@@ -118,13 +118,8 @@ class PicksService:
         
         # Load ML Model if available (Robust Path Resolution)
         try:
-             # Resolve absolute path to backend root
-            _service_dir = os.path.dirname(os.path.abspath(__file__))
-            # Go up: domain/services -> domain -> src -> backend
-            _backend_dir = os.path.join(_service_dir, "..", "..", "..")
-            model_path = os.path.join(_backend_dir, "ml_picks_classifier.joblib")
-            
-            self.ml_model = self._load_ml_model_safely(model_path)
+            from src.core.paths import MODEL_FILE_PATH
+            self.ml_model = self._load_ml_model_safely(str(MODEL_FILE_PATH))
         except Exception as e:
             logger.warning(f"Failed to resolve model path: {e}")
             self.ml_model = None

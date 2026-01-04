@@ -26,6 +26,7 @@ from src.domain.entities.entities import Match
 from src.infrastructure.cache.cache_service import CacheService
 from src.utils.time_utils import get_current_time
 from src.core.constants import DEFAULT_LEAGUES
+from src.core.paths import MODEL_FILE_PATH
 from src.infrastructure.repositories.persistence_repository import PersistenceRepository
 
 logger = logging.getLogger(__name__)
@@ -152,17 +153,10 @@ class MLTrainingOrchestrator:
             self.cache_service.set(self.CACHE_KEY_STATUS, "ERROR", ttl_seconds=3600)
             raise e
 
-        # 3. Pre-calculate REAL league averages
-        league_matches_map = {}
-        for m in all_matches:
-            if m.league.id not in league_matches_map: 
-                league_matches_map[m.league.id] = []
-            league_matches_map[m.league.id].append(m)
-            
-        league_averages_map = {
-            lid: self.statistics_service.calculate_league_averages(ms) 
-            for lid, ms in league_matches_map.items()
-        }
+        # 3. Rolling League Averages (Accumulators to preventing Data Leakage)
+        # We maintain running totals and calculate averages dynamically as we progress through time.
+        # This ensures match T is predicted using only averages from 0...T-1.
+        league_accumulators = {} # lid -> {goals, corners, cards, matches...}
         
         # 3b. Calculate GLOBAL averages (Ultimate Fallback)
         global_averages_obj = self.statistics_service.calculate_league_averages(all_matches)
@@ -249,7 +243,32 @@ class MLTrainingOrchestrator:
                     
                     home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home)
                     away_stats = self.statistics_service.convert_to_domain_stats(match.away_team.name, raw_away)
-                    league_averages = league_averages_map.get(match.league.id) 
+                    league_averages = None
+                    
+                    # Dynamic League Averages from Rolling Accumulator
+                    from src.domain.value_objects.value_objects import LeagueAverages
+                    
+                    acc = league_accumulators.get(match.league.id)
+                    
+                    if acc and acc['matches_with_goals'] > 0:
+                         # Calculate on the fly
+                         avg_home = acc['home_goals'] / acc['matches_with_goals']
+                         avg_away = acc['away_goals'] / acc['matches_with_goals']
+                         avg_total = (acc['home_goals'] + acc['away_goals']) / acc['matches_with_goals']
+                         
+                         avg_corn = acc['corners'] / acc['matches_with_corners'] if acc['matches_with_corners'] > 0 else 9.5
+                         avg_card = acc['cards'] / acc['matches_with_cards'] if acc['matches_with_cards'] > 0 else 4.5
+                         
+                         league_averages = LeagueAverages(
+                             avg_home_goals=avg_home,
+                             avg_away_goals=avg_away,
+                             avg_total_goals=avg_total,
+                             avg_corners=avg_corn,
+                             avg_cards=avg_card
+                         )
+                    else:
+                        # Cold start: Use global averages
+                        league_averages = global_averages_obj 
     
                     try:
                         # PREDICT using current knowledge
@@ -415,6 +434,30 @@ class MLTrainingOrchestrator:
                         self.statistics_service.update_team_stats_dict(team_stats_cache[match.home_team.name], match, is_home=True)
                     if match.away_team.name in team_stats_cache:
                         self.statistics_service.update_team_stats_dict(team_stats_cache[match.away_team.name], match, is_home=False)
+
+                    # Update League Accumulators
+                    lid = match.league.id
+                    if lid not in league_accumulators:
+                        league_accumulators[lid] = {
+                            'home_goals': 0, 'away_goals': 0, 
+                            'corners': 0, 'cards': 0,
+                            'matches_with_goals': 0, 'matches_with_corners': 0.0001, 'matches_with_cards': 0.0001 # prevent zero div
+                        }
+                    
+                    l_acc = league_accumulators[lid]
+                    
+                    if match.home_goals is not None and match.away_goals is not None:
+                        l_acc['home_goals'] += match.home_goals
+                        l_acc['away_goals'] += match.away_goals
+                        l_acc['matches_with_goals'] += 1
+                        
+                    if match.home_corners is not None and match.away_corners is not None:
+                        l_acc['corners'] += (match.home_corners + match.away_corners)
+                        l_acc['matches_with_corners'] += 1
+                        
+                    if match.home_yellow_cards is not None and match.away_yellow_cards is not None:
+                        l_acc['cards'] += (match.home_yellow_cards + match.away_yellow_cards)
+                        l_acc['matches_with_cards'] += 1
                 
                 # Yield control to event loop to allow other requests (health checks, polling) to be processed
                 await asyncio.sleep(0)
@@ -450,7 +493,7 @@ class MLTrainingOrchestrator:
                         clf.fit(ml_features, ml_targets)
                         
                         # Save to absolute path
-                        joblib.dump(clf, self.MODEL_FILE_PATH)
+                        joblib.dump(clf, str(MODEL_FILE_PATH))
                         return clf
     
                     loop = asyncio.get_running_loop()
