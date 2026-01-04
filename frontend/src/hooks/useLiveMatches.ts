@@ -5,9 +5,13 @@ import { MatchPrediction } from "../types";
 // Local interface until backend adds new fields
 export interface LiveMatch {
   id: string;
-  home_team: string;
+  home_team:
+    | string
+    | { id: string; name: string; short_name?: string; logo_url?: string };
   home_short_name?: string;
-  away_team: string;
+  away_team:
+    | string
+    | { id: string; name: string; short_name?: string; logo_url?: string };
   away_short_name?: string;
   home_score: number;
   away_score: number;
@@ -302,11 +306,16 @@ export const useLiveMatches = () => {
         let liveMatches: LiveMatch[] = Array.isArray(data)
           ? data.map((match: any) => ({
               id: match.id,
-              home_team: match.home_team?.name || match.home_team || "Local",
+              home_team:
+                typeof match.home_team === "object"
+                  ? match.home_team
+                  : match.home_team || "Local",
               home_short_name: match.home_team?.short_name,
               home_logo_url: match.home_team?.logo_url,
               away_team:
-                match.away_team?.name || match.away_team || "Visitante",
+                typeof match.away_team === "object"
+                  ? match.away_team
+                  : match.away_team || "Visitante",
               away_short_name: match.away_team?.short_name,
               away_logo_url: match.away_team?.logo_url,
               home_score: match.home_goals ?? match.home_score ?? 0,

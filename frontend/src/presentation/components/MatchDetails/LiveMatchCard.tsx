@@ -144,28 +144,39 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                 flex={1}
                 display="flex"
                 flexDirection="column"
-                alignItems="flex-start"
+                alignItems="center"
+                justifyContent="center"
               >
-                <Box display="flex" alignItems="center" gap={1}>
-                  {match.home_logo_url && (
-                    <Box
-                      component="img"
-                      src={match.home_logo_url}
-                      alt={cleanTeamName(
-                        match.home_short_name || match.home_team
-                      )}
-                      sx={{ width: 28, height: 28, objectFit: "contain" }}
-                    />
-                  )}
-                  <Typography
-                    variant="body1"
-                    fontWeight={600}
-                    color="white"
-                    sx={{ lineHeight: 1.2 }}
-                  >
-                    {cleanTeamName(match.home_short_name || match.home_team)}
-                  </Typography>
-                </Box>
+                {match.home_logo_url && (
+                  <Box
+                    component="img"
+                    src={match.home_logo_url}
+                    alt={cleanTeamName(
+                      match.home_short_name || match.home_team
+                    )}
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      objectFit: "contain",
+                      mb: 1,
+                    }}
+                  />
+                )}
+                <Typography
+                  variant="body1"
+                  fontWeight={600}
+                  color="white"
+                  align="center"
+                  sx={{
+                    lineHeight: 1.2,
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {cleanTeamName(match.home_short_name || match.home_team)}
+                </Typography>
               </Box>
 
               {/* Score Box */}
@@ -206,29 +217,39 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                 flex={1}
                 display="flex"
                 flexDirection="column"
-                alignItems="flex-end"
+                alignItems="center"
+                justifyContent="center"
               >
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography
-                    variant="body1"
-                    fontWeight={600}
-                    color="white"
-                    align="right"
-                    sx={{ lineHeight: 1.2 }}
-                  >
-                    {cleanTeamName(match.away_short_name || match.away_team)}
-                  </Typography>
-                  {match.away_logo_url && (
-                    <Box
-                      component="img"
-                      src={match.away_logo_url}
-                      alt={cleanTeamName(
-                        match.away_short_name || match.away_team
-                      )}
-                      sx={{ width: 28, height: 28, objectFit: "contain" }}
-                    />
-                  )}
-                </Box>
+                {match.away_logo_url && (
+                  <Box
+                    component="img"
+                    src={match.away_logo_url}
+                    alt={cleanTeamName(
+                      match.away_short_name || match.away_team
+                    )}
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      objectFit: "contain",
+                      mb: 1,
+                    }}
+                  />
+                )}
+                <Typography
+                  variant="body1"
+                  fontWeight={600}
+                  color="white"
+                  align="center"
+                  sx={{
+                    lineHeight: 1.2,
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {cleanTeamName(match.away_short_name || match.away_team)}
+                </Typography>
               </Box>
             </Box>
 

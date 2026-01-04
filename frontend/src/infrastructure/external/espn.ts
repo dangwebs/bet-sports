@@ -196,10 +196,12 @@ export const fetchESPNLiveMatches = async (): Promise<
             home_team: {
               id: home.team.id,
               name: home.team?.displayName || "Local",
+              logo_url: home.team?.logo,
             },
             away_team: {
               id: away.team.id,
               name: away.team?.displayName || "Visitante",
+              logo_url: away.team?.logo,
             },
             league: { id: leagueId, name: leagueName, country: "" },
             match_date: new Date().toISOString(), // Approximation

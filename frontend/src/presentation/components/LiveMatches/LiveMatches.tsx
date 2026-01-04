@@ -24,6 +24,7 @@ import {
 import { useLiveMatches, LiveMatch } from "../../../hooks/useLiveMatches";
 import { LiveMatchPrediction } from "../../../types";
 import { translateMatchStatus } from "../../../utils/translationUtils";
+import { getTeamLogo, getTeamDisplayName } from "../../../utils/teamUtils";
 
 /**
  * Skeleton component for loading state
@@ -84,6 +85,8 @@ interface NormalizedMatch {
   awayTeamName: string;
   homeScore: number;
   awayScore: number;
+  homeTeam?: any;
+  awayTeam?: any;
 }
 
 // Normalize match data from either Match or LiveMatch
@@ -102,14 +105,22 @@ const normalizeMatch = (
       awayScore: match.away_score ?? 0,
     };
   } else {
-    // It's a Match
+    // It's a Match or LiveMatch
     return {
       status: match.status || "LIVE",
-      leagueName: match.league?.name || "Liga",
-      homeTeamName: match.home_team?.name || "Local",
-      awayTeamName: match.away_team?.name || "Visitante",
-      homeScore: match.home_goals ?? 0,
-      awayScore: match.away_goals ?? 0,
+      leagueName: match.league?.name || (match as any).league_name || "Liga",
+      homeTeamName:
+        typeof match.home_team === "string"
+          ? match.home_team
+          : match.home_team?.name || "Local",
+      awayTeamName:
+        typeof match.away_team === "string"
+          ? match.away_team
+          : match.away_team?.name || "Visitante",
+      homeScore: (match as any).home_goals ?? (match as any).home_score ?? 0,
+      awayScore: (match as any).away_goals ?? (match as any).away_score ?? 0,
+      homeTeam: (match as any).home_team_obj || match.home_team,
+      awayTeam: (match as any).away_team_obj || match.away_team,
     };
   }
 };
@@ -228,10 +239,27 @@ const LiveMatchCard: React.FC<MatchCardProps> = ({ matchData }) => {
             justifyContent="space-between"
             alignItems="center"
           >
-            <Box flex={1} textAlign="left">
+            <Box
+              flex={1}
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              sx={{ minWidth: 0 }}
+            >
+              {"homeTeam" in match ? (
+                <Box
+                  component="img"
+                  src={getTeamLogo(match.homeTeam as any)}
+                  alt={getTeamDisplayName(match.homeTeam as any)}
+                  sx={{ width: 32, height: 32, mb: 0.5, objectFit: "contain" }}
+                />
+              ) : null}
               <Typography
+                variant="body2"
                 fontWeight={500}
                 sx={{
+                  width: "100%",
+                  textAlign: "center",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -243,11 +271,12 @@ const LiveMatchCard: React.FC<MatchCardProps> = ({ matchData }) => {
 
             <Box
               sx={{
-                px: 2,
-                py: 0.75,
+                mx: 1,
+                px: 1.5,
+                py: 0.5,
                 bgcolor: "rgba(0, 0, 0, 0.4)",
                 borderRadius: 1.5,
-                minWidth: 70,
+                minWidth: 60,
                 textAlign: "center",
               }}
             >
@@ -256,10 +285,27 @@ const LiveMatchCard: React.FC<MatchCardProps> = ({ matchData }) => {
               </Typography>
             </Box>
 
-            <Box flex={1} textAlign="right">
+            <Box
+              flex={1}
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              sx={{ minWidth: 0 }}
+            >
+              {"awayTeam" in match ? (
+                <Box
+                  component="img"
+                  src={getTeamLogo(match.awayTeam as any)}
+                  alt={getTeamDisplayName(match.awayTeam as any)}
+                  sx={{ width: 32, height: 32, mb: 0.5, objectFit: "contain" }}
+                />
+              ) : null}
               <Typography
+                variant="body2"
                 fontWeight={500}
                 sx={{
+                  width: "100%",
+                  textAlign: "center",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
