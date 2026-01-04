@@ -684,8 +684,12 @@ class GetTopMLPicksUseCase:
                         else:
                             m_date = m_date.astimezone(now.tzinfo)
                         
-                        if m_date <= now:
-                            continue # Skip past matches
+                        # Statuses that indicate a match is currently in play
+                        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY"]
+                        
+                        # Allow if it's in the future OR if it's currently live
+                        if m_date <= now and match_info.get("status") not in live_statuses:
+                            continue # Skip past and finished matches
                     except Exception as e:
                         logger.warning(f"Error parsing date {match_date_str}: {e}")
                 

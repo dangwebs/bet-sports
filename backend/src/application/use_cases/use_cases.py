@@ -641,6 +641,9 @@ class GetPredictionsUseCase:
         from src.utils.time_utils import get_current_time
         now = get_current_time() # Returns Bogota time
         
+        # Statuses that indicate a match is currently in play
+        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY"]
+        
         filtered = []
         for p in predictions:
             m_date = p.match.match_date
@@ -649,7 +652,8 @@ class GetPredictionsUseCase:
             else:
                 m_date = m_date.astimezone(now.tzinfo)
                 
-            if m_date > now:
+            # Allow if it's in the future OR if it's currently live
+            if m_date > now or p.match.status in live_statuses:
                 filtered.append(p)
         return filtered
 
