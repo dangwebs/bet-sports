@@ -11,6 +11,7 @@ from src.infrastructure.data_sources.football_data_uk import FootballDataUKSourc
 from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
+from src.infrastructure.data_sources.espn import ESPNSource
 from src.infrastructure.cache.cache_service import CacheService, get_cache_service
 from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
@@ -45,6 +46,11 @@ def get_thesportsdb() -> TheSportsDBClient:
     """Get TheSportsDB data source (cached)."""
     return TheSportsDBClient()
 
+@lru_cache()
+def get_espn() -> ESPNSource:
+    """Get ESPN data source (cached)."""
+    return ESPNSource()
+
 
 def get_data_sources() -> DataSources:
     """Get all data sources container."""
@@ -53,6 +59,7 @@ def get_data_sources() -> DataSources:
         football_data_org=get_football_data_org(),
         openfootball=get_openfootball(),
         thesportsdb=get_thesportsdb(),
+        espn=get_espn(),
     )
 
 

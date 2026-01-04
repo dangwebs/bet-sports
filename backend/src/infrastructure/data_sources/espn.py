@@ -34,6 +34,7 @@ ESPN_LEAGUE_MAPPING = {
     "UCL": "uefa.champions",
     "UEL": "uefa.europa",
     "UECL": "uefa.europa.conf", # Corrected generic slug for Conference League
+    "COL1": "col.1", # Colombian Primera A
 }
 
 @dataclass
@@ -453,3 +454,61 @@ class ESPNSource:
             logger.debug(f"Parse error: {e}")
             return None
 
+    async def get_live_matches(self, league_codes: Optional[List[str]] = None) -> List[Match]:
+        """
+        Get live or upcoming matches for today from ESPN.
+        """
+        matches = []
+        leagues_to_fetch = league_codes or list(ESPN_LEAGUE_MAPPING.keys())
+        
+        # Today's date
+        date_str = datetime.utcnow().strftime("%Y%m%d")
+        
+        for code in leagues_to_fetch:
+            slug = ESPN_LEAGUE_MAPPING.get(code)
+            if not slug:
+                continue
+            
+            try:
+                url = f"{self.BASE_URL}/{slug}/scoreboard"
+                data = await self._make_request(url, {"dates": date_str})
+                
+                if not data or "events" not in data:
+                    continue
+                    
+                for event in data["events"]:
+                    status = event.get("status", {}).get("type", {}).get("state")
+                    # 'pre' = upcoming, 'in' = live
+                    if status not in ["pre", "in"]:
+                        continue
+                        
+                    match_id = event.get("id")
+                    
+                    # For live matches, we might want detailed stats if available
+                    # But fetching detailed stats for EVERY upcoming match is slow and rate-limited.
+                    # Optimization: Only fetch detailed stats if status is 'in' (live)
+                    # For 'pre', use scoreboard data.
+                    
+                    match = None
+                    if status == "in":
+                         match = await self._get_match_details(slug, match_id, event, code)
+                    else:
+                         # Lightweight parsing for upcoming
+                         match = self._parse_full_match(event, {}, {}, code, None) # Or specialized lightweight parser
+                         
+                    if match:
+                        # Override status for our system
+                        match.status = "LIVE" if status == "in" else "SCHEDULED"
+                        # Parse minute if live
+                        if status == "in":
+                             clock = event.get("status", {}).get("displayClock", "0'") # "45'"
+                             match.minute = clock.replace("'", "")
+                        
+                        matches.append(match)
+                            
+            except Exception as e:
+                logger.debug(f"Error parsing ESPN live match for {code}: {e}")
+                continue
+                
+        logger.info(f"ESPN: fetched {len(matches)} live/upcoming matches")
+        return matches

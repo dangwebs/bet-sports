@@ -120,6 +120,15 @@ class GetLivePredictionsUseCase:
                     source_used = "Football-Data.org"
             except Exception as e:
                 logger.error(f"Football-Data.org live fetch failed: {e}")
+
+        # Priority 3: ESPN (Critical for COL1 and others not in above)
+        if not matches and self.data_sources.espn:
+            try:
+                matches = await self.data_sources.espn.get_live_matches()
+                if matches:
+                    source_used = "ESPN"
+            except Exception as e:
+                logger.error(f"ESPN live fetch failed: {e}")
         
         if not matches:
             # Cache empty result for short period to avoid hammering API

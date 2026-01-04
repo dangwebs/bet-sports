@@ -84,7 +84,7 @@ class MLTrainingOrchestrator:
     async def run_training_pipeline(
         self, 
         league_ids: Optional[List[str]] = None, 
-        days_back: int = 120, # Reduced from 365 to 120 (4 months) to save RAM
+        days_back: int = 3650, # Restored to 10 years per user request (Quality > Speed)
         start_date: Optional[str] = None,
         force_refresh: bool = False
     ) -> TrainingResult:
@@ -108,9 +108,8 @@ class MLTrainingOrchestrator:
         self.cache_service.set(self.CACHE_KEY_MESSAGE, "Iniciando orquestación del servidor...", ttl_seconds=3600)
         
         # 1. Initialize logic-dependant services
-        # We use Heuristic PicksService for the 2500+ match backtest to save massive overhead
-        # The ML model training happens at the end once.
-        picks_service_instance = PicksService(learning_weights=self.learning_service.get_learning_weights())
+        # We use AIPicksService for the match backtest to reflect true production logic (AI Locks, Context, etc.)
+        picks_service_instance = AIPicksService(learning_weights=self.learning_service.get_learning_weights())
         
         matches_processed = 0
         correct_predictions = 0
