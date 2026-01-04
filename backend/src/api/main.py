@@ -255,6 +255,13 @@ async def lifespan(app: FastAPI):
             logger.info("✓ Scheduler shutdown complete")
         else:
             logger.info("✓ API-only mode shutdown (no scheduler to stop)")
+            
+        # Release cache resources (Close SQLite connections in DiskCache)
+        from src.infrastructure.cache.cache_service import get_cache_service
+        cache_to_close = get_cache_service()
+        cache_to_close.close()
+        logger.info("✓ Cache resources released")
+        
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
 

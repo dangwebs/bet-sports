@@ -505,6 +505,11 @@ class MLTrainingOrchestrator:
                 
             return final_result
 
+        except asyncio.CancelledError:
+            logger.warning("ML Training Pipeline was cancelled. Cleaning up...")
+            self.cache_service.set(self.CACHE_KEY_STATUS, "CANCELLED", ttl_seconds=3600)
+            self.cache_service.set(self.CACHE_KEY_MESSAGE, "Entrenamiento cancelado.", ttl_seconds=3600)
+            raise 
         except Exception as e:
             logger.error(f"Critical error in training pipeline: {e}")
             self.cache_service.set(self.CACHE_KEY_STATUS, "ERROR", ttl_seconds=3600)

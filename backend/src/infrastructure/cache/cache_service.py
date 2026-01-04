@@ -34,6 +34,10 @@ class CacheProvider(ABC):
     def clear(self) -> bool:
         pass
 
+    def close(self):
+        """Optional close method for cleanup."""
+        pass
+
 
 class DiskCacheProvider(CacheProvider):
     """DiskCache implementation."""
@@ -66,6 +70,13 @@ class DiskCacheProvider(CacheProvider):
             return self.cache.clear()
         except Exception:
             return False
+
+    def close(self):
+        try:
+            self.cache.close()
+            logger.info("DiskCache closed")
+        except Exception:
+            pass
 
 class CacheService:
     """
@@ -156,6 +167,13 @@ class CacheService:
             provider.clear()
         
         logger.info("Cache cleared across all layers")
+
+    def close(self) -> None:
+        """Close all cache providers."""
+        with self._lock:
+            for provider in self.providers:
+                provider.close()
+        logger.info("CacheService closed")
     
     # --- Helper methods ---
     

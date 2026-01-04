@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -199,43 +199,56 @@ async def get_cached_training_data(
     Get cached training data without recomputation.
     
     Returns cached results from the last scheduled training run.
-    If no cache exists, returns a message indicating training needs to run.
-    
-    This endpoint is fast and doesn't trigger any computation.
+    Syncs with PostgreSQL if the local cache is stale.
     """
     from src.infrastructure.cache import get_cache_service
     
     cache = get_cache_service()
     CACHE_KEY_RESULT = "ml_training_result_data"
+    DB_KEY_RESULT = "latest_daily"
     
-    # 1. Check ephemeral cache first
-    results = cache.get(CACHE_KEY_RESULT)
-    if results:
+    # 1. Sync Logic: Check DB version first
+    db_data, db_last_updated = persistence_repo.get_training_result_with_timestamp(DB_KEY_RESULT)
+    
+    # 2. Check ephemeral cache
+    cached_results = cache.get(CACHE_KEY_RESULT)
+    
+    # Synchronization Strategy:
+    # If DB has data and (Cache is empty OR DB is newer than what we might have in cache)
+    # Since CacheService doesn't track metadata, we rely on DB as source of truth for 'freshness'.
+    # If we have DB data, we use it to refresh cache if they differ (or just always if DB exists)
+    
+    if db_data:
+        # If cache exists, we Compare timestamps if we had them, OR just use DB if it exists 
+        # as it's the more reliable persistent storage in worker-v-server architecture.
+        # For simplicity and correctness: If DB version exists, refresh local cache with it.
+        if not cached_results:
+            logger.info("Cache miss for training data. Loading from PostgreSQL.")
+            cache.set(CACHE_KEY_RESULT, db_data, ttl_seconds=cache.TTL_TRAINING)
+            cached_results = db_data
+        
         return CachedTrainingResponse(
             cached=True,
-            last_update=None, # CacheService doesn't track mtime per key yet
-            data=TrainingStatus(**results),
-            message="Datos de entrenamiento recuperados de caché rápido"
+            last_update=db_last_updated.isoformat() if db_last_updated else None,
+            data=TrainingStatus(**db_results if 'db_results' in locals() else db_data),
+            message="Datos de entrenamiento sincronizados con base de datos"
         )
-    else:
-        # DB FALLBACK: If local cache is missing (e.g. after deployment), check PostgreSQL
-        db_results = persistence_repo.get_training_result("latest_daily")
-        if db_results:
-            last_update = persistence_repo.get_last_updated("latest_daily")
-            logger.info("Retrieved training results from PostgreSQL persistence layer")
-            return CachedTrainingResponse(
-                cached=True,
-                last_update=last_update.isoformat() if last_update else None,
-                data=TrainingStatus(**db_results),
-                message="Datos de entrenamiento recuperados de persistencia SQL"
-            )
             
+    # Fallback to ephemeral cache only if DB is empty (rare)
+    if cached_results:
         return CachedTrainingResponse(
-            cached=False,
+            cached=True,
             last_update=None,
-            data=None,
-            message="No hay datos disponibles. El entrenamiento se ejecuta diariamente a las 6:00 AM UTC o use POST /train para generar."
+            data=TrainingStatus(**cached_results),
+            message="Datos de entrenamiento recuperados de caché local (DB vacía)"
         )
+            
+    return CachedTrainingResponse(
+        cached=False,
+        last_update=None,
+        data=None,
+        message="No hay datos disponibles. El entrenamiento se ejecuta diariamente o use POST /train."
+    )
 
 
 @router.post("/train/run-now")
@@ -337,3 +350,33 @@ async def get_training_status(
         has_result=(result_data is not None),
         result=result_data if result_data else None
     )
+
+
+@router.get("/top-ml-picks")
+async def get_global_top_ml_picks(
+    limit: int = Query(50, ge=1, le=100),
+    persistence_repo: PersistenceRepository = Depends(get_persistence_repository)
+):
+    """
+    Returns the top aggregated ML picks across all leagues.
+    Retrieves from pre-calculated 'top_ml_picks' TrainingResult.
+    """
+    from src.application.dtos.dtos import TopMLPicksDTO
+    
+    # 1. Check persistence layer for pre-calculated top picks
+    data = persistence_repo.get_training_result("top_ml_picks")
+    
+    if data:
+        # Note: The data saved in DB already has date filtering applied by GetTopMLPicksUseCase.execute()
+        # but we can re-verify here if needed.
+        return data
+        
+    # 2. Fallback: Generate it on the fly (More expensive)
+    from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
+    use_case = GetTopMLPicksUseCase(persistence_repo)
+    result = await use_case.execute(limit=limit)
+    
+    if result:
+        return result
+        
+    raise HTTPException(status_code=404, detail="Top ML picks not found. Ensure predictions have been generated.")

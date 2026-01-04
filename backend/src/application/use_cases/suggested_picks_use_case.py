@@ -669,6 +669,26 @@ class GetTopMLPicksUseCase:
                 
                 prediction = pred_data.get("prediction", {})
                 match_info = pred_data.get("match", {})
+                
+                # Check match date (ensure only future matches)
+                from src.utils.time_utils import get_current_time
+                now = get_current_time() # Returns Bogota time
+                
+                match_date_str = match_info.get("match_date")
+                if match_date_str:
+                    try:
+                        from dateutil import parser
+                        m_date = parser.parse(match_date_str)
+                        if m_date.tzinfo is None:
+                            m_date = now.tzinfo.localize(m_date)
+                        else:
+                            m_date = m_date.astimezone(now.tzinfo)
+                        
+                        if m_date <= now:
+                            continue # Skip past matches
+                    except Exception as e:
+                        logger.warning(f"Error parsing date {match_date_str}: {e}")
+                
                 picks = prediction.get("suggested_picks", [])
                 
                 match_label = f"{match_info.get('home_team', {}).get('name', '')} vs {match_info.get('away_team', {}).get('name', '')}"

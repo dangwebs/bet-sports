@@ -167,15 +167,23 @@ class PersistenceRepository:
         """
         Retrieve a training result by key.
         """
+        result, _ = self.get_training_result_with_timestamp(key)
+        return result
+
+    def get_training_result_with_timestamp(self, key: str) -> tuple[Optional[dict], Optional[datetime]]:
+        """
+        Retrieve a training result and its last_updated timestamp.
+        Returns (data, last_updated)
+        """
         session = self.db_service.get_session()
         try:
             record = session.query(TrainingResultModel).filter(TrainingResultModel.key == key).first()
             if record:
-                return record.data
-            return None
+                return record.data, record.last_updated
+            return None, None
         except Exception as e:
-            logger.error(f"Failed to retrieve training result: {e}")
-            return None
+            logger.error(f"Failed to retrieve training result with timestamp: {e}")
+            return None, None
         finally:
             session.close()
 
@@ -231,9 +239,9 @@ class PersistenceRepository:
         finally:
             session.close()
 
-    def get_match_prediction(self, match_id: str) -> Optional[dict]:
+    def get_match_prediction_with_timestamp(self, match_id: str) -> tuple[Optional[dict], Optional[datetime]]:
         """
-        Retrieve a valid (non-expired) match prediction.
+        Retrieve a valid prediction and its last_updated timestamp.
         """
         session = self.db_service.get_session()
         try:
@@ -243,10 +251,12 @@ class PersistenceRepository:
                 MatchPredictionModel.expires_at > now
             ).first()
             
-            return record.data if record else None
+            if record:
+                return record.data, record.last_updated
+            return None, None
         except Exception as e:
-            logger.error(f"Failed to retrieve match prediction {match_id}: {e}")
-            return None
+            logger.error(f"Failed to retrieve match prediction with timestamp {match_id}: {e}")
+            return None, None
         finally:
             session.close()
 

@@ -218,12 +218,22 @@ class GetLivePredictionsUseCase:
                     prediction=self._empty_prediction(match.id),
                 ))
         
+        # 4. Filter only future or currently live matches
+        from src.utils.time_utils import get_current_time
+        now = get_current_time()
+        
+        filtered_results = []
+        for p_dto in results:
+            # We already have match_date in p_dto.match
+            if p_dto.match.match_date > now or p_dto.match.status in ["1H", "2H", "HT", "LIVE", "IN_PLAY"]:
+                filtered_results.append(p_dto)
+        
         # Cache results
-        self.cache_service.set_live_matches(results, cache_key)
-        logger.info(f"Generated {len(results)} live match predictions")
+        self.cache_service.set_live_matches(filtered_results, cache_key)
+        logger.info(f"Generated {len(filtered_results)} live match predictions (after filtering {len(results) - len(filtered_results)} matches)")
         
         # 3. Persistence: Index calculated live matches for the Explorer
-        if self.persistence_repository and results:
+        if self.persistence_repository and filtered_results:
             try:
                 prediction_batch = [
                     {
@@ -232,14 +242,14 @@ class GetLivePredictionsUseCase:
                         "data": p_dto.model_dump(),
                         "ttl_seconds": 3600 # 1 hour for live matches
                     }
-                    for p_dto in results
+                    for p_dto in filtered_results
                 ]
                 self.persistence_repository.bulk_save_predictions(prediction_batch)
-                logger.info(f"Indexed {len(results)} live prediction matches in Explorer DB")
+                logger.info(f"Indexed {len(filtered_results)} live prediction matches in Explorer DB")
             except Exception as e:
                 logger.warning(f"Failed to index live predictions: {e}")
         
-        return results
+        return filtered_results
     
     async def _generate_prediction(self, match: Match, bulk_history: dict = None) -> PredictionDTO:
         """

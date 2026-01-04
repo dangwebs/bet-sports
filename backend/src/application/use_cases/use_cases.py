@@ -6,7 +6,7 @@ the flow of data between the domain layer and the infrastructure layer.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Any
 from dataclasses import dataclass
 from pytz import timezone
 import logging
@@ -148,20 +148,58 @@ class GetPredictionsUseCase:
         # Unified Cache Key for League Forecasts
         cache_key = f"forecasts:league_{league_id}"
         
-        # 0.1 Try Ephemeral Cache (Memory/Disk)
-        cached_response = cache_service.get(cache_key)
-        if cached_response:
-            logger.info(f"Serving cached (ephemeral) predictions for {league_id}")
-            return PredictionsResponseDTO(**cached_response)
-            
-        # 0.2 Try Persistent DB (PostgreSQL fallback)
+        # 0.1 Check for new data in DB first (Versioning/Sync)
+        db_data, db_last_updated = (None, None)
         if self.persistence_repository:
-            db_data = self.persistence_repository.get_training_result(cache_key)
-            if db_data:
-                logger.info(f"Serving persistent (PostgreSQL) predictions for {league_id}")
-                # Optional: warm up ephemeral cache for next time
-                cache_service.set(cache_key, db_data, ttl_seconds=86400)
-                return PredictionsResponseDTO(**db_data)
+            db_data, db_last_updated = self.persistence_repository.get_training_result_with_timestamp(cache_key)
+        
+        # 0.2 Try Ephemeral Cache (Memory/Disk)
+        cached_response = cache_service.get(cache_key)
+        
+        # SYNC LOGIC: If we have cached response, check if it's stale compared to DB
+        is_stale = False
+        if cached_response and db_last_updated:
+            try:
+                # Use 'generated_at' from cache or a specific 'cached_db_timestamp'
+                # PredictionsResponseDTO.generated_at is ISO string if cached as dict
+                from src.utils.time_utils import to_colombia_time
+                if db_last_updated and cached_response.get('generated_at'):
+                    from dateutil import parser
+                    gen_at = to_colombia_time(parser.parse(cached_response['generated_at']))
+                    db_last_updated = to_colombia_time(db_last_updated)
+                    
+                    if db_last_updated > gen_at:
+                        logger.info(f"🔄 Cache stale for {league_id} (DB updated at {db_last_updated}). Refreshing...")
+                        is_stale = True
+            except Exception as e:
+                logger.warning(f"Error comparing cache vs db timestamp: {e}")
+        
+        if cached_response and not is_stale:
+            logger.info(f"Serving cached (ephemeral) predictions for {league_id}")
+            response = PredictionsResponseDTO(**cached_response)
+            
+            # STRICT DATE FILTERING (even for cache)
+            filtered = self._filter_future_matches(response.predictions)
+            if len(filtered) != len(response.predictions):
+                logger.info(f"Filtered {len(response.predictions) - len(filtered)} past matches from cached {league_id}")
+                response.predictions = filtered
+            
+            return response
+            
+        # 0.3 Try Persistent DB (PostgreSQL fallback)
+        if db_data:
+            logger.info(f"Serving persistent (PostgreSQL) predictions for {league_id}")
+            # Warm up ephemeral cache for next time
+            cache_service.set(cache_key, db_data, ttl_seconds=86400)
+            response = PredictionsResponseDTO(**db_data)
+            
+            # STRICT DATE FILTERING
+            filtered = self._filter_future_matches(response.predictions)
+            if len(filtered) != len(response.predictions):
+                logger.info(f"Filtered {len(response.predictions) - len(filtered)} past matches from DB {league_id}")
+                response.predictions = filtered
+            
+            return response
         
         # 0.3 Check if running in API-only mode
         import os
@@ -597,6 +635,23 @@ class GetPredictionsUseCase:
             suggested_picks=pick_dtos,
             created_at=prediction.created_at,
         )
+    
+    def _filter_future_matches(self, predictions: list[MatchPredictionDTO]) -> list[MatchPredictionDTO]:
+        """Filters out matches that have already occurred."""
+        from src.utils.time_utils import get_current_time
+        now = get_current_time() # Returns Bogota time
+        
+        filtered = []
+        for p in predictions:
+            m_date = p.match.match_date
+            if m_date.tzinfo is None:
+                m_date = now.tzinfo.localize(m_date)
+            else:
+                m_date = m_date.astimezone(now.tzinfo)
+                
+            if m_date > now:
+                filtered.append(p)
+        return filtered
 
 
 class GetMatchDetailsUseCase:
@@ -645,6 +700,26 @@ class GetMatchDetailsUseCase:
             cache = get_cache_service()
             training_results = cache.get("ml_training_result_data")
             
+            # SYNC LOGIC: Check if training_results in cache is stale compared to DB
+            if self.data_sources.football_data_uk: # Just a check for persistence repo availability
+                from src.api.dependencies import get_persistence_repository
+                repo = get_persistence_repository()
+                _, db_last_updated = repo.get_training_result_with_timestamp("ml_training_result_data")
+                
+                if training_results and db_last_updated:
+                    # Check if 'generated_at' exists in training_results
+                    from src.utils.time_utils import to_colombia_time
+                    from dateutil import parser
+                    gen_at_str = training_results.get('global_averages', {}).get('calculated_at') # Best proxy for overall generation time
+                    if gen_at_str:
+                        gen_at = to_colombia_time(parser.parse(gen_at_str))
+                        db_last_updated = to_colombia_time(db_last_updated)
+                        
+                        if db_last_updated > gen_at:
+                            logger.info("🔄 Global training cache stale. Invalidating...")
+                            cache.invalidate("ml_training_result_data")
+                            training_results = None # Force loading from DB later
+
             if training_results and 'match_history' in training_results:
                 # O(N) lookup but N=18k is fast enough for single request. 
                 # Optimized: convert to dict if frequent, but for now linear scan is <10ms.
@@ -1232,8 +1307,19 @@ class GetGlobalLiveMatchesUseCase:
                 away_offsides=match.away_offsides,
             ))
             
+        # 3. Filter only future or currently live matches
+        from src.utils.time_utils import get_current_time
+        now = get_current_time()
+        
+        filtered_dtos = []
+        for match_dto in dtos:
+            if match_dto.match_date > now or match_dto.status in ["1H", "2H", "HT", "LIVE", "IN_PLAY"]:
+                filtered_dtos.append(match_dto)
+        
+        logger.info(f"Global Live Matches: {len(dtos)} -> {len(filtered_dtos)} (Filtered past matches)")
+
         # 4. Persistence: Index live matches for the Explorer
-        if self.persistence_repository and dtos:
+        if self.persistence_repository and filtered_dtos:
             try:
                 # Convert to MatchPredictionDTO format for storage consistency
                 # These are "informational only" matches (no predictions yet)
@@ -1259,14 +1345,14 @@ class GetGlobalLiveMatchesUseCase:
                         ).model_dump(),
                         "ttl_seconds": 3600 # 1 hour for live matches
                     }
-                    for m in dtos
+                    for m in filtered_dtos
                 ]
                 self.persistence_repository.bulk_save_predictions(prediction_batch)
-                logger.info(f"Indexed {len(dtos)} live matches in Explorer DB")
+                logger.info(f"Indexed {len(filtered_dtos)} live matches in Explorer DB")
             except Exception as e:
                 logger.warning(f"Failed to index live matches: {e}")
 
-        return dtos
+        return filtered_dtos
 
 
 class GetGlobalDailyMatchesUseCase:
@@ -1372,8 +1458,17 @@ class GetGlobalDailyMatchesUseCase:
                 away_offsides=match.away_offsides,
             ))
             
-        # 4. Persistence: Index daily matches for the Explorer
-        if self.persistence_repository and dtos:
+        # 4. Filter only future or currently live matches
+        from src.utils.time_utils import get_current_time
+        now = get_current_time()
+        
+        filtered_dtos = []
+        for m in dtos:
+            if m.match_date > now or m.status in ["1H", "2H", "HT", "LIVE", "IN_PLAY"]:
+                filtered_dtos.append(m)
+        
+        # 5. Persistence: Index daily matches for the Explorer
+        if self.persistence_repository and filtered_dtos:
             try:
                 prediction_batch = [
                     {
@@ -1397,11 +1492,11 @@ class GetGlobalDailyMatchesUseCase:
                         ).model_dump(),
                         "ttl_seconds": 86400 # 24 hours for daily matches
                     }
-                    for m in dtos
+                    for m in filtered_dtos
                 ]
                 self.persistence_repository.bulk_save_predictions(prediction_batch)
-                logger.info(f"Indexed {len(dtos)} daily matches in Explorer DB")
+                logger.info(f"Indexed {len(filtered_dtos)} daily matches in Explorer DB")
             except Exception as e:
                 logger.warning(f"Failed to index daily matches: {e}")
 
-        return dtos
+        return filtered_dtos
