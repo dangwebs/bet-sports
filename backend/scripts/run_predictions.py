@@ -106,32 +106,6 @@ async def main():
             try:
                 logger.info(f"\n[{idx}/{len(LEAGUES_TO_PROCESS)}] Processing {league_id}...")
                 
-                # OPTIMIZATION: Bulk fetch history for this league to avoid N+1 calls in picks generation
-                league_history_map = {}
-                try:
-                    if data_sources.football_data_org.is_configured:
-                        date_to = datetime.now().strftime("%Y-%m-%d")
-                        date_from = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
-                        
-                        logger.info(f"   📥 Bulk fetching history for {league_id} ({date_from} to {date_to})...")
-                        bulk_matches = await data_sources.football_data_org.get_league_matches(
-                            league_id, date_from, date_to, status="FINISHED"
-                        )
-                        
-                        if bulk_matches:
-                            for m in bulk_matches:
-                                h_norm = statistics_service._normalize_name(m.home_team.name)
-                                a_norm = statistics_service._normalize_name(m.away_team.name)
-                                
-                                if h_norm not in league_history_map: league_history_map[h_norm] = []
-                                if a_norm not in league_history_map: league_history_map[a_norm] = []
-                                
-                                league_history_map[h_norm].append(m)
-                                league_history_map[a_norm].append(m)
-                            logger.info(f"   ✓ Pre-loaded history for {len(league_history_map)} teams")
-                except Exception as bulk_error:
-                    logger.warning(f"   ⚠️ Bulk fetch failed, will use fallback: {bulk_error}")
-
                 # Generate predictions
                 predictions_dto = await use_case.execute(league_id, limit=PREDICTION_LIMIT)
                 
@@ -142,105 +116,41 @@ async def main():
                     predictions_dto.model_dump() if hasattr(predictions_dto, 'model_dump') else predictions_dto.dict()
                 )
                 
-                # Save individual match predictions
+                # Save individual match predictions and their picks
                 for match_pred in predictions_dto.predictions:
                     match_data = match_pred.model_dump() if hasattr(match_pred, 'model_dump') else match_pred.dict()
+                    
+                    # 1. Save prediction for real-time detail lookup
                     persistence_repo.save_match_prediction(
                         match_id=match_pred.match.id,
                         league_id=league_id,
                         data=match_data,
                         ttl_seconds=7 * 24 * 3600  # 7 days
                     )
+                    
+                    # 2. Save picks to the specific picks key (used by SuggestedPicksTab)
+                    # This avoids redundant re-calculation in the worker
+                    if match_pred.prediction and match_pred.prediction.suggested_picks:
+                        picks_cache_key = f"picks:match_{match_pred.match.id}"
+                        # Wrapper DTO for frontend compatibility
+                        from src.application.dtos.dtos import MatchSuggestedPicksDTO
+                        picks_container = MatchSuggestedPicksDTO(
+                            match_id=match_pred.match.id,
+                            suggested_picks=match_pred.prediction.suggested_picks,
+                            generated_at=match_pred.prediction.created_at
+                        )
+                        persistence_repo.save_training_result(
+                            picks_cache_key,
+                            picks_container.model_dump() if hasattr(picks_container, 'model_dump') else picks_container.dict()
+                        )
+                        total_picks_saved += len(match_pred.prediction.suggested_picks)
+                    
                     predictions_saved += 1
                 
-                logger.info(f"   ✅ Saved {len(predictions_dto.predictions)} predictions for {league_id}")
-                
-                # Generate and save picks for each match
-                logger.info(f"   💰 Generating picks for {len(predictions_dto.predictions)} matches...")
-                from src.application.use_cases.use_cases import GetSuggestedPicksUseCase
-                
-                picks_use_case = GetSuggestedPicksUseCase(
-                    data_sources=data_sources,
-                    prediction_service=prediction_service,
-                    statistics_service=statistics_service,
-                    learning_service=learning_service,
-                    cache_service=cache_service
-                )
-                
-                picks_saved = 0
-                for match_pred in predictions_dto.predictions:
-                    try:
-                        # Generate picks for this match
-                        # Build context from bulk history
-                        match_history_context = []
-                        if league_history_map:
-                             # Reconstruct match entity from DTO for normalization calls?
-                             # No, DTO has names.
-                             h_name = match_pred.match.home_team.name
-                             a_name = match_pred.match.away_team.name
-                             
-                             h_n = statistics_service._normalize_name(h_name)
-                             a_n = statistics_service._normalize_name(a_name)
-                             
-                             raw_hist = league_history_map.get(h_n, []) + league_history_map.get(a_n, [])
-                             # Deduplicate by ID
-                             seen_ids = set()
-                             for hm in raw_hist:
-                                 if hm.id not in seen_ids:
-                                     match_history_context.append(hm)
-                                     seen_ids.add(hm.id)
-
-                        # Reconstruct Minimal Match Object to avoid re-fetching details
-                        # We use the DTO data to support the use case
-                        from src.domain.entities.entities import Match, Team, League
-                        match_obj = Match(
-                            id=match_pred.match.id,
-                            home_team=Team(
-                                id=match_pred.match.home_team.id, 
-                                name=match_pred.match.home_team.name,
-                                country=match_pred.match.home_team.country
-                            ),
-                            away_team=Team(
-                                id=match_pred.match.away_team.id, 
-                                name=match_pred.match.away_team.name,
-                                country=match_pred.match.away_team.country
-                            ),
-                            league=League(
-                                id=match_pred.match.league.id,
-                                name=match_pred.match.league.name,
-                                country=match_pred.match.league.country,
-                                season=match_pred.match.league.season
-                            ),
-                            match_date=match_pred.match.match_date,
-                            status=match_pred.match.status,
-                            home_goals=match_pred.match.home_goals,
-                            away_goals=match_pred.match.away_goals
-                        )
-                        
-                        picks_dto = await picks_use_case.execute(
-                            match_id=match_pred.match.id,
-                            match_data=match_obj,
-                            pre_fetched_history=match_history_context if match_history_context else None
-                        )
-                        
-                        if picks_dto and picks_dto.picks:
-                            # Save picks to database
-                            picks_cache_key = f"picks:match_{match_pred.match.id}"
-                            picks_data = picks_dto.model_dump() if hasattr(picks_dto, 'model_dump') else picks_dto.dict()
-                            persistence_repo.save_training_result(
-                                picks_cache_key,
-                                picks_data
-                            )
-                            picks_saved += len(picks_dto.picks)
-                    except Exception as pick_error:
-                        logger.debug(f"      ⚠️  Could not generate picks for {match_pred.match.id}: {pick_error}")
-                        continue
-                
-                total_picks_saved += picks_saved
-                logger.info(f"   💰 Saved {picks_saved} picks for {league_id}")
+                logger.info(f"   ✅ Saved {len(predictions_dto.predictions)} predictions and {total_picks_saved} picks for {league_id}")
                 
                 # Small delay to avoid overwhelming the database
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)
                 
             except Exception as e:
                 logger.error(f"   ❌ Error processing {league_id}: {e}", exc_info=True)
@@ -304,7 +214,7 @@ async def main():
         logger.info(f"💰 Individual picks saved: {total_picks_saved}")
         logger.info(f"🏆 Top ML picks saved: 50")
         logger.info(f"📚 Training accuracy: {training_result.accuracy:.2%}")
-        logger.info(f"� Training ROI: {training_result.roi:.2f}%")
+        logger.info(f"📈 Training ROI: {training_result.roi:.2f}%")
         logger.info("=" * 80)
         
         return 0  # Success

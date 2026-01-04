@@ -19,12 +19,16 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 
 # Worker Configuration
 WORKER_MODE = True  # Always True for worker script
-DAYS_BACK = 365  # Historical data window
-PREDICTION_LIMIT = 50  # Max predictions per league
+DAYS_BACK = int(os.getenv("DAYS_BACK", 365))  # Historical data window
+PREDICTION_LIMIT = int(os.getenv("PREDICTION_LIMIT", 50))  # Max predictions per league
 
 # Leagues to process (from constants)
 from src.core.constants import DEFAULT_LEAGUES
-LEAGUES_TO_PROCESS: List[str] = DEFAULT_LEAGUES
+env_leagues = os.getenv("LEAGUES_TO_PROCESS")
+if env_leagues:
+    LEAGUES_TO_PROCESS = [l.strip() for l in env_leagues.split(",")]
+else:
+    LEAGUES_TO_PROCESS = DEFAULT_LEAGUES
 
 # Logging Configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
