@@ -134,32 +134,34 @@ class AIPicksService(PicksService):
         
         for pick in picks:
             market_type = pick.market_type
+            analysis_parts = []
             
             # PHASE A: Model-First Filtering (LearningWeights)
-            # Automatically discard markets performing poorly historically
             weight = self.learning_weights.get_market_adjustment(market_type)
             
-            # STRICTER GLOBAL POLICY: Discard if Weight < 0.8 (Quality > Quantity)
+            # STRICTER GLOBAL POLICY: Discard if Weight < 0.8
             if weight < 0.8:
                 logger.debug(f"AI Discarded {pick.market_label} (Weight {weight:.2f} < 0.8)")
                 continue
+
+            if weight >= 1.1:
+                analysis_parts.append(f"Historial Rentable ({weight:.1f}x)")
 
             # --- PHASE B: Integration of Context ---
             # Rule: Defensive Struggle -> Force UNDER / NO BTTS
             if context["defensive_struggle"]:
                 if "UNDER" in market_type or "BTTS_NO" in market_type:
                     pick.priority_score *= 1.25
-                    pick.reasoning += " 🛡️ Contexto Defensivo."
-                    pick.confidence_level = ConfidenceLevel.HIGH # Boost confidence directly
+                    analysis_parts.append("🛡️ Contexto Defensivo (Equipos cerrados)")
+                    pick.confidence_level = ConfidenceLevel.HIGH
                 elif "OVER" in market_type or "BTTS_YES" in market_type:
-                    # Penalize contradictory picks in this context
-                     pick.priority_score *= 0.5 # Stricter penalty
+                     pick.priority_score *= 0.5 
             
             # Rule: One-Sided -> Prioritize HANDICAP / TEAM GOALS / WINNER
             if context["one_sided"]:
                 if "HANDICAP" in market_type or "TEAM_GOALS" in market_type or "WINNER" in market_type:
                      pick.priority_score *= 1.2
-                     pick.reasoning += " ⚔️ Desigualdad detectada."
+                     analysis_parts.append("⚔️ Desigualdad detectada (Oportunidad Handicap)")
 
             # --- PHASE C: ML Confirmation (Predict Proba) ---
             ml_confidence = 0.0
@@ -174,7 +176,6 @@ class AIPicksService(PicksService):
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
             # Criteria: Prob > 65%, Weight >= 1.0, ML > 80% (Strict)
-            # If ML model is missing (during backtesting), use stricter statistical thresholds
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
                     pick.probability > 0.65 and
@@ -182,47 +183,59 @@ class AIPicksService(PicksService):
                     ml_confidence > 0.80
                 )
             else:
-                # Fallback: Strong Statistical signal "Algo Lock" for history
-                # Strict: 0.75
+                # Fallback
                 is_ai_lock = (pick.probability > 0.75 and weight >= 1.05)
             
+            ai_label = ""
             if is_ai_lock:
-                pick.priority_score *= 2.0 # Massive boost for verified quality
-                pick.reasoning = f"🤖 IA HIGH PRECISION: {pick.reasoning}"
+                pick.priority_score *= 2.0 
+                ai_label = "🤖 IA LOCK"
                 pick.is_recommended = True
                 pick.is_ml_confirmed = True
                 pick.confidence_level = ConfidenceLevel.HIGH
-                
+                # Specific Reason
+                conf_pct = int(ml_confidence * 100) if ml_confidence > 0 else "N/A"
+                analysis_parts.insert(0, f"Confianza Modelo {conf_pct}%")
+
             # --- PHASE E: Anomaly/Value Detection ---
-            # Check implied odds vs internal probability
             if pick.odds > 1.0:
                 implied_prob = 1.0 / pick.odds
-                # If our model is > 10% more confident than the market
-                # Reduced discrepancy needed to catch value, BUT added probability floor
                 discrepancy = pick.probability - implied_prob
                 
-                # REQUIREMENT: Must be at least >55% probable to be a "Value Pick" for general users
+                # REQUIREMENT: Must be at least >55% probable
                 if discrepancy > 0.10 and pick.probability > 0.55:
-                    # Validate with context to ensure it's not a "trap"
-                    # Simple heuristic: if context agrees with pick direction
                     context_supports = True
-                    if "OVER" in market_type and context["defensive_struggle"]:
-                        context_supports = False
+                    if "OVER" in market_type and context["defensive_struggle"]: context_supports = False
                     
                     if context_supports:
                         pick.priority_score *= 1.3
-                        pick.reasoning += f" 💎 VALOR ALGORÍTMICO (Disc: {discrepancy*100:.1f}%)."
+                        val_pct = int(discrepancy * 100)
+                        analysis_parts.append(f"💎 Valor Detectado (+{val_pct}% vs Mercado)")
                         pick.expected_value = (pick.probability * pick.odds) - 1
                         
-                        # Only recommend if confidence is solid or is an AI Lock
                         if pick.probability > 0.60:
                             pick.is_recommended = True
+                            if not ai_label: ai_label = "💎 SMART VALUE"
 
-            # FINAL FILTER: Discard picks with very low absolute probability unless they are high EV longshots (handled elsewhere)
-            # For "Quality over Quantity", we ignore "lottery tickets" < 45% even if EV+
+            # FINAL FILTER
             if pick.probability < 0.45:
                  continue
 
+            # --- REASONING CONSTRUCTION ---
+            # "IA LOCK: Confianza 85% | Historial 1.2x | Contexto Defensivo"
+            final_reasoning = f"{ai_label}: " if ai_label else ""
+            if analysis_parts:
+                final_reasoning += " | ".join(analysis_parts)
+            
+            # Append original reasoning if valuable (avoid duplicates like h2h if needed, but keeping for now)
+            if pick.reasoning and "Test Reasoning" not in pick.reasoning: 
+                 # Clean up old tags
+                 clean_base = pick.reasoning.replace("🤖 IA HIGH PRECISION:", "").strip()
+                 if clean_base:
+                     final_reasoning += f" [{clean_base}]"
+            
+            pick.reasoning = final_reasoning.strip()
+            
             refined_picks.append(pick)
             
         return refined_picks
