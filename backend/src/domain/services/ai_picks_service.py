@@ -139,9 +139,9 @@ class AIPicksService(PicksService):
             # Automatically discard markets performing poorly historically
             weight = self.learning_weights.get_market_adjustment(market_type)
             
-            # RELAXED: weight < 0.1 -> Discard (from 0.5) to allow almost everything
-            if weight < 0.1:
-                logger.debug(f"AI Discarded {pick.market_label} (Weight {weight:.2f} < 0.1)")
+            # STRICTER: weight < 0.6 -> Discard (Quality over Quantity)
+            if weight < 0.6:
+                logger.debug(f"AI Discarded {pick.market_label} (Weight {weight:.2f} < 0.6)")
                 continue
 
             # --- PHASE B: Integration of Context ---
@@ -153,11 +153,11 @@ class AIPicksService(PicksService):
                     pick.confidence_level = ConfidenceLevel.HIGH # Boost confidence directly
                 elif "OVER" in market_type or "BTTS_YES" in market_type:
                     # Penalize contradictory picks in this context
-                     pick.priority_score *= 0.7
+                     pick.priority_score *= 0.5 # Stricter penalty
             
-            # Rule: One-Sided -> Prioritize HANDICAP / TEAM GOALS
+            # Rule: One-Sided -> Prioritize HANDICAP / TEAM GOALS / WINNER
             if context["one_sided"]:
-                if "HANDICAP" in market_type or "TEAM_GOALS" in market_type:
+                if "HANDICAP" in market_type or "TEAM_GOALS" in market_type or "WINNER" in market_type:
                      pick.priority_score *= 1.2
                      pick.reasoning += " ⚔️ Desigualdad detectada."
 
@@ -171,34 +171,37 @@ class AIPicksService(PicksService):
                 except Exception:
                     pass
 
-            # --- PHASE D: AI Locks Generation ---
-            # Criteria: Prob > 60%, Weight >= 1.0, ML > 70%
+            # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
+            # Criteria: Prob > 65%, Weight >= 1.0, ML > 75%
             # If ML model is missing (during backtesting), use stricter statistical thresholds
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
-                    pick.probability > 0.60 and
-                    weight >= 1.0 and
-                    ml_confidence > 0.70
+                    pick.probability > 0.65 and
+                    weight >= 1.05 and
+                    ml_confidence > 0.75
                 )
             else:
                 # Fallback: Strong Statistical signal "Algo Lock" for history
-                # Relaxed from 0.75/1.1 to 0.70/1.0 to ensure visibility
-                is_ai_lock = (pick.probability > 0.70 and weight >= 1.0)
+                # Stricter: 0.70 -> 0.75 to ensure only top tier picks
+                is_ai_lock = (pick.probability > 0.75 and weight >= 1.05)
             
             if is_ai_lock:
-                pick.priority_score *= 1.5 # Massive boost
-                pick.reasoning = f"🤖 IA CONFIRMED: {pick.reasoning}"
+                pick.priority_score *= 2.0 # Massive boost for verified quality
+                pick.reasoning = f"🤖 IA HIGH PRECISION: {pick.reasoning}"
                 pick.is_recommended = True
                 pick.is_ml_confirmed = True
+                pick.confidence_level = ConfidenceLevel.HIGH
                 
             # --- PHASE E: Anomaly/Value Detection ---
             # Check implied odds vs internal probability
             if pick.odds > 1.0:
                 implied_prob = 1.0 / pick.odds
-                # If our model is > 15% more confident than the market
+                # If our model is > 10% more confident than the market
+                # Reduced discrepancy needed to catch value, BUT added probability floor
                 discrepancy = pick.probability - implied_prob
                 
-                if discrepancy > 0.15:
+                # REQUIREMENT: Must be at least >55% probable to be a "Value Pick" for general users
+                if discrepancy > 0.10 and pick.probability > 0.55:
                     # Validate with context to ensure it's not a "trap"
                     # Simple heuristic: if context agrees with pick direction
                     context_supports = True
@@ -209,7 +212,15 @@ class AIPicksService(PicksService):
                         pick.priority_score *= 1.3
                         pick.reasoning += f" 💎 VALOR ALGORÍTMICO (Disc: {discrepancy*100:.1f}%)."
                         pick.expected_value = (pick.probability * pick.odds) - 1
-                        pick.is_recommended = True
+                        
+                        # Only recommend if confidence is solid or is an AI Lock
+                        if pick.probability > 0.60:
+                            pick.is_recommended = True
+
+            # FINAL FILTER: Discard picks with very low absolute probability unless they are high EV longshots (handled elsewhere)
+            # For "Quality over Quantity", we ignore "lottery tickets" < 45% even if EV+
+            if pick.probability < 0.45:
+                 continue
 
             refined_picks.append(pick)
             

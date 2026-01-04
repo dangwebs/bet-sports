@@ -358,21 +358,11 @@ const ExpandedMatchDetails = ({ match }: { match: MatchPredictionHistory }) => {
               <Box mx={1} width="1px" bgcolor="rgba(255,255,255,0.2)" />
               <PickChip
                 icon={<SmartToy sx={{ fontSize: "14px !important" }} />}
-                label={`IA: ${aiCorrectCount} ✅`}
+                label={`IA: ${aiCorrectCount}/${aiPicks.length}`}
                 sx={{
                   bgcolor: "rgba(56, 189, 248, 0.15)",
                   color: "#38bdf8",
                   borderColor: "#38bdf8",
-                  borderWidth: "1px",
-                  height: 24,
-                }}
-              />
-              <PickChip
-                label={`IA: ${aiWrongCount} ❌`}
-                sx={{
-                  bgcolor: "rgba(56, 189, 248, 0.05)",
-                  color: "rgba(255,255,255,0.7)",
-                  borderColor: "rgba(56, 189, 248, 0.3)",
                   borderWidth: "1px",
                   height: 24,
                 }}
@@ -708,7 +698,7 @@ const MobileMatchCard = ({
                       fontWeight={700}
                       color="#38bdf8"
                     >
-                      {aiCorrectCount}/{aiWrongCount}
+                      {aiCorrectCount}/{aiPicks.length}
                     </Typography>
                   </Box>
                 )}

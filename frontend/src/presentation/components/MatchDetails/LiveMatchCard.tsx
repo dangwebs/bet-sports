@@ -6,32 +6,34 @@ import {
   CardContent,
   styled,
   Chip,
-  Divider,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { Flag } from "@mui/icons-material";
+import { Flag, SportsSoccer } from "@mui/icons-material";
 import { LiveMatchRaw } from "../../../utils/matchMatching";
 import { getLeagueName } from "../LeagueSelector/constants";
 import { cleanTeamName } from "../../../utils/teamUtils";
 
-// --- Estilos Personalizados ---
+// --- Estilos Ultra Premium ---
 const MatchCard = styled(Card)(() => ({
   background:
-    "linear-gradient(145deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
-  backdropFilter: "blur(12px)",
+    "linear-gradient(165deg, rgba(20, 25, 35, 0.85) 0%, rgba(10, 14, 23, 0.95) 100%)", // Darker, richer
+  backdropFilter: "blur(24px)",
   border: "1px solid rgba(255, 255, 255, 0.08)",
-  borderRadius: "20px",
+  borderRadius: "28px", // Slightly softer corners
   position: "relative",
   overflow: "hidden",
-  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+  transition: "all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)",
   cursor: "pointer",
   boxShadow:
-    "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+    "0 15px 35px -5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 20px rgba(0,0,0,0.2)",
   "&:hover": {
-    transform: "translateY(-4px)",
+    transform: "translateY(-6px) scale(1.01)",
     boxShadow:
-      "0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)",
-    borderColor: "rgba(34, 197, 94, 0.5)",
+      "0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.2)",
+    borderColor: "rgba(74, 222, 128, 0.3)", // Greenish tint on hover
+    "& .action-bg": {
+      opacity: 1,
+    },
   },
 }));
 
@@ -39,22 +41,23 @@ const PulseDot = styled(Box)({
   width: 6,
   height: 6,
   borderRadius: "50%",
-  backgroundColor: "#22c55e",
-  animation: "pulse 1.5s infinite ease-in-out",
+  backgroundColor: "#00e676", // Brighter green
+  boxShadow: "0 0 10px 2px rgba(0, 230, 118, 0.6)",
+  animation: "pulse 1.8s infinite ease-in-out",
   willChange: "opacity",
   "@keyframes pulse": {
-    "0%": { opacity: 1 },
-    "50%": { opacity: 0.4 },
-    "100%": { opacity: 1 },
+    "0%": { opacity: 1, transform: "scale(1)" },
+    "50%": { opacity: 0.6, transform: "scale(1.2)" },
+    "100%": { opacity: 1, transform: "scale(1)" },
   },
 });
 
 const CardBadge = styled(Box)<{ color: string }>(({ color }) => ({
-  width: 10,
-  height: 14,
+  width: 8,
+  height: 8,
   backgroundColor: color,
-  borderRadius: 2,
-  boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+  borderRadius: "2px",
+  boxShadow: `0 0 8px ${color}`, // Glow effect
 }));
 
 interface LiveMatchCardProps {
@@ -67,33 +70,55 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
     return (
       <Grid size={{ xs: 12, sm: 6, md: 6, lg: 4 }}>
         <MatchCard onClick={() => onMatchClick?.(match)}>
-          <CardContent sx={{ p: "20px !important" }}>
-            {/* Header: Liga + Bandera + Tiempo */}
+          {/* Background Accent (for hover) */}
+          <Box
+            className="action-bg"
+            sx={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "radial-gradient(800px circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.03), transparent 40%)",
+              opacity: 0,
+              transition: "opacity 0.4s",
+              pointerEvents: "none",
+            }}
+          />
+
+          <CardContent
+            sx={{ p: "24px !important", position: "relative", zIndex: 1 }}
+          >
+            {/* Header: Liga + Tiempo */}
             <Box
               display="flex"
               justifyContent="space-between"
               alignItems="center"
-              mb={2}
+              mb={4}
             >
-              <Box display="flex" alignItems="center" gap={1}>
+              <Box display="flex" alignItems="center" gap={1.5}>
                 {match.league_flag && (
                   <Box
                     component="img"
                     src={match.league_flag}
                     alt={match.league_name}
                     sx={{
-                      width: 16,
-                      height: 12,
-                      borderRadius: 0.5,
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
                       objectFit: "cover",
+                      border: "1px solid rgba(255,255,255,0.15)",
                     }}
                   />
                 )}
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  fontWeight={600}
-                  sx={{ textTransform: "uppercase", fontSize: "0.65rem" }}
+                  color="rgba(255,255,255,0.7)"
+                  fontWeight={700}
+                  sx={{
+                    textTransform: "uppercase",
+                    fontSize: "0.6rem",
+                    letterSpacing: "1px",
+                    textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                  }}
                 >
                   {getLeagueName(match.league_name)}
                 </Typography>
@@ -104,8 +129,15 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                   <Chip
                     label="HT"
                     size="small"
-                    color="warning"
-                    sx={{ height: 18, fontSize: "0.6rem", fontWeight: 700 }}
+                    sx={{
+                      height: 20,
+                      fontSize: "0.6rem",
+                      fontWeight: 800,
+                      bgcolor: "rgba(245, 158, 11, 0.2)",
+                      color: "#fbbf24",
+                      border: "1px solid rgba(245, 158, 11, 0.4)",
+                      mr: 0.5,
+                    }}
                   />
                 )}
                 <Box
@@ -113,18 +145,19 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                   alignItems="center"
                   gap={1}
                   sx={{
-                    bgcolor: "rgba(34, 197, 94, 0.1)",
-                    px: 1,
-                    py: 0.25,
+                    bgcolor: "rgba(0, 0, 0, 0.3)",
+                    px: 1.5,
+                    py: 0.5,
                     borderRadius: "100px",
-                    border: "1px solid rgba(34, 197, 94, 0.2)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
                   }}
                 >
                   <PulseDot />
                   <Typography
                     variant="caption"
                     fontWeight={700}
-                    color="#4ade80"
+                    color="#00e676"
+                    sx={{ fontFamily: "monospace", letterSpacing: 1 }}
                   >
                     {match.minute}'
                   </Typography>
@@ -134,37 +167,50 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
 
             {/* Scoreboard Central */}
             <Box
-              display="flex"
+              display="grid"
+              gridTemplateColumns="1fr auto 1fr"
               alignItems="center"
-              justifyContent="space-between"
               mb={3}
+              position="relative"
             >
               {/* Home Team */}
               <Box
-                flex={1}
                 display="flex"
                 flexDirection="column"
                 alignItems="center"
                 justifyContent="center"
+                zIndex={2}
               >
-                {match.home_logo_url && (
-                  <Box
-                    component="img"
-                    src={match.home_logo_url}
-                    alt={cleanTeamName(
-                      match.home_short_name || match.home_team
-                    )}
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      objectFit: "contain",
-                      mb: 1,
-                    }}
-                  />
-                )}
+                <Box
+                  sx={{
+                    position: "relative",
+                    mb: 1,
+                    filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.4))",
+                  }}
+                >
+                  {match.home_logo_url ? (
+                    <Box
+                      component="img"
+                      src={match.home_logo_url}
+                      alt={cleanTeamName(
+                        match.home_short_name || match.home_team
+                      )}
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        transition: "transform 0.3s",
+                        "&:hover": { transform: "scale(1.1)" },
+                      }}
+                    />
+                  ) : (
+                    <SportsSoccer
+                      sx={{ fontSize: 36, color: "rgba(255,255,255,0.1)" }}
+                    />
+                  )}
+                </Box>
                 <Typography
-                  variant="body1"
-                  fontWeight={600}
+                  variant="body2"
+                  fontWeight={700}
                   color="white"
                   align="center"
                   sx={{
@@ -173,71 +219,104 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: "vertical",
                     overflow: "hidden",
+                    fontSize: "0.85rem",
+                    textShadow: "0 2px 4px rgba(0,0,0,0.8)",
+                    px: 1,
+                    letterSpacing: "0.2px",
                   }}
                 >
                   {cleanTeamName(match.home_short_name || match.home_team)}
                 </Typography>
               </Box>
 
-              {/* Score Box */}
+              {/* Score - Clean & Large */}
               <Box
-                sx={{
-                  mx: 2,
-                  px: 2,
-                  py: 1,
-                  bgcolor: "rgba(0,0,0,0.3)",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(255,255,255,0.05)",
-                  display: "flex",
-                  alignItems: "center",
-                  minWidth: "80px",
-                  justifyContent: "center",
-                }}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                sx={{ px: 1, zIndex: 2 }}
               >
-                <Typography variant="h5" fontWeight={700} color="white">
+                <Typography
+                  variant="h3"
+                  fontWeight={800}
+                  color="white"
+                  sx={{
+                    fontSize: "1.5rem",
+                    lineHeight: 1,
+                    textShadow:
+                      "0 0 20px rgba(255,255,255,0.15), 0 4px 10px rgba(0,0,0,0.5)",
+                    fontFeatureSettings: "'tnum'",
+                  }}
+                >
                   {match.home_score}
                 </Typography>
                 <Typography
-                  variant="h6"
+                  variant="h4"
                   sx={{
-                    mx: 1,
-                    color: "rgba(255,255,255,0.3)",
-                    pb: 0.5,
+                    mx: 1.5,
+                    color: "rgba(255,255,255,0.15)",
+                    fontWeight: 200,
+                    fontSize: "1.25rem",
+                    lineHeight: 1,
+                    mb: 0.5, // Subtle optical adjustment
                   }}
                 >
-                  :
+                  -
                 </Typography>
-                <Typography variant="h5" fontWeight={700} color="white">
+                <Typography
+                  variant="h3"
+                  fontWeight={800}
+                  color="white"
+                  sx={{
+                    fontSize: "1.5rem",
+                    lineHeight: 1,
+                    textShadow:
+                      "0 0 20px rgba(255,255,255,0.15), 0 4px 10px rgba(0,0,0,0.5)",
+                    fontFeatureSettings: "'tnum'",
+                  }}
+                >
                   {match.away_score}
                 </Typography>
               </Box>
 
               {/* Away Team */}
               <Box
-                flex={1}
                 display="flex"
                 flexDirection="column"
                 alignItems="center"
                 justifyContent="center"
+                zIndex={2}
               >
-                {match.away_logo_url && (
-                  <Box
-                    component="img"
-                    src={match.away_logo_url}
-                    alt={cleanTeamName(
-                      match.away_short_name || match.away_team
-                    )}
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      objectFit: "contain",
-                      mb: 1,
-                    }}
-                  />
-                )}
+                <Box
+                  sx={{
+                    position: "relative",
+                    mb: 1,
+                    filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.4))",
+                  }}
+                >
+                  {match.away_logo_url ? (
+                    <Box
+                      component="img"
+                      src={match.away_logo_url}
+                      alt={cleanTeamName(
+                        match.away_short_name || match.away_team
+                      )}
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        transition: "transform 0.3s",
+                        "&:hover": { transform: "scale(1.1)" },
+                      }}
+                    />
+                  ) : (
+                    <SportsSoccer
+                      sx={{ fontSize: 36, color: "rgba(255,255,255,0.1)" }}
+                    />
+                  )}
+                </Box>
                 <Typography
-                  variant="body1"
-                  fontWeight={600}
+                  variant="body2"
+                  fontWeight={700}
                   color="white"
                   align="center"
                   sx={{
@@ -246,6 +325,10 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: "vertical",
                     overflow: "hidden",
+                    fontSize: "0.85rem",
+                    textShadow: "0 2px 4px rgba(0,0,0,0.8)",
+                    px: 1,
+                    letterSpacing: "0.2px",
                   }}
                 >
                   {cleanTeamName(match.away_short_name || match.away_team)}
@@ -253,114 +336,105 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
               </Box>
             </Box>
 
-            {/* Estadísticas: Corners y Tarjetas */}
+            {/* Compact Stats Bar */}
             <Box
               sx={{
-                bgcolor: "rgba(255,255,255,0.03)",
-                borderRadius: "12px",
-                p: 1.5,
+                background: "rgba(15, 23, 42, 0.4)",
+                borderRadius: "16px",
+                py: 1.5,
+                px: 2,
+                border: "1px solid rgba(255,255,255,0.05)",
                 display: "flex",
-                flexDirection: "column",
-                gap: 1,
+                justifyContent: "space-around",
+                alignItems: "center",
+                mt: "auto",
               }}
             >
               {/* Corners */}
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-              >
-                <Typography
-                  variant="body2"
-                  fontWeight={700}
-                  color="rgba(255,255,255,0.9)"
-                  sx={{ width: 20, textAlign: "center" }}
-                >
-                  {match.home_corners}
-                </Typography>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Flag
-                    sx={{
-                      fontSize: 16,
-                      color: "#fbbf24",
-                      opacity: 0.8,
-                    }}
-                  />
-                  <Typography variant="caption" color="rgba(255,255,255,0.6)">
-                    Córners
+              <Box display="flex" flexDirection="column" alignItems="center">
+                <Box display="flex" alignItems="center" gap={0.5} mb={0.2}>
+                  <Flag sx={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }} />
+                  <Typography
+                    variant="caption"
+                    color="rgba(255,255,255,0.4)"
+                    fontSize="0.6rem"
+                    fontWeight={700}
+                    letterSpacing={0.5}
+                  >
+                    CÓRNERS
                   </Typography>
                 </Box>
                 <Typography
                   variant="body2"
                   fontWeight={700}
-                  color="rgba(255,255,255,0.9)"
-                  sx={{ width: 20, textAlign: "center" }}
+                  color="white"
+                  letterSpacing={1}
                 >
-                  {match.away_corners}
+                  {match.home_corners} : {match.away_corners}
                 </Typography>
               </Box>
 
-              <Divider sx={{ borderColor: "rgba(255,255,255,0.05)" }} />
+              <Box
+                sx={{
+                  width: "1px",
+                  height: "20px",
+                  bgcolor: "rgba(255,255,255,0.08)",
+                }}
+              />
 
               {/* Yellow Cards */}
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-              >
-                <Typography
-                  variant="body2"
-                  fontWeight={700}
-                  color="rgba(255,255,255,0.9)"
-                  sx={{ width: 20, textAlign: "center" }}
-                >
-                  {match.home_yellow_cards}
-                </Typography>
-                <Box display="flex" alignItems="center" gap={1}>
+              <Box display="flex" flexDirection="column" alignItems="center">
+                <Box display="flex" alignItems="center" gap={0.5} mb={0.2}>
                   <CardBadge color="#facc15" />
-                  <Typography variant="caption" color="rgba(255,255,255,0.6)">
-                    Amarillas
+                  <Typography
+                    variant="caption"
+                    color="rgba(255,255,255,0.4)"
+                    fontSize="0.6rem"
+                    fontWeight={700}
+                    letterSpacing={0.5}
+                  >
+                    AMARILLAS
                   </Typography>
                 </Box>
                 <Typography
                   variant="body2"
                   fontWeight={700}
-                  color="rgba(255,255,255,0.9)"
-                  sx={{ width: 20, textAlign: "center" }}
+                  color="white"
+                  letterSpacing={1}
                 >
-                  {match.away_yellow_cards}
+                  {match.home_yellow_cards} : {match.away_yellow_cards}
                 </Typography>
               </Box>
 
-              <Divider sx={{ borderColor: "rgba(255,255,255,0.05)" }} />
+              <Box
+                sx={{
+                  width: "1px",
+                  height: "20px",
+                  bgcolor: "rgba(255,255,255,0.08)",
+                }}
+              />
 
               {/* Red Cards */}
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-              >
-                <Typography
-                  variant="body2"
-                  fontWeight={700}
-                  color="rgba(255,255,255,0.9)"
-                  sx={{ width: 20, textAlign: "center" }}
-                >
-                  {match.home_red_cards}
-                </Typography>
-                <Box display="flex" alignItems="center" gap={1}>
+              <Box display="flex" flexDirection="column" alignItems="center">
+                <Box display="flex" alignItems="center" gap={0.5} mb={0.2}>
                   <CardBadge color="#ef4444" />
-                  <Typography variant="caption" color="rgba(255,255,255,0.6)">
-                    Rojas
+                  <Typography
+                    variant="caption"
+                    color="rgba(255,255,255,0.4)"
+                    fontSize="0.6rem"
+                    fontWeight={700}
+                    letterSpacing={0.5}
+                  >
+                    ROJAS
                   </Typography>
                 </Box>
                 <Typography
                   variant="body2"
                   fontWeight={700}
-                  color="rgba(255,255,255,0.9)"
-                  sx={{ width: 20, textAlign: "center" }}
+                  color="white"
+                  letterSpacing={1}
                 >
-                  {match.away_red_cards}
+                  {match.home_red_cards} : {match.away_red_cards}
                 </Typography>
               </Box>
             </Box>
@@ -370,6 +444,7 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
     );
   }
 );
+
 // Fix display name for memoized component
 LiveMatchCard.displayName = "LiveMatchCard";
 
