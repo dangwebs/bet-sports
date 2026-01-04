@@ -57,6 +57,18 @@ jobs:
           cd backend
           python scripts/run_predictions.py
 
+      - name: 🧹 Clear Render Cache
+        if: success()
+        env:
+          RENDER_APP_URL: "https://football-prediction-api-8sl4.onrender.com" # Hardcoded for reliability or use secret
+          ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }} # Reusing available secret
+        run: |
+          echo "Clearing cache on Render..."
+          curl -X DELETE "${RENDER_APP_URL}/cache/clear" \
+            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --fail || echo "Warning: Failed to clear cache (Service might be sleeping)"
+
       - name: 📊 Upload worker logs
         if: always()
         uses: actions/upload-artifact@v4
