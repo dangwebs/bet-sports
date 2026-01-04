@@ -175,16 +175,16 @@ class AIPicksService(PicksService):
                     pass
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
-            # Criteria: Prob > 65%, Weight >= 1.0, ML > 80% (Strict)
+            # Criteria: Prob > 60%, Weight >= 1.02, ML > 72% (Balanced for Major Leagues)
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
-                    pick.probability > 0.65 and
-                    weight >= 1.05 and
-                    ml_confidence > 0.80
+                    pick.probability > 0.60 and
+                    weight >= 1.02 and
+                    ml_confidence > 0.72
                 )
             else:
                 # Fallback
-                is_ai_lock = (pick.probability > 0.75 and weight >= 1.05)
+                is_ai_lock = (pick.probability > 0.70 and weight >= 1.05)
             
             ai_label = ""
             if is_ai_lock:

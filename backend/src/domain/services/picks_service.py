@@ -595,18 +595,18 @@ class PicksService:
             self._apply_ml_refinement(picks, match)
 
         # --- REFINEMENT: STRICT QUALITY CONTROL (Global) ---
-        # "Quality above Quantity": We enforce a 70% probability threshold for ALL leagues.
+        # "Quality above Quantity": We enforce a 65% probability threshold for ALL leagues.
         for p in picks.suggested_picks:
              if p.is_recommended:
                  # EXCEPTION: High Value picks (EV > 5%) are kept
                  if p.expected_value > 0.05:
                      continue
                      
-                 # Normal picks must meet 70% threshold
-                 if p.probability < 0.70:
+                 # Normal picks must meet 65% threshold (0.70 was too strict for PL/LaLiga)
+                 if p.probability < 0.65:
                      p.is_recommended = False
                      p.priority_score *= 0.8 # Penalty
-                     p.reasoning += " (Prob < 70%)."
+                     p.reasoning += " (Prob < 65%)."
                      
         # Finally, sort all generated picks by probability in descending order
         picks.suggested_picks.sort(key=lambda p: p.probability, reverse=True)
