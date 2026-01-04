@@ -84,7 +84,7 @@ class MLTrainingOrchestrator:
     async def run_training_pipeline(
         self, 
         league_ids: Optional[List[str]] = None, 
-        days_back: int = 365, 
+        days_back: int = 120, # Reduced from 365 to 120 (4 months) to save RAM
         start_date: Optional[str] = None,
         force_refresh: bool = False
     ) -> TrainingResult:
@@ -102,8 +102,6 @@ class MLTrainingOrchestrator:
             joblib = None
             logger.warning("ML libraries (sklearn, joblib) not found. Training will be skipped.")
         
-        # 0. Set Status to IN_PROGRESS immediately
-        # This tells the frontend to hide the Dashboard button but allow navigation
         # 0. Set Status to IN_PROGRESS immediately
         # This tells the frontend to hide the Dashboard button but allow navigation
         self.cache_service.set(self.CACHE_KEY_STATUS, "IN_PROGRESS", ttl_seconds=3600)
@@ -424,22 +422,28 @@ class MLTrainingOrchestrator:
         
             # --- TRAIN ML MODEL ---
             self.cache_service.set(self.CACHE_KEY_MESSAGE, "Entrenando modelo de Machine Learning (Random Forest)...", ttl_seconds=3600)
+            
+            # CRITICAL: Force Garbage Collection before training to free up RAM
+            import gc
+            gc.collect()
+
             if ML_AVAILABLE and RandomForestClassifier and len(ml_features) > 100:
                 try:
                     logger.info(f"Training ML Model on {len(ml_features)} samples...")
                     
                     # Offload CPU-bound training to a thread
+                    # Offload CPU-bound training to a thread
                     def _train_and_save():
-                        # Optimized for High Performance (GitHub Actions):
-                        # - More trees (200 vs 60) for better accuracy
-                        # - Deeper trees (12 vs 6) for complex patterns
-                        # - n_jobs=-1 to use ALL available CPU cores
+                        # Optimized for LOW MEMORY (Render Free Tier - 512MB RAM):
+                        # - n_estimators=100 (reduced from 200)
+                        # - max_depth=10 (reduced from 12) to prevent potential overfitting and save memory
+                        # - n_jobs=1 (CRITICAL: Avoid multiprocessing overhead in container)
                         clf = RandomForestClassifier(
-                            n_estimators=200, 
-                            max_depth=12, 
+                            n_estimators=100, 
+                            max_depth=10, 
                             random_state=42,
                             class_weight='balanced',
-                            n_jobs=-1
+                            n_jobs=1 
                         )
                         clf.fit(ml_features, ml_targets)
                         

@@ -84,35 +84,39 @@ const getProbabilityColor = (value: number): string => {
 
 const getCardSx = (highlight?: boolean, clickable?: boolean) => ({
   height: "100%",
-  // GPU-accelerated properties only (transform, opacity)
-  transform: highlight ? "scale(1.02)" : "translateY(0)",
-  transition:
-    "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
   position: "relative" as const,
   cursor: clickable ? "pointer" : "default",
-  background: "rgba(30, 41, 59, 0.6)", // Explicit Glass Base
-  backdropFilter: "blur(12px)",
+
+  // Premium Background & Glass
+  background:
+    "linear-gradient(165deg, rgba(20, 25, 35, 0.85) 0%, rgba(10, 14, 23, 0.95) 100%)",
+  backdropFilter: "blur(24px)",
+  borderRadius: "24px",
+
+  // Borders
   border: highlight
-    ? "1px solid #3b82f6"
+    ? "1px solid rgba(59, 130, 246, 0.5)" // Blue for highlight
     : "1px solid rgba(255, 255, 255, 0.08)",
+
+  // Shadows (Deep & Glossy)
   boxShadow: highlight
-    ? "0 0 20px rgba(59, 130, 246, 0.3)"
-    : "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
+    ? "0 0 30px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255,255,255,0.1)"
+    : "0 15px 35px -5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 20px rgba(0,0,0,0.2)",
+
+  // Transitions
+  transition: "all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)",
+
+  // Hover Effects
   "&:hover": {
-    transform: highlight
-      ? "scale(1.03)"
-      : clickable
-      ? "translateY(-5px)"
-      : "translateY(0)",
+    transform: clickable ? "translateY(-6px) scale(1.01)" : "none",
     boxShadow: highlight
-      ? "0 0 30px rgba(59, 130, 246, 0.5)"
-      : clickable
-      ? "0 15px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(59, 130, 246, 0.1)" // Neon glow on hover
-      : "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
-    border: "1px solid rgba(59, 130, 246, 0.5)", // Light up border on hover
+      ? "0 0 50px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)"
+      : "0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.2)",
+    borderColor: highlight ? "#3b82f6" : "rgba(255, 255, 255, 0.2)",
   },
-  // Hint to browser for performance
-  willChange: clickable || highlight ? "transform, box-shadow" : "auto",
+
+  // Performance hint
+  willChange: clickable ? "transform, box-shadow" : "auto",
 });
 
 const MatchCard: React.FC<MatchCardProps> = memo(

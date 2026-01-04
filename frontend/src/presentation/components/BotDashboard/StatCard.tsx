@@ -19,10 +19,21 @@ const StatCard: React.FC<StatCardProps> = ({
   <Card
     sx={{
       height: "100%",
-      bgcolor: "rgba(30, 41, 59, 0.6)",
-      backdropFilter: "blur(10px)",
-      border: "1px solid rgba(148, 163, 184, 0.1)",
+      background:
+        "linear-gradient(165deg, rgba(20, 25, 35, 0.85) 0%, rgba(10, 14, 23, 0.95) 100%)",
+      backdropFilter: "blur(24px)",
+      border: "1px solid rgba(255, 255, 255, 0.08)",
+      borderRadius: "24px",
+      boxShadow:
+        "0 15px 35px -5px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
       color: "white",
+      transition: "transform 0.3s ease, box-shadow 0.3s ease",
+      "&:hover": {
+        transform: "translateY(-4px)",
+        boxShadow:
+          "0 20px 40px -5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)",
+        borderColor: "rgba(255, 255, 255, 0.15)",
+      },
     }}
   >
     <CardContent>

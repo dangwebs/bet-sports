@@ -376,19 +376,23 @@ const BotDashboard: React.FC = () => {
                     background:
                       "linear-gradient(135deg, #fbbf24 0%, #d97706 100%)",
                     color: "#fff",
-                    fontWeight: 700,
+                    fontWeight: 800,
                     textTransform: "none",
                     fontSize: "0.95rem",
-                    padding: "8px 24px",
-                    borderRadius: "12px",
-                    boxShadow: "0 4px 15px rgba(251, 191, 36, 0.4)",
-                    border: "1px solid rgba(255, 255, 255, 0.2)",
-                    transition: "all 0.3s ease",
+                    padding: "10px 28px",
+                    borderRadius: "16px",
+                    boxShadow:
+                      "0 4px 15px rgba(251, 191, 36, 0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
+                    border: "1px solid rgba(251, 191, 36, 0.5)",
+                    backdropFilter: "blur(4px)",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                     "&:hover": {
                       background:
                         "linear-gradient(135deg, #f59e0b 0%, #b45309 100%)",
-                      transform: "translateY(-2px)",
-                      boxShadow: "0 8px 25px rgba(251, 191, 36, 0.5)",
+                      transform: "translateY(-2px) scale(1.02)",
+                      boxShadow:
+                        "0 8px 30px rgba(251, 191, 36, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)",
+                      border: "1px solid rgba(251, 191, 36, 0.8)",
                     },
                   }}
                 >
@@ -476,15 +480,36 @@ const BotDashboard: React.FC = () => {
         )}
 
         {/* Tab Navigation */}
-        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+        <Box sx={{ mb: 4 }}>
           <Tabs
             value={activeTab}
             onChange={handleTabChange}
             variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
-            textColor="secondary"
-            indicatorColor="secondary"
+            sx={{
+              "& .MuiTabs-indicator": { display: "none" },
+              "& .MuiTab-root": {
+                textTransform: "none",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                mr: 1.5,
+                color: "rgba(255,255,255,0.5)",
+                borderRadius: "12px",
+                transition: "all 0.3s ease",
+                minHeight: 44,
+                "&:hover": {
+                  color: "#fff",
+                  bgcolor: "rgba(255,255,255,0.05)",
+                },
+                "&.Mui-selected": {
+                  color: "#fff",
+                  bgcolor: "rgba(59, 130, 246, 0.2)",
+                  border: "1px solid rgba(59, 130, 246, 0.4)",
+                  boxShadow: "0 0 15px rgba(59, 130, 246, 0.15)",
+                },
+              },
+            }}
           >
             <Tab label="📊 Resumen General" />
             <Tab label="📈 Rendimiento por Mercado" />

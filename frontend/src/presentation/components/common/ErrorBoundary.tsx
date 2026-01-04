@@ -47,27 +47,54 @@ class ErrorBoundary extends Component<Props, State> {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            bgcolor: "#0f172a",
+            background:
+              "radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 100%)",
             color: "white",
             p: 2,
           }}
         >
           <Container maxWidth="sm">
             <Paper
+              elevation={24}
               sx={{
-                p: 4,
+                p: 3, // Reduced padding
                 textAlign: "center",
-                bgcolor: "rgba(30, 41, 59, 0.7)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(239, 68, 68, 0.3)",
-                borderRadius: 4,
+                background: "rgba(20, 25, 35, 0.9)", // More opaque
+                backdropFilter: "blur(24px)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "20px",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
               }}
             >
-              <ErrorOutline sx={{ fontSize: 64, color: "#ef4444", mb: 2 }} />
-              <Typography variant="h4" gutterBottom fontWeight={700}>
+              <Box
+                sx={{
+                  display: "inline-flex",
+                  p: 1.5,
+                  borderRadius: "50%",
+                  bgcolor: "rgba(239, 68, 68, 0.1)",
+                  mb: 2,
+                  boxShadow: "0 0 20px rgba(239, 68, 68, 0.2)",
+                }}
+              >
+                <ErrorOutline sx={{ fontSize: 48, color: "#ef4444" }} />
+              </Box>
+
+              <Typography
+                variant="h5"
+                gutterBottom
+                fontWeight={700}
+                sx={{
+                  color: "white",
+                  mb: 1,
+                }}
+              >
                 ¡Ups! Algo salió mal
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+
+              <Typography
+                variant="body2"
+                sx={{ mb: 3, color: "white", opacity: 0.9 }}
+              >
                 La aplicación ha experimentado un error inesperado al renderizar
                 el contenido.
               </Typography>
@@ -76,16 +103,21 @@ class ErrorBoundary extends Component<Props, State> {
                 <Box
                   sx={{
                     mb: 4,
-                    p: 2,
+                    p: 2.5,
                     bgcolor: "rgba(0,0,0,0.3)",
-                    borderRadius: 2,
+                    borderRadius: 3,
                     textAlign: "left",
                     overflowX: "auto",
+                    border: "1px solid rgba(239, 68, 68, 0.2)",
                   }}
                 >
                   <Typography
                     variant="caption"
-                    sx={{ fontFamily: "monospace", color: "#f87171" }}
+                    sx={{
+                      fontFamily: "monospace",
+                      color: "white",
+                      fontSize: "0.85rem",
+                    }}
                   >
                     {this.state.error.toString()}
                   </Typography>
@@ -96,10 +128,22 @@ class ErrorBoundary extends Component<Props, State> {
                 variant="contained"
                 startIcon={<Refresh />}
                 onClick={this.handleReset}
+                size="large"
                 fullWidth
                 sx={{
+                  py: 1.5,
+                  fontSize: "1rem",
+                  fontWeight: 700,
+                  borderRadius: "12px",
                   background:
                     "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+                  boxShadow: "0 0 20px rgba(59, 130, 246, 0.4)",
+                  textTransform: "none",
+                  transition: "all 0.3s ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: "0 0 30px rgba(59, 130, 246, 0.6)",
+                  },
                 }}
               >
                 Recargar Aplicación

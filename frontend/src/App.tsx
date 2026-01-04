@@ -220,9 +220,9 @@ const App: React.FC = () => {
         <AppBar
           position="static"
           elevation={0}
+          className="glass-header"
           sx={{
-            background: "transparent",
-            borderBottom: "1px solid rgba(148, 163, 184, 0.1)",
+            background: "transparent", // Handled by CSS class
           }}
         >
           <Toolbar>

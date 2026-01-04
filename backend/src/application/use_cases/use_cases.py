@@ -706,103 +706,33 @@ class GetMatchDetailsUseCase:
         if not match:
             return None
 
-        # 2. Check Unified Cache for Historical Prediction (Consistency)
+        if not match:
+            return None
+
+        # 2. Optimized Lookup: Fetch Pre-calculated prediction from PostgreSQL (O(1))
+        # yielding massive RAM savings vs loading the 100MB+ training result blob.
         try:
-            from src.infrastructure.cache import get_cache_service
-            from src.application.dtos.dtos import SuggestedPickDTO
-            
-            cache = get_cache_service()
-            training_results = cache.get("ml_training_result_data")
-            
-            # SYNC LOGIC: Check if training_results in cache is stale compared to DB
-            if self.data_sources.football_data_uk: # Just a check for persistence repo availability
-                from src.api.dependencies import get_persistence_repository
-                repo = get_persistence_repository()
-                _, db_last_updated = repo.get_training_result_with_timestamp("ml_training_result_data")
-                
-                if training_results and db_last_updated:
-                    # Check if 'generated_at' exists in training_results
-                    from src.utils.time_utils import to_colombia_time
-                    from dateutil import parser
-                    gen_at_str = training_results.get('global_averages', {}).get('calculated_at') # Best proxy for overall generation time
-                    if gen_at_str:
-                        gen_at = to_colombia_time(parser.parse(gen_at_str))
-                        db_last_updated = to_colombia_time(db_last_updated)
-                        
-                        if db_last_updated > gen_at:
-                            logger.info("🔄 Global training cache stale. Invalidating...")
-                            cache.invalidate("ml_training_result_data")
-                            training_results = None # Force loading from DB later
-
-            if training_results and 'match_history' in training_results:
-                # O(N) lookup but N=18k is fast enough for single request. 
-                # Optimized: convert to dict if frequent, but for now linear scan is <10ms.
-                # Actually, filtering by ID is cleaner.
-                history_item = next((m for m in training_results['match_history'] if m['match_id'] == match_id), None)
-                
-                if history_item:
-                    # Found in history! Map to PredictionDTO
-                    logger.info(f"Serving cached historical prediction for match {match_id}")
-                    
-                    # Synthesize SuggestedPickDTOs from History PickDetails
-                    picks_dtos = []
-                    if 'picks' in history_item:
-                        for p in history_item['picks']:
-                            # PickDetail -> SuggestedPickDTO
-                            prob = p.get('probability', 0.0)
-                            conf = p.get('confidence', 0.0)
-                            
-                            # Estimate risk/confidence text
-                            conf_level = "MEDIA"
-                            if prob > 0.7: conf_level = "ALTA"
-                            elif prob < 0.4: conf_level = "BAJA"
-                            
-                            risk = int((1 - prob) * 10)
-                            if risk < 1: risk = 1
-                            
-                            picks_dtos.append(SuggestedPickDTO(
-                                market_type=p.get('market_type', 'unknown'),
-                                market_label=p.get('market_label', 'Unknown Pick'),
-                                probability=prob,
-                                confidence_level=conf_level,
-                                reasoning="Resultado Verificado en Backtest",
-                                risk_level=risk,
-                                is_recommended=True, # All history picks were "suggested"
-                                priority_score=prob * p.get('expected_value', 1.0)
-                            ))
-
-                    # Parse prediction values
-                    pred_dto = PredictionDTO(
-                        match_id=match_id,
-                        home_win_probability=history_item.get('home_win_probability', 0.0),
-                        draw_probability=history_item.get('draw_probability', 0.0),
-                        away_win_probability=history_item.get('away_win_probability', 0.0),
-                        over_25_probability=0.0, # Not stored yet, but less critical than Win Probs
-                        under_25_probability=0.0,
-                        predicted_home_goals=history_item.get('predicted_home_goals', 0.0),
-                        predicted_away_goals=history_item.get('predicted_away_goals', 0.0),
-                        confidence=history_item.get('confidence', 0.0),
-                        data_sources=[
-                            "GitHub Dataset (2000-2025)",
-                            "API-Football",
-                            "ESPN",
-                            "Football-Data.co.uk"
-                        ], # Explicitly list sources used in Training
-                        recommended_bet="See Picks",
-                        over_under_recommendation="See Picks",
-                        suggested_picks=picks_dtos,
-                        created_at=datetime.now(timezone('America/Bogota')), # Placeholder
-                    )
-                    
-                    # Update probabilities if we can infer them from picks or if added to history later
-                    # For now, we return what we have. The UI mostly cares about 'suggested_picks' and exact score.
-                    
-                    return MatchPredictionDTO(
-                        match=self._match_to_dto(match),
-                        prediction=pred_dto
-                    )
+             # Just to be safe with imports
+             from src.api.dependencies import get_persistence_repository
+             repo = get_persistence_repository()
+             
+             pred_data, _ = repo.get_match_prediction_with_timestamp(match_id)
+             
+             if pred_data:
+                 logger.info(f"Serving optimized pre-calculated prediction for match {match_id}")
+                 
+                 # The data is already in the shape of MatchPredictionDTO (serialized)
+                 # We just need to parse it back to DTO
+                 # Note: The 'data' field in DB corresponds to the full MatchPredictionDTO model dump
+                 # stored in GetPredictionsUseCase.execute -> bulk_save_predictions
+                 
+                 return MatchPredictionDTO(**pred_data)
+                 
         except Exception as e:
-            logger.warning(f"Error reading training cache for match details: {e}")
+            logger.error(f"Failed to fetch optimized prediction for {match_id}: {e}")
+            # Continue to fallback (although fallback is the heavy blob we want to avoid, we might keep it as last resort or just return None)
+
+        return None
 
         # 3. Get historical data for context (for stats) - Standard Fallback
         historical_matches = []

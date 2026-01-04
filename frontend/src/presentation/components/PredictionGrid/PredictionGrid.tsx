@@ -54,11 +54,6 @@ const PredictionGrid: React.FC = memo(() => {
   const [snackbarOpen, setSnackbarOpen] = React.useState(false);
   const [snackbarMessage, setSnackbarMessage] = React.useState("");
 
-  // Loading state for individual picks
-  const [loadingPicks, setLoadingPicks] = React.useState<Set<string>>(
-    new Set()
-  );
-
   const handleCloseSnackbar = (
     _event?: React.SyntheticEvent | Event,
     reason?: string
@@ -102,55 +97,45 @@ const PredictionGrid: React.FC = memo(() => {
           return;
         }
 
-        // Set loading state for this match
-        setLoadingPicks((prev) => new Set(prev).add(matchId));
+        // Optimize: Use local data first! avoids unnecessary API call
+        // Use suggested picks if available in the prediction object
+        let picks = match.prediction.suggested_picks || [];
 
-        try {
-          // Fetch picks from backend API (same source as modal)
-          const { predictionsApi } = await import(
-            "../../../infrastructure/api/predictions"
-          );
-          const apiPicks = await predictionsApi.getSuggestedPicks(matchId);
+        // If no suggested picks, use recommended bet
+        if (picks.length === 0 && match.prediction.recommended_bet) {
+          // We construct a mock pick from the recommendation
+          // This is faster and uses what's already on screen
+          // But best to check if we can get a real pick object
+          const bestPick = getBestPick(match);
+          if (bestPick) picks = [bestPick];
+        }
 
-          let picks = apiPicks?.suggested_picks || [];
-
-          // If no API picks, fallback to generated picks
-          if (picks.length === 0) {
-            picks = getBestPick(match) ? [getBestPick(match)!] : [];
-          }
-
+        if (picks.length > 0) {
           // Sort by probability and get the best one
-          if (picks.length > 0) {
-            const bestPick = picks.sort(
-              (a, b) => b.probability - a.probability
-            )[0];
-            const pickItem: ParleyPickItem = {
-              match: match,
-              pick: bestPick.pick_code || "?",
-              probability: bestPick.probability,
-              label: bestPick.market_label,
-            };
-            addPick(matchId, pickItem);
-          }
-        } catch (error) {
-          // Fallback to local generation if API fails
+          const bestPick = picks.sort(
+            (a, b) => b.probability - a.probability
+          )[0];
+
+          const pickItem: ParleyPickItem = {
+            match: match,
+            // Ensure we have a valid code or fallback to a readable one
+            pick: bestPick.pick_code || bestPick.market_type || "WINNER",
+            probability: bestPick.probability,
+            label: bestPick.market_label,
+          };
+          addPick(matchId, pickItem);
+        } else {
+          // Fallback for missing data
           const bestPick = getBestPick(match);
           if (bestPick) {
             const pickItem: ParleyPickItem = {
               match: match,
-              pick: bestPick.pick_code || "?",
+              pick: bestPick.pick_code || bestPick.market_type || "WINNER",
               probability: bestPick.probability,
               label: bestPick.market_label,
             };
             addPick(matchId, pickItem);
           }
-        } finally {
-          // Remove loading state
-          setLoadingPicks((prev) => {
-            const next = new Set(prev);
-            next.delete(matchId);
-            return next;
-          });
         }
       }
     },
@@ -307,7 +292,6 @@ const PredictionGrid: React.FC = memo(() => {
           predictions={sortedPredictions}
           onMatchClick={handleMatchClick}
           selectedMatchIds={Object.keys(selectedPicks)}
-          loadingMatchIds={loadingPicks}
           onToggleMatchSelection={handleToggleSelection}
         />
       )}

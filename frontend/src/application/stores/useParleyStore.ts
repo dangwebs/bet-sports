@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { MatchPrediction } from "../../domain/entities";
-import { indexedDBStorage } from "../../infrastructure/storage/indexedDBStorage";
 
 export interface ParleyPickItem {
   match: MatchPrediction;
@@ -67,8 +66,8 @@ export const useParleyStore = create<ParleyState>()(
       },
     }),
     {
-      name: "parley-storage-v2",
-      storage: createJSONStorage(() => indexedDBStorage),
+      name: "parley-storage-v3", // Bump version to reset invalid state
+      storage: createJSONStorage(() => localStorage), // Switch to localStorage for speed
     }
   )
 );

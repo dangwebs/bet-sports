@@ -17,10 +17,43 @@ import {
   ExpandLess,
   ExpandMore,
   Diamond,
+  SportsSoccer,
+  Flag,
+  Style,
+  EmojiEvents,
 } from "@mui/icons-material";
 import { useParleyStore } from "../../../application/stores/useParleyStore";
 import { useUIStore } from "../../../application/stores/useUIStore";
 import { getTeamDisplayName } from "../../../utils/teamUtils";
+
+// Helper to map pick codes to icons
+const getPickIcon = (pick: string, label: string) => {
+  const p = pick.toUpperCase();
+  const l = label.toUpperCase();
+
+  if (l.includes("CÓRNER") || l.includes("CORNER") || p.includes("CORNER"))
+    return <Flag sx={{ fontSize: "1rem !important" }} />;
+  if (l.includes("TARJETA") || l.includes("CARD") || p.includes("CARD"))
+    return <Style sx={{ fontSize: "1rem !important" }} />; // Cards
+  if (
+    l.includes("GOL") ||
+    p.includes("OVER") ||
+    p.includes("UNDER") ||
+    p.includes("BTTS")
+  )
+    return <SportsSoccer sx={{ fontSize: "1rem !important" }} />;
+  if (
+    p.includes("WIN") ||
+    p.includes("HOME") ||
+    p.includes("AWAY") ||
+    p === "1" ||
+    p === "2" ||
+    p === "X"
+  )
+    return <EmojiEvents sx={{ fontSize: "1rem !important" }} />;
+
+  return <LocalActivity sx={{ fontSize: "1rem !important" }} />;
+};
 
 const ParleySlip: React.FC = () => {
   const { selectedPicks, removePick, clearPicks } = useParleyStore();
@@ -143,12 +176,21 @@ const ParleySlip: React.FC = () => {
                   }}
                 >
                   <Box display="flex" alignItems="center" gap={1}>
-                    <Chip
-                      label={item.pick}
-                      size="small"
-                      color="secondary"
-                      sx={{ fontWeight: "bold", height: 24, minWidth: 24 }}
-                    />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        bgcolor: "rgba(139, 92, 246, 0.2)",
+                        color: "#a78bfa",
+                        border: "1px solid rgba(139, 92, 246, 0.3)",
+                      }}
+                    >
+                      {getPickIcon(item.pick, item.label)}
+                    </Box>
                     <Typography variant="body2" color="white" fontWeight="bold">
                       {item.label}
                     </Typography>

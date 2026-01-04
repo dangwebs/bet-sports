@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react";
-import { Box, Skeleton, Grow } from "@mui/material";
+import { Box, Skeleton } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { MatchPrediction } from "../../../types";
 
@@ -51,29 +51,27 @@ const PredictionGridList: React.FC<PredictionGridListProps> = ({
     <Grid container spacing={3}>
       {predictions.map((matchPrediction, index) => (
         <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={matchPrediction.match.id}>
-          <Grow
-            in
-            timeout={300 + index * 50}
-            style={{ transformOrigin: "0 0 0" }}
+          <Box
+            className="animate-fade-in-up"
+            sx={{
+              animationDelay: `${index * 0.05}s`,
+              height: "100%", // Ensure full height for card
+            }}
           >
-            <Box>
-              <Suspense fallback={<MatchCardSkeleton />}>
-                <MatchCard
-                  matchPrediction={matchPrediction}
-                  highlight={index === 0}
-                  onClick={() => onMatchClick(matchPrediction)}
-                  isSelected={selectedMatchIds.includes(
-                    matchPrediction.match.id
-                  )}
-                  isLoading={loadingMatchIds.has(matchPrediction.match.id)}
-                  onToggleSelection={() =>
-                    onToggleMatchSelection &&
-                    onToggleMatchSelection(matchPrediction)
-                  }
-                />
-              </Suspense>
-            </Box>
-          </Grow>
+            <Suspense fallback={<MatchCardSkeleton />}>
+              <MatchCard
+                matchPrediction={matchPrediction}
+                highlight={index === 0}
+                onClick={() => onMatchClick(matchPrediction)}
+                isSelected={selectedMatchIds.includes(matchPrediction.match.id)}
+                isLoading={loadingMatchIds.has(matchPrediction.match.id)}
+                onToggleSelection={() =>
+                  onToggleMatchSelection &&
+                  onToggleMatchSelection(matchPrediction)
+                }
+              />
+            </Suspense>
+          </Box>
         </Grid>
       ))}
     </Grid>
