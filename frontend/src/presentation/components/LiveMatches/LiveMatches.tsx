@@ -99,8 +99,16 @@ const normalizeMatch = (
     return {
       status: match.status || "LIVE",
       leagueName: match.league_name || "Liga",
-      homeTeamName: match.home_team,
-      awayTeamName: match.away_team,
+      homeTeamName:
+        typeof match.home_team === "string"
+          ? match.home_team
+          : match.home_team.name || "Local",
+      awayTeamName:
+        typeof match.away_team === "string"
+          ? match.away_team
+          : match.away_team.name || "Visitante",
+      homeTeam: match.home_team,
+      awayTeam: match.away_team,
       homeScore: match.home_score ?? 0,
       awayScore: match.away_score ?? 0,
     };
