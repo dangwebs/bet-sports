@@ -434,13 +434,16 @@ class MLTrainingOrchestrator:
                     # Offload CPU-bound training to a thread
                     # Offload CPU-bound training to a thread
                     def _train_and_save():
-                        # Optimized for LOW MEMORY (Render Free Tier - 512MB RAM):
-                        # - n_estimators=100 (reduced from 200)
-                        # - max_depth=10 (reduced from 12) to prevent potential overfitting and save memory
-                        # - n_jobs=1 (CRITICAL: Avoid multiprocessing overhead in container)
+                        # Optimized for LOW MEMORY & HIGH GENERALIZATION:
+                        # - n_estimators=150
+                        # - max_depth=10 
+                        # - min_samples_leaf=5 (Reliability)
+                        # - n_jobs=1
                         clf = RandomForestClassifier(
-                            n_estimators=100, 
+                            n_estimators=150, 
                             max_depth=10, 
+                            min_samples_leaf=5,
+                            min_samples_split=15,
                             random_state=42,
                             class_weight='balanced',
                             n_jobs=1 

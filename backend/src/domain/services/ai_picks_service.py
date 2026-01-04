@@ -139,9 +139,9 @@ class AIPicksService(PicksService):
             # Automatically discard markets performing poorly historically
             weight = self.learning_weights.get_market_adjustment(market_type)
             
-            # STRICTER: weight < 0.6 -> Discard (Quality over Quantity)
-            if weight < 0.6:
-                logger.debug(f"AI Discarded {pick.market_label} (Weight {weight:.2f} < 0.6)")
+            # STRICTER GLOBAL POLICY: Discard if Weight < 0.8 (Quality > Quantity)
+            if weight < 0.8:
+                logger.debug(f"AI Discarded {pick.market_label} (Weight {weight:.2f} < 0.8)")
                 continue
 
             # --- PHASE B: Integration of Context ---
@@ -165,24 +165,25 @@ class AIPicksService(PicksService):
             ml_confidence = 0.0
             if self.ml_model:
                 try:
-                    features = [MLFeatureExtractor.extract_features(pick)]
+                    # STRICT: Must pass match for League Context
+                    features = [MLFeatureExtractor.extract_features(pick, match=match)]
                     ml_confidence = self.ml_model.predict_proba(features)[0][1]
                     pick.ml_confidence = float(ml_confidence)
                 except Exception:
                     pass
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
-            # Criteria: Prob > 65%, Weight >= 1.0, ML > 75%
+            # Criteria: Prob > 65%, Weight >= 1.0, ML > 80% (Strict)
             # If ML model is missing (during backtesting), use stricter statistical thresholds
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
                     pick.probability > 0.65 and
                     weight >= 1.05 and
-                    ml_confidence > 0.75
+                    ml_confidence > 0.80
                 )
             else:
                 # Fallback: Strong Statistical signal "Algo Lock" for history
-                # Stricter: 0.70 -> 0.75 to ensure only top tier picks
+                # Strict: 0.75
                 is_ai_lock = (pick.probability > 0.75 and weight >= 1.05)
             
             if is_ai_lock:

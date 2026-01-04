@@ -596,8 +596,23 @@ class PicksService:
 
         # 7. Apply ML Refinement (if model exists)
         if self.ml_model:
-            self._apply_ml_refinement(picks)
+            # Must pass match for League Context
+            self._apply_ml_refinement(picks, match)
 
+        # --- REFINEMENT: STRICT QUALITY CONTROL (Global) ---
+        # "Quality above Quantity": We enforce a 70% probability threshold for ALL leagues.
+        for p in picks.suggested_picks:
+             if p.is_recommended:
+                 # EXCEPTION: High Value picks (EV > 5%) are kept
+                 if p.expected_value > 0.05:
+                     continue
+                     
+                 # Normal picks must meet 70% threshold
+                 if p.probability < 0.70:
+                     p.is_recommended = False
+                     p.priority_score *= 0.8 # Penalty
+                     p.reasoning += " (Prob < 70%)."
+                     
         # Finally, sort all generated picks by probability in descending order
         picks.suggested_picks.sort(key=lambda p: p.probability, reverse=True)
 
@@ -606,7 +621,7 @@ class PicksService:
 
         return picks
     
-    def _apply_ml_refinement(self, picks_container: MatchSuggestedPicks):
+    def _apply_ml_refinement(self, picks_container: MatchSuggestedPicks, match: Match):
         """
         Uses the trained ML model to adjust confidence/priority of picks.
         """
@@ -616,7 +631,8 @@ class PicksService:
                 
             try:
                 # Use centralized feature extraction to ensure parity with training
-                features = [MLFeatureExtractor.extract_features(pick)]
+                # MUST pass match for League/Date context
+                features = [MLFeatureExtractor.extract_features(pick, match=match)]
                 
                 # Predict probability of this pick being correct (Class 1)
                 ml_confidence = self.ml_model.predict_proba(features)[0][1]
