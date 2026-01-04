@@ -638,11 +638,13 @@ class GetPredictionsUseCase:
     
     def _filter_future_matches(self, predictions: list[MatchPredictionDTO]) -> list[MatchPredictionDTO]:
         """Filters out matches that have already occurred."""
+        from datetime import timedelta
         from src.utils.time_utils import get_current_time
         now = get_current_time() # Returns Bogota time
         
         # Statuses that indicate a match is currently in play
-        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY"]
+        # Added PAUSED/IN_PLAY/HT/1H/2H
+        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY", "PAUSED"]
         
         filtered = []
         for p in predictions:
@@ -652,8 +654,16 @@ class GetPredictionsUseCase:
             else:
                 m_date = m_date.astimezone(now.tzinfo)
                 
-            # Allow if it's in the future OR if it's currently live
-            if m_date > now or p.match.status in live_statuses:
+            # Allow if:
+            # 1. It's in the future
+            # 2. It's currently marked as live
+            # 3. It started less than 150 minutes (2.5h) ago (Grace period for stale statuses)
+            is_recent = (now - m_date) < timedelta(minutes=150)
+            
+            if m_date > now or p.match.status in live_statuses or is_recent:
+                # But don't show if clearly finished (FT) and past the grace period
+                if p.match.status == "FT" and not is_recent:
+                    continue
                 filtered.append(p)
         return filtered
 
@@ -1311,13 +1321,19 @@ class GetGlobalLiveMatchesUseCase:
                 away_offsides=match.away_offsides,
             ))
             
-        # 3. Filter only future or currently live matches
         from src.utils.time_utils import get_current_time
         now = get_current_time()
+        from datetime import timedelta
+        # Statuses that indicate a match is currently in play
+        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY", "PAUSED"]
         
         filtered_dtos = []
         for match_dto in dtos:
-            if match_dto.match_date > now or match_dto.status in ["1H", "2H", "HT", "LIVE", "IN_PLAY"]:
+            is_recent = (now - match_dto.match_date) < timedelta(minutes=150)
+            if match_dto.match_date > now or match_dto.status in live_statuses or is_recent:
+                # Skip clearly finished matches past grace
+                if match_dto.status == "FT" and not is_recent:
+                    continue
                 filtered_dtos.append(match_dto)
         
         logger.info(f"Global Live Matches: {len(dtos)} -> {len(filtered_dtos)} (Filtered past matches)")
@@ -1462,13 +1478,19 @@ class GetGlobalDailyMatchesUseCase:
                 away_offsides=match.away_offsides,
             ))
             
-        # 4. Filter only future or currently live matches
         from src.utils.time_utils import get_current_time
         now = get_current_time()
+        from datetime import timedelta
+        # Statuses that indicate a match is currently in play
+        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY", "PAUSED"]
         
         filtered_dtos = []
         for m in dtos:
-            if m.match_date > now or m.status in ["1H", "2H", "HT", "LIVE", "IN_PLAY"]:
+            is_recent = (now - m.match_date) < timedelta(minutes=150)
+            if m.match_date > now or m.status in live_statuses or is_recent:
+                # Skip clearly finished matches past grace
+                if m.status == "FT" and not is_recent:
+                    continue
                 filtered_dtos.append(m)
         
         # 5. Persistence: Index daily matches for the Explorer

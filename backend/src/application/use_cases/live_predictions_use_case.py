@@ -218,14 +218,19 @@ class GetLivePredictionsUseCase:
                     prediction=self._empty_prediction(match.id),
                 ))
         
-        # 4. Filter only future or currently live matches
         from src.utils.time_utils import get_current_time
         now = get_current_time()
+        from datetime import timedelta
+        # Statuses that indicate a match is currently in play
+        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY", "PAUSED"]
         
         filtered_results = []
         for p_dto in results:
-            # We already have match_date in p_dto.match
-            if p_dto.match.match_date > now or p_dto.match.status in ["1H", "2H", "HT", "LIVE", "IN_PLAY"]:
+            is_recent = (now - p_dto.match.match_date) < timedelta(minutes=150)
+            if p_dto.match.match_date > now or p_dto.match.status in live_statuses or is_recent:
+                # Skip clearly finished matches past grace
+                if p_dto.match.status == "FT" and not is_recent:
+                    continue
                 filtered_results.append(p_dto)
         
         # Cache results

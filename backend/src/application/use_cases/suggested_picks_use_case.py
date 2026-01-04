@@ -684,12 +684,22 @@ class GetTopMLPicksUseCase:
                         else:
                             m_date = m_date.astimezone(now.tzinfo)
                         
+                        from datetime import timedelta
                         # Statuses that indicate a match is currently in play
-                        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY"]
+                        live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY", "PAUSED"]
                         
-                        # Allow if it's in the future OR if it's currently live
-                        if m_date <= now and match_info.get("status") not in live_statuses:
+                        # Allow if:
+                        # 1. It's in the future
+                        # 2. It's currently marked as live
+                        # 3. It started less than 150 minutes (2.5h) ago (Grace period for stale statuses)
+                        is_recent = (now - m_date) < timedelta(minutes=150)
+                        
+                        if m_date <= now and match_info.get("status") not in live_statuses and not is_recent:
                             continue # Skip past and finished matches
+                        
+                        # Final check: skip if clearly finished (FT) and past grace period
+                        if match_info.get("status") == "FT" and not is_recent:
+                            continue
                     except Exception as e:
                         logger.warning(f"Error parsing date {match_date_str}: {e}")
                 

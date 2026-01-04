@@ -239,7 +239,8 @@ class FootballDataOrgSource:
         
         comp_code = COMPETITION_CODE_MAPPING[league_code]
         # Only fetch matches that are scheduled or have a set time (avoiding finished games)
-        params = {"status": "SCHEDULED,TIMED"}
+        # Fetch scheduled, timed, and currently live matches
+        params = {"status": "SCHEDULED,TIMED,IN_PLAY,LIVE"}
         
         if matchday:
             params["matchday"] = matchday
@@ -351,7 +352,8 @@ class FootballDataOrgSource:
         
         comp_code = COMPETITION_CODE_MAPPING[league_code]
         # Only fetch matches that are scheduled or have a set time (avoiding finished games)
-        params = {"status": "SCHEDULED,TIMED"}
+        # Fetch scheduled, timed, and currently live matches
+        params = {"status": "SCHEDULED,TIMED,IN_PLAY,LIVE"}
         
         if matchday:
             params["matchday"] = matchday
@@ -467,6 +469,7 @@ class FootballDataOrgSource:
                 match_date=match_date,
                 home_goals=home_goals,
                 away_goals=away_goals,
+                status=match_data.get("status", "NS"),
             )
             
         except Exception as e:
