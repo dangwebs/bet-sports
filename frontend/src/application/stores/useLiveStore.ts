@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { LiveMatchPrediction } from "../../domain/entities";
 import { liveApi } from "../../infrastructure/api/live";
+import { indexedDBStorage } from "../../infrastructure/storage/indexedDBStorage";
 import { useOfflineStore } from "./useOfflineStore";
 
 interface LiveState {
@@ -14,6 +15,15 @@ interface LiveState {
   fetchMatches: () => Promise<void>;
   startPolling: (intervalMs?: number) => void;
   stopPolling: () => void;
+}
+
+// Cleanup old localStorage to prevent quota issues on mobile
+try {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("live-matches-storage");
+  }
+} catch (e) {
+  // Silent cleanup fail
 }
 
 export const useLiveStore = create<LiveState>()(
@@ -82,10 +92,10 @@ export const useLiveStore = create<LiveState>()(
       },
     }),
     {
-      name: "live-matches-storage",
+      name: "live-matches-storage-v2",
+      storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({
         matches: state.matches,
-        // Don't persist loading, error, pollingId
       }),
     }
   )

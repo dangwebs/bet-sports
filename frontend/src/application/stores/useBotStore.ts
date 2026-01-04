@@ -8,14 +8,8 @@ import {
 import { api } from "../../services/api";
 import { useOfflineStore } from "./useOfflineStore";
 import { localStorageObserver } from "../../infrastructure/storage/LocalStorageObserver";
+import { indexedDBStorage } from "../../infrastructure/storage/indexedDBStorage";
 import localforage from "localforage";
-
-// Configure localforage for large dataset storage (IndexedDB)
-localforage.config({
-  name: "BJJ-BetSports",
-  storeName: "bot_storage",
-  description: "Storage for AI Training Data & History",
-});
 
 interface BotState {
   // Data
@@ -266,19 +260,7 @@ export const useBotStore = create<BotState>()(
     }),
     {
       name: "bot-storage",
-      storage: createJSONStorage(() => ({
-        getItem: async (name: string) => {
-          const val = await localforage.getItem(name);
-          if (!val) return null;
-          return JSON.stringify(val);
-        },
-        setItem: async (name: string, value: string) => {
-          await localforage.setItem(name, JSON.parse(value));
-        },
-        removeItem: async (name: string) => {
-          await localforage.removeItem(name);
-        },
-      })),
+      storage: createJSONStorage(() => indexedDBStorage),
       onRehydrateStorage: () => (state) => {
         // Fix Date deserialization after rehydration
         if (state && state.lastUpdate && typeof state.lastUpdate === "string") {

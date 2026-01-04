@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import {
   LeaguesResponse,
   MatchPrediction,
@@ -9,6 +9,7 @@ import {
 import { predictionsApi } from "../../infrastructure/api/predictions";
 import { leaguesApi } from "../../infrastructure/api/leagues";
 import { useOfflineStore } from "./useOfflineStore";
+import { indexedDBStorage } from "../../infrastructure/storage/indexedDBStorage";
 
 export type SortOption =
   | "confidence"
@@ -50,6 +51,15 @@ interface PredictionState {
   resetFilters: () => void;
   performSearch: (query: string) => Promise<void>;
   checkTrainingStatus: () => Promise<void>;
+}
+
+// Cleanup old localStorage to prevent quota issues on mobile
+try {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("prediction-storage");
+  }
+} catch (e) {
+  // Silent cleanup fail
 }
 
 export const usePredictionStore = create<PredictionState>()(
@@ -255,7 +265,8 @@ export const usePredictionStore = create<PredictionState>()(
       },
     }),
     {
-      name: "prediction-storage", // unique name
+      name: "prediction-storage-v2", // unique name
+      storage: createJSONStorage(() => indexedDBStorage),
       // Only persist essential user selections, NOT large data arrays
       partialize: (state) => ({
         // leaguesData is persisted separately via localStorageObserver
@@ -264,8 +275,6 @@ export const usePredictionStore = create<PredictionState>()(
         sortBy: state.sortBy,
         sortDesc: state.sortDesc,
         lastTrainingUpdate: state.lastTrainingUpdate,
-        // Don't persist predictions, leaguesData, or search results - they're too large
-        // and will be fetched fresh when needed
       }),
     }
   )

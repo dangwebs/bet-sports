@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { MatchPrediction } from "../../domain/entities";
+import { indexedDBStorage } from "../../infrastructure/storage/indexedDBStorage";
 
 export interface ParleyPickItem {
   match: MatchPrediction;
@@ -17,6 +18,15 @@ interface ParleyState {
   removePick: (matchId: string) => void;
   clearPicks: () => void;
   togglePick: (match: MatchPrediction, pick?: ParleyPickItem | null) => void;
+}
+
+// Cleanup old localStorage to prevent quota issues on mobile
+try {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("parley-storage");
+  }
+} catch (e) {
+  // Silent cleanup fail
 }
 
 export const useParleyStore = create<ParleyState>()(
@@ -57,7 +67,8 @@ export const useParleyStore = create<ParleyState>()(
       },
     }),
     {
-      name: "parley-storage",
+      name: "parley-storage-v2",
+      storage: createJSONStorage(() => indexedDBStorage),
     }
   )
 );

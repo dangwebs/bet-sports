@@ -1,16 +1,11 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import localforage from "localforage";
 import { SuggestedPick } from "../../types";
 import api from "../../services/api";
+import { indexedDBStorage } from "../../infrastructure/storage/indexedDBStorage";
 
-// Configure localforage to use IndexedDB
-localforage.config({
-  name: "BJJ-BetSports",
-  storeName: "picks_cache",
-});
-
-const MAX_CACHE_ENTRIES = 100; // Limit cache entries to prevent unlimited growth
+// Basic LRU: Limit cache entries to prevent unlimited growth
+const MAX_CACHE_ENTRIES = 100;
 
 interface CacheState {
   // Data
@@ -149,7 +144,7 @@ export const useCacheStore = create<CacheState>()(
     {
       name: "bjj-bets-cache-storage-v7",
       // Important: Use localforage for IndexedDB support (much larger quota than localStorage)
-      storage: createJSONStorage(() => localforage as any),
+      storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({ picksCache: state.picksCache }),
     }
   )
