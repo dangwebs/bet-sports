@@ -57,12 +57,14 @@ class TrainingDataService:
         except Exception as e:
             logger.warning(f"GitHub Dataset fetch failed: {e}")
 
-        # 2. CSV source (Rich historical stats)
-        for league_id in leagues:
+        # 2. CSV source (Rich historical stats) - PARALLELIZED for speed
+        import asyncio
+        
+        async def fetch_league_data(lid):
             try:
                 # Use dynamic seasons logic inside get_historical_matches
                 matches = await self.data_sources.football_data_uk.get_historical_matches(
-                    league_id, 
+                    lid, 
                     seasons=None, 
                     force_refresh=force_refresh
                 )
@@ -82,16 +84,21 @@ class TrainingDataService:
                     days_lag = (now - last_match_date).days
                     
                     if days_lag > 3:
-                        logger.warning(f"CSV data for {league_id} is stale ({days_lag} days lag). Triggering backfill...")
+                        logger.warning(f"CSV data for {lid} is stale ({days_lag} days lag). Triggering backfill...")
                         start_backfill = last_match_date + timedelta(days=1)
-                        gap_matches = await self._backfill_gap(league_id, start_backfill, now)
+                        gap_matches = await self._backfill_gap(lid, start_backfill, now)
                         if gap_matches:
-                            logger.info(f"Backfilled {len(gap_matches)} matches for {league_id}")
+                            logger.info(f"Backfilled {len(gap_matches)} matches for {lid}")
                             matches.extend(gap_matches)
-                
-                csv_matches.extend(matches)
+                return matches
             except Exception as e:
-                logger.error(f"Error fetching CSV/Backfill for {league_id}: {e}")
+                logger.error(f"Error fetching CSV/Backfill for {lid}: {e}")
+                return []
+
+        # Execute all fetches concurrently
+        results = await asyncio.gather(*(fetch_league_data(lid) for lid in leagues))
+        for res in results:
+            csv_matches.extend(res)
 
 
         # 4. ESPN (Detailed recent stats)
