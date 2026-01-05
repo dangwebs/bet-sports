@@ -130,20 +130,33 @@ class TrainingDataService:
 
     async def _backfill_gap(self, league_code: str, start_date: datetime, end_date: datetime) -> List[Match]:
         """
-        Fetch matches from API-Football to fill gap between static CSVs and today.
+        Fetch matches from Football-Data.org to fill gap between static CSVs and today.
+        Using Football-Data.org (Source #2) as it supports batch fetching and is already configured.
         """
-        return [] # DISABLED PER USER REQUEST
-        # try:
-        #     from src.infrastructure.data_sources.api_football import APIFootballSource
-        #     api_fb = APIFootballSource()
-        #     if not api_fb.is_configured:
-        #         return []
-        #         
-        #     return await api_fb.get_finished_matches(
-        #         date_from=start_date.strftime("%Y-%m-%d"),
-        #         date_to=end_date.strftime("%Y-%m-%d"),
-        #         league_codes=[league_code]
-        #     )
-        # except Exception as e:
-        #     logger.warning(f"Backfill failed for {league_code}: {e}")
-        #     return []
+        try:
+            # Prevent backfilling relative future or tiny gaps
+            if start_date >= end_date:
+                return []
+                
+            # Use FootballDataOrgSource (already injected in self.data_sources)
+            fb_org = self.data_sources.football_data_org
+            if not fb_org.is_configured:
+                # logger.warning(f"Cannot backfill {league_code}: Football-Data.org not configured.")
+                return []
+            
+            logger.info(f"Backfilling {league_code} gap from {start_date.date()} to {end_date.date()} via Football-Data.org")
+            
+            # Fetch matches in the gap range
+            # Football-Data.org accepts dateFrom/dateTo
+            matches = await fb_org.get_league_matches(
+                league_code,
+                date_from=start_date.strftime("%Y-%m-%d"),
+                date_to=end_date.strftime("%Y-%m-%d"),
+                status="FINISHED"
+            )
+            
+            return matches
+            
+        except Exception as e:
+            logger.warning(f"Backfill failed for {league_code}: {e}")
+            return []
