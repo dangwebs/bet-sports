@@ -5,7 +5,7 @@
  * Optimized with React.memo to prevent unnecessary re-renders.
  */
 
-import React, { memo, useMemo } from "react";
+import React, { memo } from "react";
 import {
   Card,
   CardContent,
@@ -19,16 +19,14 @@ import {
   Checkbox,
   CircularProgress,
 } from "@mui/material";
-import {
-  TrendingUp,
-  TrendingDown,
-  Schedule,
-  SportsSoccer,
-  Info,
-  Diamond,
-  PlayCircleOutline,
-  AutoGraph,
-} from "@mui/icons-material";
+import TrendingUp from "@mui/icons-material/TrendingUp";
+import TrendingDown from "@mui/icons-material/TrendingDown";
+import Schedule from "@mui/icons-material/Schedule";
+import SportsSoccer from "@mui/icons-material/SportsSoccer";
+import Info from "@mui/icons-material/Info";
+import Diamond from "@mui/icons-material/Diamond";
+import PlayCircleOutline from "@mui/icons-material/PlayCircleOutline";
+import AutoGraph from "@mui/icons-material/AutoGraph";
 import { styled } from "@mui/material/styles";
 import type { MatchPrediction } from "../../../types";
 import {
@@ -130,7 +128,8 @@ const MatchCard: React.FC<MatchCardProps> = memo(
     onToggleSelection,
   }) => {
     const { match, prediction } = matchPrediction;
-    const { prefetchMatch } = useCacheStore();
+    // OPTIMIZACIÓN 2: Selector atómico para evitar re-renders innecesarios
+    const prefetchMatch = useCacheStore((state) => state.prefetchMatch);
 
     const prefetchTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -157,73 +156,22 @@ const MatchCard: React.FC<MatchCardProps> = memo(
       };
     }, []);
 
-    // ... useMemos ...
-    const formattedDate = useMemo(
-      () => formatDate(match.match_date),
-      [match.match_date]
-    );
+    // OPTIMIZACIÓN 1: Eliminar useMemo para operaciones triviales
+    const formattedDate = formatDate(match.match_date);
+    const homeGoals = prediction.predicted_home_goals.toFixed(1);
+    const awayGoals = prediction.predicted_away_goals.toFixed(1);
+    const homeWinPercent = formatPercent(prediction.home_win_probability);
+    const drawPercent = formatPercent(prediction.draw_probability);
+    const awayWinPercent = formatPercent(prediction.away_win_probability);
+    const overPercent = formatPercent(prediction.over_25_probability);
+    const underPercent = formatPercent(prediction.under_25_probability);
+    const confidencePercent = formatPercent(prediction.confidence);
+    const sourcesTooltip = `Fuentes: ${prediction.data_sources.join(", ")}`;
 
-    // Format stats with useMemo
-    const homeGoals = useMemo(
-      () => prediction.predicted_home_goals.toFixed(1),
-      [prediction.predicted_home_goals]
-    );
-
-    const awayGoals = useMemo(
-      () => prediction.predicted_away_goals.toFixed(1),
-      [prediction.predicted_away_goals]
-    );
-
-    const homeWinPercent = useMemo(
-      () => formatPercent(prediction.home_win_probability),
-      [prediction.home_win_probability]
-    );
-
-    const drawPercent = useMemo(
-      () => formatPercent(prediction.draw_probability),
-      [prediction.draw_probability]
-    );
-
-    const awayWinPercent = useMemo(
-      () => formatPercent(prediction.away_win_probability),
-      [prediction.away_win_probability]
-    );
-
-    const overPercent = useMemo(
-      () => formatPercent(prediction.over_25_probability),
-      [prediction.over_25_probability]
-    );
-
-    const underPercent = useMemo(
-      () => formatPercent(prediction.under_25_probability),
-      [prediction.under_25_probability]
-    );
-
-    const confidencePercent = useMemo(
-      () => formatPercent(prediction.confidence),
-      [prediction.confidence]
-    );
-
-    const sourcesTooltip = useMemo(
-      () => `Fuentes: ${prediction.data_sources.join(", ")}`,
-      [prediction.data_sources]
-    );
-
-    // CORRECCIÓN: Memoizar colores de probabilidad
-    const homeWinColor = useMemo(
-      () => getProbabilityColor(prediction.home_win_probability),
-      [prediction.home_win_probability]
-    );
-
-    const drawColor = useMemo(
-      () => getProbabilityColor(prediction.draw_probability),
-      [prediction.draw_probability]
-    );
-
-    const awayWinColor = useMemo(
-      () => getProbabilityColor(prediction.away_win_probability),
-      [prediction.away_win_probability]
-    );
+    // Colores pueden mantenerse simples o con useMemo si calcular cuesta (aquí es trivial, quitamos overhead)
+    const homeWinColor = getProbabilityColor(prediction.home_win_probability);
+    const drawColor = getProbabilityColor(prediction.draw_probability);
+    const awayWinColor = getProbabilityColor(prediction.away_win_probability);
 
     const isLive = ["1H", "2H", "HT", "LIVE", "ET", "P"].includes(match.status);
     const isFinished = ["FT", "AET", "PEN"].includes(match.status);
