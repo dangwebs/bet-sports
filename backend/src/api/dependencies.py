@@ -18,6 +18,7 @@ from src.domain.services.match_enrichment_service import MatchEnrichmentService
 from src.domain.services.pick_resolution_service import PickResolutionService
 from src.application.services.training_data_service import TrainingDataService
 from src.application.use_cases.use_cases import DataSources
+from src.domain.services.match_aggregator_service import MatchAggregatorService
 
 
 @lru_cache()
@@ -147,3 +148,13 @@ from src.infrastructure.services.background_processor import BackgroundProcessor
 def get_background_processor() -> BackgroundProcessor:
     """Get background processor (cached singleton)."""
     return BackgroundProcessor()
+
+@lru_cache()
+def get_match_aggregator_service() -> MatchAggregatorService:
+    """Get MatchAggregatorService (cached)."""
+    return MatchAggregatorService(
+        football_data_uk=get_football_data_uk(),
+        football_data_org=get_football_data_org(),
+        openfootball=get_openfootball(),
+        thesportsdb=get_thesportsdb()
+    )

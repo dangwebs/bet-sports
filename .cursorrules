@@ -1,0 +1,46 @@
+# Reglas del Proyecto (BJJ-BetSports)
+
+Estas reglas deben ser seguidas **A TODA COSTA** por el asistente de IA.
+
+## 1. Idioma y Comunicación
+
+- **SIEMPRE** responde en **ESPAÑOL**.
+- Mantén un tono profesional, técnico y directo.
+
+## 2. Reglas de Negocio (Backend)
+
+### A. Agregación Estricta de Datos (CRÍTICO)
+
+- **Regla**: Nunca depender de una sola fuente de datos para los partidos.
+- **Implementación**: Al buscar partidos (históricos o futuros), se DEBEN consultar **TODOS** los orígenes configurados (`FootballDataUK`, `FootballDataOrg`, `OpenFootball`) en paralelo.
+- **Fusión**: Fusionar los resultados priorizando la fuente con datos más ricos (UK > Org > Open).
+
+### B. "Zero Stats" (Prohibido)
+
+- **Regla**: Nunca mostrar ceros (`0`) en estadísticas proyectadas (corners, tarjetas) para partidos futuros.
+- **Implementación**: Si la data histórica de un equipo falta o es cero (ej. viene de OpenFootball), se DEBE inyectar el valor predicho por el modelo de IA (`prediction.predicted_home_corners`), el cual usa promedios de liga como base.
+
+### C. Verificación de Caché (Frescura)
+
+- **Regla**: Nunca servir datos obsoletos si la base de datos tiene información más reciente.
+- **Implementación**: Comparar siempre el timestamp de generación del caché (`generated_at`) contra la última actualización de la DB (`db_last_updated`).
+- **Condición**: Si `db_last_updated > cached_timestamp` (con buffer de 10s), se considera STALE y se debe recalcular.
+
+## 3. Desarrollo y Mantenimiento
+
+- **No Hardcoding**: Evitar datos estadísticos "quemados" en código. Usar siempre cálculos dinámicos o configuraciones.
+- **Seguridad**: Respetar tokens de administración para endpoints críticos (ej. limpieza de caché).
+
+## 4. Estándares de Arquitectura y Calidad (High Standards)
+
+- **Calidad de Código**: Seguir siempre los estándares de desarrollo más altos (Clean Code).
+- **Integridad**: Verificar SIEMPRE que los cambios no rompan funcionalidades existentes.
+- **Principios SOLID**: Aplicar estrictamente los principios SOLID en cada refactorización o nueva implementación.
+- **Arquitectura Limpia & DDD**: Respetar la arquitectura Hexagonal/Clean (Domain, Application, Infrastructure) y Domain-Driven Design.
+
+## 5. Verificación y Entrega (Pre-Commit)
+
+- **Validación Obligatoria**: Antes de finalizar cualquier tarea, confirmar cambios o solicitar revisión, SE DEBE:
+  1. **Sintaxis y Tipado**: Ejecutar verificaciones de sintaxis (compilación) y tipado para asegurar que no hay errores groseros.
+  2. **Imports**: Limpiar importaciones no utilizadas.
+  3. **Formato**: Asegurar un formato limpio y consistente.

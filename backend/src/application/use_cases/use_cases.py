@@ -11,12 +11,14 @@ from dataclasses import dataclass
 from pytz import timezone
 import logging
 import asyncio
+import asyncio
 from src.infrastructure.services.background_processor import BackgroundProcessor
 
 from src.domain.entities.entities import Match, League, Prediction, TeamStatistics
 from src.domain.services.prediction_service import PredictionService
 from src.domain.services.picks_service import PicksService
 from src.domain.services.ai_picks_service import AIPicksService
+from src.domain.services.match_aggregator_service import MatchAggregatorService
 from src.infrastructure.repositories.persistence_repository import PersistenceRepository
 from src.domain.value_objects.value_objects import LeagueAverages
 from src.domain.exceptions import InsufficientDataException
@@ -115,12 +117,14 @@ class GetPredictionsUseCase:
         data_sources: DataSources,
         prediction_service: PredictionService,
         statistics_service: StatisticsService,
+        match_aggregator: MatchAggregatorService,
         persistence_repository: Optional["PersistenceRepository"] = None,
         background_processor: Optional[BackgroundProcessor] = None,
     ):
         self.data_sources = data_sources
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
+        self.match_aggregator = match_aggregator
         self.persistence_repository = persistence_repository
         from src.domain.services.learning_service import LearningService
         self.picks_service = AIPicksService(learning_weights=get_learning_service().get_learning_weights() if 'get_learning_service' in globals() else {})
@@ -163,20 +167,39 @@ class GetPredictionsUseCase:
                 # Use 'generated_at' from cache or a specific 'cached_db_timestamp'
                 # PredictionsResponseDTO.generated_at is ISO string if cached as dict
                 from src.utils.time_utils import to_colombia_time
-                if db_last_updated and cached_response.get('generated_at'):
+                if cached_response.get('generated_at'):
                     from datetime import datetime
+                    from datetime import timedelta, timezone
+                    
                     gen_at_str = cached_response['generated_at']
                     # Handle Z suffix for older python versions compat
                     if gen_at_str.endswith('Z'):
                         gen_at_str = gen_at_str[:-1] + '+00:00'
-                    gen_at = to_colombia_time(datetime.fromisoformat(gen_at_str))
-                    db_last_updated = to_colombia_time(db_last_updated)
                     
-                    if db_last_updated > gen_at:
-                        logger.info(f"🔄 Cache stale for {league_id} (DB updated at {db_last_updated}). Refreshing...")
+                    # Parse and Localize
+                    gen_at = datetime.fromisoformat(gen_at_str)
+                    if gen_at.tzinfo is None:
+                         gen_at = gen_at.replace(tzinfo=timezone.utc)
+                    else:
+                         gen_at = gen_at.astimezone(timezone.utc)
+                         
+                    # DB Timestamp is typically naive UTC in SQLAlchemy
+                    if db_last_updated.tzinfo is None:
+                        db_last_updated = db_last_updated.replace(tzinfo=timezone.utc)
+                    else:
+                        db_last_updated = db_last_updated.astimezone(timezone.utc)
+                    
+                    # Add a small buffer (e.g. 10 seconds) to avoid race conditions
+                    if db_last_updated > (gen_at + timedelta(seconds=10)):
+                        logger.info(f"🔄 Cache stale for {league_id} (DB: {db_last_updated} > Cache: {gen_at}). Refreshing...")
                         is_stale = True
+                    else:
+                         logger.info(f"✓ Cache valid for {league_id}. DB: {db_last_updated} <= Cache: {gen_at}")
             except Exception as e:
                 logger.warning(f"Error comparing cache vs db timestamp: {e}")
+                # If error in comparison, err on side of caution if DB data exists
+                if db_data:
+                    is_stale = True
         
         if cached_response and not is_stale:
             logger.info(f"Serving cached (ephemeral) predictions for {league_id}")
@@ -260,40 +283,20 @@ class GetPredictionsUseCase:
         prev_season = f"{str(s2_start)[-2:]}{str(s2_end)[-2:]}"
         seasons = [current_season, prev_season]
         
-        logger.info(f"Fetching data for {league_id} in parallel...")
         
-        # Define parallel tasks
-        task_history = self.data_sources.football_data_uk.get_historical_matches(
+        logger.info(f"Fetching data for {league_id} via Aggregator Service...")
+        
+        # 1. Fetch History Aggregated
+        historical_matches = await self.match_aggregator.get_aggregated_history(
             league_id,
-            seasons=seasons,
+            seasons=seasons
         )
-        task_upcoming = self._get_upcoming_matches(league_id, limit=1000)
-        
-        # Execute in parallel
-        results = await asyncio.gather(task_history, task_upcoming, return_exceptions=True)
-        
-        historical_matches = results[0]
-        upcoming_matches = results[1]
-        
-        # Handle History Result
-        if isinstance(historical_matches, Exception):
-            logger.warning(f"Error fetching history: {historical_matches}")
-            historical_matches = []
-            
-        # Fallback for History
-        if not historical_matches:
-            logger.info(f"No CSV data for {league_id}, trying OpenFootball...")
-            try:
-                open_matches = await self.data_sources.openfootball.get_matches(league)
-                # Filter for played matches only
-                historical_matches = [m for m in open_matches if m.status in ["FT", "AET", "PEN"]]
-            except Exception as e:
-                logger.warning(f"Failed to fetch OpenFootball history: {e}")
 
-        # Handle Upcoming Result
-        if isinstance(upcoming_matches, Exception):
-             logger.error(f"Error fetching upcoming matches: {upcoming_matches}")
-             upcoming_matches = []
+        # 2. Fetch Upcoming Aggregated
+        upcoming_matches = await self.match_aggregator.get_upcoming_matches(
+            league_id,
+            limit=1000 # Fetch plenty, filter later
+        )
         
         # Calculate league averages from historical data using the service
         league_averages = self.statistics_service.calculate_league_averages(historical_matches)
@@ -470,16 +473,39 @@ class GetPredictionsUseCase:
             # Convert to DTOs
             match_dto = self._match_to_dto(match)
             
-            # Inject projected stats (historical averages) for upcoming matches
+            # Inject projected stats (historical averages OR prediction fallbacks) for upcoming matches
             if match.status in ["NS", "TIMED", "SCHEDULED"]:
-                if home_stats and home_stats.matches_played > 0:
-                    match_dto.home_corners = int(round(home_stats.avg_corners_per_match))
-                    match_dto.home_yellow_cards = int(round(home_stats.avg_yellow_cards_per_match))
-                    match_dto.home_red_cards = int(round(home_stats.avg_red_cards_per_match))
-                if away_stats and away_stats.matches_played > 0:
-                    match_dto.away_corners = int(round(away_stats.avg_corners_per_match))
-                    match_dto.away_yellow_cards = int(round(away_stats.avg_yellow_cards_per_match))
-                    match_dto.away_red_cards = int(round(away_stats.avg_red_cards_per_match))
+                # Default to historical averages
+                h_corners = home_stats.avg_corners_per_match if home_stats and home_stats.matches_played > 0 else 0
+                h_yellow = home_stats.avg_yellow_cards_per_match if home_stats and home_stats.matches_played > 0 else 0
+                h_red = home_stats.avg_red_cards_per_match if home_stats and home_stats.matches_played > 0 else 0
+                
+                a_corners = away_stats.avg_corners_per_match if away_stats and away_stats.matches_played > 0 else 0
+                a_yellow = away_stats.avg_yellow_cards_per_match if away_stats and away_stats.matches_played > 0 else 0
+                a_red = away_stats.avg_red_cards_per_match if away_stats and away_stats.matches_played > 0 else 0
+                
+                # If stats are zero (e.g. OpenFootball fallback), use Prediction Service projections
+                if h_corners == 0 and prediction:
+                     h_corners = prediction.predicted_home_corners
+                if a_corners == 0 and prediction:
+                     a_corners = prediction.predicted_away_corners
+                     
+                if h_yellow == 0 and prediction:
+                     h_yellow = prediction.predicted_home_yellow_cards
+                if a_yellow == 0 and prediction:
+                     a_yellow = prediction.predicted_away_yellow_cards
+                     
+                if h_red == 0 and prediction:
+                     h_red = prediction.predicted_home_red_cards
+                if a_red == 0 and prediction:
+                     a_red = prediction.predicted_away_red_cards
+                
+                match_dto.home_corners = int(round(h_corners))
+                match_dto.away_corners = int(round(a_corners))
+                match_dto.home_yellow_cards = int(round(h_yellow))
+                match_dto.away_yellow_cards = int(round(a_yellow))
+                match_dto.home_red_cards = int(round(h_red))
+                match_dto.away_red_cards = int(round(a_red))
             
             prediction_dto = self._prediction_to_dto(prediction, suggested_picks.suggested_picks)
             
@@ -526,49 +552,7 @@ class GetPredictionsUseCase:
     
 
     
-    async def _get_upcoming_matches(
-        self,
-        league_id: str,
-        limit: int,
-    ) -> list[Match]:
-        """Get upcoming matches from available sources."""
-        # Try Football-Data.org first if configured
-        if self.data_sources.football_data_org.is_configured:
-            matches = await self.data_sources.football_data_org.get_upcoming_matches(
-                league_id
-            )
-            if matches:
-                return matches
-        
-
-        # Try TheSportsDB (Free fallback)
-        try:
-            matches = await self.data_sources.thesportsdb.get_upcoming_fixtures(league_id, next_n=limit)
-            if matches:
-                 return matches
-        except Exception as e:
-             logger.warning(f"TheSportsDB fetch failed: {e}")
-        
-        # Try OpenFootball
-        # We need league entity for mapping
-        try:
-            from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
-            if league_id in LEAGUES_METADATA:
-                meta = LEAGUES_METADATA[league_id]
-                league_entity = League(id=league_id, name=meta["name"], country=meta["country"])
-                matches = await self.data_sources.openfootball.get_matches(league_entity)
-                
-                # Filter for upcoming only (NS)
-                upcoming = [m for m in matches if m.status == "NS"]
-                if upcoming:
-                    # Sort by date
-                    upcoming.sort(key=lambda x: x.match_date)
-                    return upcoming[:limit]
-        except Exception as e:
-            logger.error(f"OpenFootball fetch failed: {e}")
-            
-        return []
-        
+    
     def _match_to_dto(self, match: Match) -> MatchDTO:
         # Duplicated helper for now (should be in mapper)
         from src.application.dtos.dtos import TeamDTO, LeagueDTO
