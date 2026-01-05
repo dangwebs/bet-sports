@@ -691,15 +691,15 @@ class GetTopMLPicksUseCase:
                         # Allow if:
                         # 1. It's in the future
                         # 2. It's currently marked as live
-                        # 3. It started less than 150 minutes (2.5h) ago (Grace period for stale statuses)
+                        # 3. It's PAUSED/HALFTIME etc.
+                        # Strictly exclude FT/AET/PEN even if "recent" to avoid confusion
+                        if match_info.get("status") in ["FT", "AET", "PEN", "FINISHED"]:
+                            continue
+
                         is_recent = (now - m_date) < timedelta(minutes=150)
                         
                         if m_date <= now and match_info.get("status") not in live_statuses and not is_recent:
                             continue # Skip past and finished matches
-                        
-                        # Final check: skip if clearly finished (FT) and past grace period
-                        if match_info.get("status") == "FT" and not is_recent:
-                            continue
                     except Exception as e:
                         logger.warning(f"Error parsing date {match_date_str}: {e}")
                 

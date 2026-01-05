@@ -657,14 +657,15 @@ class GetPredictionsUseCase:
             # Allow if:
             # 1. It's in the future
             # 2. It's currently marked as live
-            # 3. It started less than 150 minutes (2.5h) ago (Grace period for stale statuses)
-            is_recent = (now - m_date) < timedelta(minutes=150)
-            
+            # 3. It's PAUSED/HALFTIME etc.
+            # Strictly exclude FT/AET/PEN even if "recent" to avoid confusion
+            if p.match.status in ["FT", "AET", "PEN", "FINISHED"]:
+                continue
+                
             if m_date > now or p.match.status in live_statuses or is_recent:
-                # But don't show if clearly finished (FT) and past the grace period
-                if p.match.status == "FT" and not is_recent:
-                    continue
-                filtered.append(p)
+                 # Double check status just in case dates are weird
+                 if p.match.status not in ["FT", "AET", "PEN", "FINISHED"]:
+                     filtered.append(p)
         return filtered
 
 
@@ -706,14 +707,11 @@ class GetMatchDetailsUseCase:
         if not match:
             return None
 
-        if not match:
-            return None
-
         # 2. Optimized Lookup: Fetch Pre-calculated prediction from PostgreSQL (O(1))
         # yielding massive RAM savings vs loading the 100MB+ training result blob.
         try:
              # Just to be safe with imports
-             from src.api.dependencies import get_persistence_repository
+             from src.infrastructure.repositories.persistence_repository import get_persistence_repository
              repo = get_persistence_repository()
              
              pred_data, _ = repo.get_match_prediction_with_timestamp(match_id)
@@ -731,8 +729,6 @@ class GetMatchDetailsUseCase:
         except Exception as e:
             logger.error(f"Failed to fetch optimized prediction for {match_id}: {e}")
             # Continue to fallback (although fallback is the heavy blob we want to avoid, we might keep it as last resort or just return None)
-
-        return None
 
         # 3. Get historical data for context (for stats) - Standard Fallback
         historical_matches = []
