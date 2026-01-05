@@ -27,6 +27,7 @@ from src.infrastructure.cache.cache_service import CacheService
 from src.utils.time_utils import get_current_time
 from src.core.constants import DEFAULT_LEAGUES
 from src.infrastructure.repositories.persistence_repository import PersistenceRepository
+from src.application.services.ml_training_orchestrator_helper import _process_single_match_task
 
 logger = logging.getLogger(__name__)
 
@@ -233,67 +234,77 @@ class MLTrainingOrchestrator:
                 #              except Exception as e:
                 #                 logger.warning(f"Rolling Window Training Limit: {e}")
     
-                # B. Generate Candidates for TODAY
+                # B. Generate Candidates for TODAY (PARALLELIZED)
                 daily_candidates = [] # List of {'pick': SuggestedPick, 'match': Match}
                 daily_predictions_map = {} # match_id -> Prediction
-                
+
+                # Prepare data for parallel execution to avoid pickling the whole service
+                # We explicitly pass only what's needed
+                parallel_inputs = []
                 for match in daily_matches:
                     if match.home_goals is None or match.away_goals is None: continue
-    
-                    # Get/Create stats (Centralized)
-                    if match.home_team.name not in team_stats_cache: 
-                        team_stats_cache[match.home_team.name] = self.statistics_service.create_empty_stats_dict()
-                    if match.away_team.name not in team_stats_cache: 
-                        team_stats_cache[match.away_team.name] = self.statistics_service.create_empty_stats_dict()
-                        
-                    raw_home = team_stats_cache[match.home_team.name]
-                    raw_away = team_stats_cache[match.away_team.name]
                     
-                    home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home)
-                    away_stats = self.statistics_service.convert_to_domain_stats(match.away_team.name, raw_away)
-                    league_averages = league_averages_map.get(match.league.id) 
-    
-                    try:
-                        # PREDICT using current knowledge
-                        prediction = self.prediction_service.generate_prediction(
-                            match=match, 
-                            home_stats=home_stats, 
-                            away_stats=away_stats, 
-                            league_averages=league_averages,
-                            global_averages=global_averages_obj,
-                            min_matches=0
-                        )
-                        
-                        # Store prediction for later history logging (even if no picks generated)
-                        daily_predictions_map[match.id] = prediction
+                    # Get stats (fast dict lookup)
+                    raw_home = team_stats_cache.get(match.home_team.name, self.statistics_service.create_empty_stats_dict())
+                    raw_away = team_stats_cache.get(match.away_team.name, self.statistics_service.create_empty_stats_dict())
+                    
+                    # Init stats if missing
+                    if match.home_team.name not in team_stats_cache: team_stats_cache[match.home_team.name] = raw_home
+                    if match.away_team.name not in team_stats_cache: team_stats_cache[match.away_team.name] = raw_away
+
+                    league_averages = league_averages_map.get(match.league.id)
+                    
+                    parallel_inputs.append((
+                        match, 
+                        raw_home, 
+                        raw_away, 
+                        league_averages, 
+                        global_averages_obj, 
+                        self.prediction_service, 
+                        picks_service_instance,
+                        self.statistics_service,
+                        self.resolution_service,
+                        self.feature_extractor,
+                        self.risk_manager
+                    ))
+                
+                # Execute in parallel using all available cores (n_jobs=-1)
+                # We use 'loky' backend which is robust for pickling
+                if parallel_inputs:
+                    from joblib import Parallel, delayed
+                    
+                    # Inner function defined here to be picklable? No, must be top-level or static.
+                    # But we can use 'delayed' on a standalone function.
+                    # Let's use a helper method defined outside the class or static.
+                    # For safety and context, we'll keep it simple:
+                    # We can't pickle 'self', so we pass services explicitly.
+                    
+                    results = Parallel(n_jobs=-1, prefer="threads")(
+                        delayed(_process_single_match_task)(*args) for args in parallel_inputs
+                    )
+                    
+                    # Process results
+                    for res in results:
+                        if not res: continue
+                        match_res, pred_res, picks_container_res = res
                         
                         matches_processed += 1
+                        daily_predictions_map[match_res.id] = pred_res
                         
-                        # GENERATE PICKS
-                        suggested_picks_container = picks_service_instance.generate_suggested_picks(
-                            match=match, home_stats=home_stats, away_stats=away_stats, league_averages=league_averages,
-                            predicted_home_goals=prediction.predicted_home_goals, predicted_away_goals=prediction.predicted_away_goals,
-                            home_win_prob=prediction.home_win_probability, draw_prob=prediction.draw_probability, away_win_prob=prediction.away_win_probability
-                        )
-                        
-                        if suggested_picks_container and suggested_picks_container.suggested_picks:
-                            for p in suggested_picks_container.suggested_picks:
-                                daily_candidates.append({'pick': p, 'match': match, 'prediction': prediction})
+                        if picks_container_res and picks_container_res.suggested_picks:
+                            for p in picks_container_res.suggested_picks:
+                                daily_candidates.append({'pick': p, 'match': match_res, 'prediction': pred_res})
                                 
-                    except Exception as e:
-                        logger.error(f"Error processing match {match.id}: {e}")
-                        continue
-    
                 # C. Apply Portfolio Constraints (Risk Manager)
                 # This filters the day's candidates to select the best portfolio respecting risk limits
                 approved_items = self.risk_manager.apply_portfolio_constraints(daily_candidates)
-                
-                # Mapping to easily find approved picks per match for history
-                approved_picks_map = {} # match_id -> list of picks
-                for item in approved_items:
-                    mid = item['match'].id
-                    if mid not in approved_picks_map: approved_picks_map[mid] = []
-                    approved_picks_map[mid].append(item['pick'])
+            
+            # Mapping to easily find approved picks per match for history
+            approved_picks_map = {} # match_id -> list of picks
+            for item in approved_items:
+                mid = item['match'].id
+                if mid not in approved_picks_map: approved_picks_map[mid] = []
+                approved_picks_map[mid].append(item['pick'])
     
                 # D. Resolve & Record Results
                 for match in daily_matches:
@@ -304,7 +315,7 @@ class MLTrainingOrchestrator:
                      my_picks = approved_picks_map.get(match.id, [])
                      
                      picks_list = []
-                     suggested_pick_label = None
+                     suggested_pick_label = False
                      pick_was_correct = False
                      max_ev_value = -100.0
     
@@ -329,6 +340,7 @@ class MLTrainingOrchestrator:
                         
                         # Store Features for FUTURE training
                         # Re-constitute stats for feature extraction
+                        # Note: We use the stats AS THEY WERE BEFORE THE MATCH (Snapshot)
                         raw_home_feat = team_stats_cache.get(match.home_team.name, {})
                         raw_away_feat = team_stats_cache.get(match.away_team.name, {})
                         feat_home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home_feat)
@@ -372,7 +384,7 @@ class MLTrainingOrchestrator:
     
                      # Get prediction from candidates (hacky lookup)
                      # Better: re-run prediction or store it. We stored it in 'daily_candidates'.
-                     # Let's just create a basic history entry even if no picks were approved
+                     # Let's just create a basic history entry even if no picks generated)
                      # But we need the prediction object.
                      # Let's find the prediction in daily_candidates or regenerate simple one.
                      # Optimization: Store prediction in a temp map above.
