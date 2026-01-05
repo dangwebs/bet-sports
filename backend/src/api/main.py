@@ -199,7 +199,7 @@ async def lifespan(app: FastAPI):
                             gc.collect()
                             await asyncio.sleep(5)
                         except ImportError:
-                            logger.error("⚠ Scheduler not available (APScheduler missing). Skipping orchestrated job.")
+                            logger.info("ℹ️ Scheduler module skipped (APScheduler not installed). This is expected in API-only/Lightweight mode.")
                         except Exception as e:
                             logger.error(f"⚠ Failed to run orchestrated job: {e}")
                             
@@ -223,7 +223,7 @@ async def lifespan(app: FastAPI):
                     gc.collect()
                     
                 except Exception as e:
-                    logger.error(f"Background orchestrator failure: {e}")
+                    logger.error(f"Background orchestrator failure: {e}") 
 
             # Trigger the sequential orchestration
             asyncio.create_task(background_tasks_orchestrator())
@@ -235,7 +235,7 @@ async def lifespan(app: FastAPI):
                 scheduler.start(run_immediate=False)
                 logger.info("✓ Daily training scheduler configured (06:00 AM Colombia time)")
             except ImportError:
-                logger.warning("⚠ Scheduler not available (APScheduler missing). CRON tasks disabled.")
+                logger.info("ℹ️ Internal Scheduler disabled (APScheduler not installed). External CRON/GitHub Actions expected.")
         else:
             logger.info("⏭️  Skipping background tasks (API-ONLY mode)")
             logger.info("💡 Predictions will be read from database (populated by GitHub Actions)")
