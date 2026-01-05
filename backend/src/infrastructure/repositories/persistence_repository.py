@@ -239,6 +239,13 @@ class PersistenceRepository:
         finally:
             session.close()
 
+    def get_match_prediction(self, match_id: str) -> Optional[dict]:
+        """
+        Retrieve a valid prediction by match ID.
+        """
+        data, _ = self.get_match_prediction_with_timestamp(match_id)
+        return data
+
     def get_match_prediction_with_timestamp(self, match_id: str) -> tuple[Optional[dict], Optional[datetime]]:
         """
         Retrieve a valid prediction and its last_updated timestamp.
