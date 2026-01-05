@@ -164,6 +164,19 @@ class PicksService:
             logger.error(f"Security or integrity error loading ML model {model_path}: {e}")
         return None
 
+    def reload_model(self):
+        """Force reload of the ML model from disk."""
+        # Resolve absolute path (same logic as __init__)
+        try:
+            _service_dir = os.path.dirname(os.path.abspath(__file__))
+            _backend_dir = os.path.join(_service_dir, "..", "..", "..")
+            model_path = os.path.join(_backend_dir, "ml_picks_classifier.joblib")
+            
+            self.ml_model = self._load_ml_model_safely(model_path)
+            logger.info("ML Model reloaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to reload model: {e}")
+
     def _calculate_recent_form_score(self, form: str) -> float:
         """
         Calculate a form score modifier (0.8 to 1.2) based on recent results.
