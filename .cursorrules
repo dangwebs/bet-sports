@@ -69,3 +69,42 @@ Estas reglas deben ser seguidas **A TODA COSTA** por el asistente de IA.
 ## 10. Estándar de Commits
 
 - **Conventional Commits**: Exigir formato estándar en mensajes de git (ej. `feat:`, `fix:`, `refactor:`, `chore:`).
+
+## 11. Gestión de Riesgo Financiero (CRÍTICO)
+
+- **Límites Duros (Hard Caps)**:
+
+  - **Regla**: Ninguna sugerencia de apuesta (`SuggestedPick`) puede exceder un Stake máximo predefinido (ej. 5% del Bankroll), independientemente de la confianza del modelo o el criterio de Kelly.
+  - **Implementación**: Implementar "Circuit Breakers" en `RiskManager`. Si el cálculo de stake arroja `NaN`, `Infinity` o valores absurdos, forzar a `0.0`.
+
+- **Validación de Valor (EV+)**:
+  - **Regla**: Solo sugerir apuestas donde la Esperanza Matemática sea positiva (`(Probabilidad * Cuota) > 1.0`).
+  - **Excepción**: Coberturas (Hedging) explícitamente marcadas.
+
+## 12. Integridad del Modelo y Auditoría (ML Ops)
+
+- **Trazabilidad de Predicciones**:
+
+  - **Regla**: Cada predicción guardada en DB debe incluir metadatos del modelo utilizado: `model_version` (hash o fecha), `training_date` y `accuracy_at_training`.
+  - **Objetivo**: Poder auditar post-mortem por qué el modelo falló una racha específica.
+
+- **Inmutabilidad Histórica**:
+  - **Regla**: Una vez que un `Pick` se ha sugerido al usuario o guardado en DB, sus valores (cuota inicial, probabilidad calculada) son INMUTABLES. Solo se actualiza el resultado (`WIN`/`LOSS`).
+
+## 13. Sanidad de Datos (Data Sanity)
+
+- **Detección de Anomalías (Outliers)**:
+
+  - **Regla**: Descartar datos de entrada que violen rangos lógicos antes de alimentar al modelo.
+  - **Ejemplos**: Cuotas < 1.01 o > 1000, Goles > 15, Posesión > 100%.
+  - **Acción**: Si se detecta una anomalía crítica en un partido, marcarlo como `SUSPICIOUS` y no generar predicciones.
+
+- **Consistencia de Fuentes (Data Discrepancy)**:
+  - **Regla**: Si al consultar múltiples fuentes (Regla 2A) hay una discrepancia mayor al 20% en estadísticas clave (ej. Tiros a puerta), el sistema debe ABSTENERSE de predecir en mercados relacionados.
+
+## 14. Frescura de Cuotas (Odds Freshness)
+
+- **Regla**: Para sugerencias de apuestas, está PROHIBIDO usar cuotas cacheadas con más de:
+  - **Pre-match**: 60 minutos de antigüedad.
+  - **Live**: 30 segundos de antigüedad.
+- **Implementación**: Verificar siempre `odds_last_updated` antes de calcular el EV. Si el dato es viejo, se asume "No Bet" o se fuerza una actualización en tiempo real.
