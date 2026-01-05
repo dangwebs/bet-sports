@@ -227,11 +227,8 @@ class GetLivePredictionsUseCase:
         
         filtered_results = []
         for p_dto in results:
-            is_recent = (now - p_dto.match.match_date) < timedelta(minutes=150)
-            if p_dto.match.match_date > now or p_dto.match.status in live_statuses or is_recent:
-                # Skip clearly finished matches past grace
-                if p_dto.match.status == "FT" and not is_recent:
-                    continue
+            # Strict filtering: Only show matches that are statistically live
+            if p_dto.match.status in live_statuses:
                 filtered_results.append(p_dto)
         
         # Cache results
