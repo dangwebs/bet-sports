@@ -59,16 +59,8 @@ export const liveApi = {
       // "el boton solamente cuando hay partidos en vivo que viene de la api de ESPN"
       // Implies: If ESPN has nothing, show nothing.
       if (espnMatches.length === 0) {
-        // Fallback: If Backend has matches and ESPN failed/empty, maybe ESPN is just broken?
-        // But user constraint is strict. Let's return empty if ESPN is empty to solve the "Always Active" bug.
-        // UNLESS backend returns matches with distinct status like "LIVE" (trusting strict backend filter).
-        // Let's implement a "Union" but prioritize ESPN existence.
-
-        if (backendMatches.length > 0) {
-          // Safe fallback if ESPN returns 0 but backend is confident
-          // We map backend to LiveMatchPrediction interface
-          return backendMatches.map((mp) => ({ ...mp, isProcessing: false }));
-        }
+        // Strict Requirement: Only show matches verified by ESPN as Live ("in" or "ht")
+        // "el boton solamente cuando hay partidos en vivo que viene de la api de ESPN"
         return [];
       }
 
