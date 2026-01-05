@@ -632,6 +632,15 @@ class GetPredictionsUseCase:
             under_25_probability=prediction.under_25_probability,
             predicted_home_goals=prediction.predicted_home_goals,
             predicted_away_goals=prediction.predicted_away_goals,
+            
+            # Map Extended Predictions
+            predicted_home_corners=getattr(prediction, "predicted_home_corners", 0.0),
+            predicted_away_corners=getattr(prediction, "predicted_away_corners", 0.0),
+            predicted_home_yellow_cards=getattr(prediction, "predicted_home_yellow_cards", 0.0),
+            predicted_away_yellow_cards=getattr(prediction, "predicted_away_yellow_cards", 0.0),
+            predicted_home_red_cards=getattr(prediction, "predicted_home_red_cards", 0.0),
+            predicted_away_red_cards=getattr(prediction, "predicted_away_red_cards", 0.0),
+            
             confidence=prediction.confidence,
             data_sources=prediction.data_sources,
             recommended_bet=prediction.recommended_bet,

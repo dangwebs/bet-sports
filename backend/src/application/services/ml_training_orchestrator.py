@@ -235,6 +235,7 @@ class MLTrainingOrchestrator:
     
                 # B. Generate Candidates for TODAY
                 daily_candidates = [] # List of {'pick': SuggestedPick, 'match': Match}
+                daily_predictions_map = {} # match_id -> Prediction
                 
                 for match in daily_matches:
                     if match.home_goals is None or match.away_goals is None: continue
@@ -262,6 +263,9 @@ class MLTrainingOrchestrator:
                             global_averages=global_averages_obj,
                             min_matches=0
                         )
+                        
+                        # Store prediction for later history logging (even if no picks generated)
+                        daily_predictions_map[match.id] = prediction
                         
                         matches_processed += 1
                         
@@ -380,32 +384,32 @@ class MLTrainingOrchestrator:
                      # Actually, we want history for ALL matches to show "No Bet" ones too?
                      # Yes, usually. But for now let's focus on Active Betting History.
                      
-                     if picks_list:
-                         # Re-find prediction (optimization: store in map)
-                         pred_obj = next((x['prediction'] for x in daily_candidates if x['match'].id == match.id), None)
-                         if pred_obj:
-                            # Limit match_history to prevent huge cache objects (OOM risk)
-                            if len(match_history) > 500:
-                                match_history.pop(0)
-                                
-                            match_history.append({
-                                "match_id": match.id,
-                                "home_team": match.home_team.name,
-                                "away_team": match.away_team.name,
-                                "match_date": match.match_date.isoformat(),
-                                "predicted_winner": self._get_predicted_winner(pred_obj),
-                                "actual_winner": self._get_actual_winner(match),
-                                "predicted_home_goals": round(pred_obj.predicted_home_goals, 2),
-                                "predicted_away_goals": round(pred_obj.predicted_away_goals, 2),
-                                "actual_home_goals": match.home_goals,
-                                "actual_away_goals": match.away_goals,
-                                "was_correct": self._get_predicted_winner(pred_obj) == self._get_actual_winner(match),
-                                "confidence": round(pred_obj.confidence, 3),
-                                "picks": picks_list,
-                                "suggested_pick": suggested_pick_label,
-                                "pick_was_correct": pick_was_correct,
-                                "expected_value": max_ev_value
-                            })
+                     # Retrieve prediction from our map
+                     pred_obj = daily_predictions_map.get(match.id)
+                     
+                     if pred_obj:
+                         # Limit match_history to prevent huge cache objects (OOM risk)
+                         if len(match_history) > 500:
+                             match_history.pop(0)
+                             
+                         match_history.append({
+                             "match_id": match.id,
+                             "home_team": match.home_team.name,
+                             "away_team": match.away_team.name,
+                             "match_date": match.match_date.isoformat(),
+                             "predicted_winner": self._get_predicted_winner(pred_obj),
+                             "actual_winner": self._get_actual_winner(match),
+                             "predicted_home_goals": round(pred_obj.predicted_home_goals, 2),
+                             "predicted_away_goals": round(pred_obj.predicted_away_goals, 2),
+                             "actual_home_goals": match.home_goals,
+                             "actual_away_goals": match.away_goals,
+                             "was_correct": self._get_predicted_winner(pred_obj) == self._get_actual_winner(match),
+                             "confidence": round(pred_obj.confidence, 3),
+                             "picks": picks_list,
+                             "suggested_pick": suggested_pick_label,
+                             "pick_was_correct": pick_was_correct,
+                             "expected_value": max_ev_value
+                         })
     
                 # E. Update Stats (After Day is Done) - The "Nightly Update"
                 # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
