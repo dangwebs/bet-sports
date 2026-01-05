@@ -19,7 +19,7 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 
 # Worker Configuration
 WORKER_MODE = True  # Always True for worker script
-DAYS_BACK = int(os.getenv("DAYS_BACK", 365))  # Historical data window
+DAYS_BACK = int(os.getenv("DAYS_BACK", 3650))  # Historical data window (Default 10 years)
 PREDICTION_LIMIT = int(os.getenv("PREDICTION_LIMIT", 50))  # Max predictions per league
 
 # Leagues to process (from constants)
