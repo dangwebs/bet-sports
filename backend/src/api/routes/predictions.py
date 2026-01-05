@@ -41,7 +41,8 @@ async def get_league_predictions(
     from src.api.dependencies import (
         get_data_sources, get_prediction_service, 
         get_background_processor, get_statistics_service,
-        get_persistence_repository
+        get_persistence_repository, get_risk_manager,
+        get_match_aggregator_service
     )
     from src.application.use_cases.use_cases import GetPredictionsUseCase
     from src.domain.services.team_service import TeamService
@@ -52,6 +53,8 @@ async def get_league_predictions(
             data_sources=get_data_sources(),
             prediction_service=get_prediction_service(),
             statistics_service=get_statistics_service(),
+            match_aggregator=get_match_aggregator_service(),
+            risk_manager=get_risk_manager(),
             persistence_repository=get_persistence_repository(),
             background_processor=get_background_processor()
         )
