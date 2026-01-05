@@ -482,10 +482,10 @@ class MLTrainingOrchestrator:
                         # - min_samples_leaf=5 (Reliability)
                         # - n_jobs=1
                         clf = RandomForestClassifier(
-                            n_estimators=150, 
-                            max_depth=10, 
-                            min_samples_leaf=5,
-                            min_samples_split=15,
+                            n_estimators=300, 
+                            max_depth=15, 
+                            min_samples_leaf=3,
+                            min_samples_split=10,
                             random_state=42,
                             class_weight='balanced',
                             n_jobs=1 
