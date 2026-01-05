@@ -46,18 +46,19 @@ class RiskManager:
             
             # --- CIRCUIT BREAKERS & DATA SANITY ---
             if not self._validate_financial_integrity(pick):
-                logger.warning(f"Pick rejected by Circuit Breaker: {pick.market} due to invalid financial values.")
+                logger.warning(f"Pick rejected by Circuit Breaker: {pick.market_type} due to invalid financial values.")
                 continue
                 
             # --- EV+ VALIDATION ---
             # Rule: prob * odds > 1.0 (unless Hedging)
+            # pick.probability is the calculated probability (0.0 - 1.0)
             implied_prob = 1.0 / pick.odds if pick.odds > 0 else 0
-            ev = (pick.confidence * pick.odds) - 1.0
+            ev = (pick.probability * pick.odds) - 1.0
             
             # Strict > 0 check (floating point safe)
             if ev <= 0.0001:
                 # Check for "Hedging" exception if implemented later. For now, strict rejection.
-                logger.info(f"Pick rejected (Low EV): {pick.market}. EV={ev:.4f}")
+                logger.info(f"Pick rejected (Low EV): {pick.market_type}. EV={ev:.4f}")
                 continue
 
             # --- ODDS FRESHNESS CHECK ---
