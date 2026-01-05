@@ -158,3 +158,10 @@ def get_match_aggregator_service() -> MatchAggregatorService:
         openfootball=get_openfootball(),
         thesportsdb=get_thesportsdb()
     )
+
+from src.domain.services.risk_management.risk_manager import RiskManager
+
+@lru_cache()
+def get_risk_manager() -> RiskManager:
+    """Get RiskManager (cached)."""
+    return RiskManager()

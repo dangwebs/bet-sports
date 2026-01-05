@@ -1,0 +1,169 @@
+name: Enterprise Daily MLOps
+
+on:
+  schedule:
+    - cron: "0 10 * * *" # 10:00 UTC = 05:00 Colombia
+  workflow_dispatch:
+    inputs:
+      force_train:
+        description: "Force Retraining"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+  THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+  RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+  LOG_LEVEL: INFO
+
+jobs:
+  # ------------------------------------------------------------------
+  # JOB 1: MODEL TRAINING (Vertical Scaling)
+  # ------------------------------------------------------------------
+  train-model:
+    name: 🧠 Train ML Model
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-worker.txt"
+
+      - name: 📦 Install Dependencies
+        run: |
+          cd backend
+          pip install -r requirements-worker.txt
+
+      - name: 🏋️ Run Training
+        run: |
+          cd backend
+          python scripts/orchestrator_cli.py train --days 550
+
+      - name: 📤 Upload Model Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-model
+          path: ml_picks_classifier.joblib
+          retention-days: 1
+
+  # ------------------------------------------------------------------
+  # JOB 2: PREDICTION MATRIX (Horizontal Scaling)
+  # ------------------------------------------------------------------
+  predict-leagues:
+    name: 🔮 Predict ${{ matrix.group }}
+    needs: train-model
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true # One group failure shouldn't stop others
+    strategy:
+      max-parallel: 4
+      matrix:
+        include:
+          - group: "UK"
+            leagues: "E0,E1,E2,E3,SC0,SC1"
+          - group: "DACH_BENELUX"
+            leagues: "D1,D2,N1,B1"
+          - group: "LATIN_EURO"
+            leagues: "SP1,SP2,P1,T1,G1"
+          - group: "MEDITERRANEAN"
+            leagues: "I1,I2,F1,F2"
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-worker.txt"
+
+      - name: 📦 Install Dependencies
+        run: |
+          cd backend
+          pip install -r requirements-worker.txt
+
+      - name: 📥 Download Model
+        uses: actions/download-artifact@v4
+        with:
+          name: ml-model
+          path: backend/ # Place it where backend expects it (usually root or src)
+
+      - name: 📍 Move Model to Root
+        run: |
+          # The artifact download puts it in backend/ml_picks_classifier.joblib
+          # If the code expects it at root, move it. 
+          # Based on logs: "Loaded from .../backend/src/.../../../../ml_picks_classifier.joblib"
+          # Typically scripts run from backend/ dir, so it expects it at backend/ml_picks_classifier.joblib
+          ls -R
+
+      - name: 🚀 Run Predictions
+        run: |
+          cd backend
+          python scripts/orchestrator_cli.py predict --leagues "${{ matrix.leagues }}"
+
+  # ------------------------------------------------------------------
+  # JOB 3: AGGREGATION & REPORTING
+  # ------------------------------------------------------------------
+  finalize-process:
+    name: 🏁 Finalize & Report
+    needs: [predict-leagues]
+    runs-on: ubuntu-latest
+    if: always() # Run even if some matrix jobs failed
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-worker.txt"
+
+      - name: 📦 Install Dependencies
+        run: |
+          cd backend
+          pip install -r requirements-worker.txt
+
+      - name: 🏆 Generate Top Picks
+        run: |
+          cd backend
+          python scripts/orchestrator_cli.py top-picks
+
+      - name: 🧹 Clear Render Cache
+        env:
+          RENDER_APP_URL: "https://football-prediction-api-8sl4.onrender.com"
+          ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
+        run: |
+          curl -X DELETE "${RENDER_APP_URL}/cache/clear" \
+            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --fail || echo "Warning: Failed to clear cache (Service might be sleeping)"
+
+      - name: 📧 Notify on Failure
+        if: contains(needs.*.result, 'failure')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '❌ Daily MLOps Pipeline Failed',
+              body: `The pipeline failed on run #${context.runNumber}. Check logs.`,
+              labels: ['bug', 'automated']
+            })
