@@ -80,41 +80,21 @@ jobs:
       matrix:
         include:
           # Dividir en grupos más pequeños para máximo paralelismo
-          # Total: 17 jobs corriendo simultáneamente
+          # Total: 7 jobs corriendo simultáneamente (Top Tier Only)
           - group: "England_Premier"
             leagues: "E0"
-          - group: "England_Championship"
-            leagues: "E1"
-          - group: "England_L1_L2"
-            leagues: "E2,E3"
-          - group: "Scotland"
-            leagues: "SC0,SC1"
           - group: "Germany_Bundesliga"
             leagues: "D1"
-          - group: "Germany_2"
-            leagues: "D2"
-          - group: "Netherlands"
-            leagues: "N1"
           - group: "Belgium"
             leagues: "B1"
           - group: "Spain_LaLiga"
             leagues: "SP1"
-          - group: "Spain_2"
-            leagues: "SP2"
           - group: "Portugal"
             leagues: "P1"
-          - group: "Turkey"
-            leagues: "T1"
-          - group: "Greece"
-            leagues: "G1"
           - group: "Italy_SerieA"
             leagues: "I1"
-          - group: "Italy_SerieB"
-            leagues: "I2"
           - group: "France_Ligue1"
             leagues: "F1"
-          - group: "France_Ligue2"
-            leagues: "F2"
 
     steps:
       - name: 📥 Checkout

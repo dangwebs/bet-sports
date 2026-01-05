@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from src.utils.time_utils import COLOMBIA_TZ, get_today_str
 from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
+from src.core.constants import DEFAULT_LEAGUES
 
 # Configure Logging
 logging.basicConfig(
@@ -41,7 +42,9 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
     orchestrator = get_ml_training_orchestrator()
     cache = get_cache_service()
     
-    leagues = list(LEAGUES_METADATA.keys())
+    # Use DEFAULT_LEAGUES (Top Tier Only) instead of all metadata
+    leagues = DEFAULT_LEAGUES
+    logger.info(f"Targeting Leagues: {leagues}")
     
     try:
         if os.getenv("DISABLE_ML_TRAINING") == "true":
@@ -165,7 +168,10 @@ async def cmd_top_picks():
     
     try:
         top_picks = await use_case.execute(limit=10)
-        logger.info(f"✅ Generated {len(top_picks)} Top ML Verified Picks.")
+        if top_picks and top_picks.picks:
+            logger.info(f"✅ Generated {len(top_picks.picks)} Top ML Verified Picks.")
+        else:
+            logger.info("ℹ️ No Top Picks generated.")
         
     except Exception as e:
         logger.error(f"❌ Top Picks Generation Failed: {e}")
