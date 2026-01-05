@@ -108,3 +108,21 @@ Estas reglas deben ser seguidas **A TODA COSTA** por el asistente de IA.
   - **Pre-match**: 60 minutos de antigüedad.
   - **Live**: 30 segundos de antigüedad.
 - **Implementación**: Verificar siempre `odds_last_updated` antes de calcular el EV. Si el dato es viejo, se asume "No Bet" o se fuerza una actualización en tiempo real.
+
+## 15. Restricciones Operativas (GitHub Actions & Scope)
+
+### A. Compliance con GitHub Free Tier
+- **Runner**: Debe ser estrictamente `ubuntu-latest`. Prohibido usar runners de pago.
+- **Timeout**: Límite estricto de **60 minutos** por job. Configurar `timeout-minutes: 60` o menos.
+- **Paralelismo**: Máximo 20 jobs concurrentes (preferiblemente <10 para estabilidad).
+
+### B. Restricción de Ligas (Scope Activo)
+El proyecto se limita EXCLUSIVAMENTE a las siguientes ligas Top-Tier. **Cualquier otra liga debe ser explícitamente ignorada en entrenamiento y predicción**:
+
+- 🇪🇸 **España**: La Liga (`SP1`)
+- 🏴󠁧󠁢󠁥󠁮󠁧󠁿 **Inglaterra**: Premier League (`E0`)
+- 🇩🇪 **Alemania**: Bundesliga (`D1`)
+- 🇮🇹 **Italia**: Serie A (`I1`)
+- 🇫🇷 **Francia**: Ligue 1 (`F1`)
+- 🇧🇪 **Bélgica**: Jupiler Pro League (`B1`)
+- 🇵🇹 **Portugal**: Liga Portugal (`P1`)
