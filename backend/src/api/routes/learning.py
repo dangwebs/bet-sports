@@ -44,7 +44,7 @@ router = APIRouter()
 
 class BacktestRequest(BaseModel):
     league_ids: Optional[List[str]] = None
-    days_back: int = 365
+    days_back: int = 550
     start_date: Optional[str] = None
     reset_weights: bool = False
     force_refresh: bool = False

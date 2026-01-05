@@ -26,11 +26,34 @@ async def debug_picks():
     # 1. Initialize Persistence
     repo = get_persistence_repository()
     
-    # 2. Check DB Counts
     try:
         session = repo.db_service.get_session()
         count = session.execute(text("SELECT count(*) FROM match_predictions")).scalar()
         logger.info(f"Total rows in 'match_predictions': {count}")
+        
+        # Check Manchester City Stats from TrainingResult (JSON)
+        logger.info("Checking 'latest_daily' training result for Man City stats...")
+        # Use query text specific to the table structure shown in repository
+        res = session.execute(text("SELECT data FROM training_results WHERE key = 'latest_daily'")).first()
+        
+        if res and res[0]:
+            import json
+            data = res[0]
+            if isinstance(data, str): data = json.loads(data)
+            
+            team_stats = data.get('team_stats', {})
+            man_city = team_stats.get('Manchester City')
+            
+            if man_city:
+                logger.info(f"Man City Stats: Matches Played={man_city.get('matches_played')}, Goals Scored={man_city.get('goals_scored')}")
+            else:
+                logger.info("Man City stats not found in 'latest_daily' (Keys checked: Manchester City)")
+        else:
+            logger.info("'latest_daily' training result not found")
+            
+    except Exception as e:
+        logger.error(f"Error accessing DB: {e}", exc_info=True)
+
         
         # Check active
         active_preds = repo.get_all_active_predictions()

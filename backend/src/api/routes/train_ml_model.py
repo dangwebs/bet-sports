@@ -64,7 +64,7 @@ async def main():
     try:
         result = await orchestrator.run_training_pipeline(
             league_ids=DEFAULT_LEAGUES,
-            days_back=365  # Reduced from 730 to 365 (1 Year) to fit in 512MB RAM
+            days_back=550  # Increased to 550 (1.5 Years)
         )
         
         # Force garbage collection to free up memory immediately

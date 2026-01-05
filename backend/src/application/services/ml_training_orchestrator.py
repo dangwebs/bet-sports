@@ -84,7 +84,7 @@ class MLTrainingOrchestrator:
     async def run_training_pipeline(
         self, 
         league_ids: Optional[List[str]] = None, 
-        days_back: int = 120, # Reduced from 365 to 120 (4 months) to save RAM
+        days_back: int = 550, # Standardized to 550 days (1.5 years)
         start_date: Optional[str] = None,
         force_refresh: bool = False
     ) -> TrainingResult:

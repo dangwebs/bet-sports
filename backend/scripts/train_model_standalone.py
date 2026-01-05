@@ -20,7 +20,7 @@ logger = logging.getLogger("train_model_standalone")
 
 async def main():
     parser = argparse.ArgumentParser(description="Standalone ML Training Script")
-    parser.add_argument("--days-back", type=int, default=365, help="Number of days of historical data to fetch")
+    parser.add_argument("--days-back", type=int, default=550, help="Number of days of historical data to fetch")
     parser.add_argument("--leagues", type=str, nargs="+", default=None, help="List of league IDs to train on")
     parser.add_argument("--force-refresh", action="store_true", help="Force refresh of external data")
     

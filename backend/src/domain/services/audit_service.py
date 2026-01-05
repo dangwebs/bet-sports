@@ -106,7 +106,7 @@ class AuditService:
                     # We run it in a way that doesn't block the main thread (orchestrator now handles threading)
                     await self.orchestrator.run_training_pipeline(
                         league_ids=missing_leagues,
-                        days_back=365,
+                        days_back=550,
                         force_refresh=True
                     )
                     report["actions_taken"].append(f"Retrained: {missing_leagues}")

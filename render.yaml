@@ -19,6 +19,8 @@ services:
         sync: false
       - key: LOW_MEMORY_MODE
         value: "true"
+      - key: API_ONLY_MODE
+        value: "true"
       - key: CORS_ORIGINS
         value: "https://football-prediction-frontend-nz9r.onrender.com"
       - key: DATABASE_URL

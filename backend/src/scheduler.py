@@ -76,7 +76,7 @@ class BotScheduler:
                 logger.info("Step 1/4: Starting retraining...")
                 training_result = await orchestrator.run_training_pipeline(
                     league_ids=leagues,
-                    days_back=365
+                    days_back=550
                 )
                 accuracy = getattr(training_result, 'accuracy', 0)
                 logger.info(f"Retraining completed. Accuracy: {accuracy:.2%}")
