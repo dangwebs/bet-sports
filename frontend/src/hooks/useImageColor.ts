@@ -74,13 +74,26 @@ export const useImageColor = (imageUrl: string | undefined) => {
           setColor("rgba(255, 255, 255, 0.3)");
         }
       } catch (e) {
-        // CORS error likely
-        // create a hash from the url to generate a deterministic random color
+        // CORS error likely or canvas tainted
+        // Generate a deterministic color from the URL string
         console.warn(
-          "Could not extract color from image (CORS likely):",
+          "CORS/Canvas error for image, generating fallback glow:",
           imageUrl
         );
-        setColor(null);
+
+        let hash = 0;
+        for (let i = 0; i < imageUrl.length; i++) {
+          hash = imageUrl.charCodeAt(i) + ((hash << 5) - hash);
+        }
+
+        // Use HSL to ensure vibrant colors (high saturation/lightness)
+        const h = Math.abs(hash % 360);
+        const s = 80; // High saturation
+        const l = 60; // Medium-high lightness for glow
+
+        const fallbackColor = `hsl(${h}, ${s}%, ${l}%)`;
+        colorCache[imageUrl] = fallbackColor;
+        setColor(fallbackColor);
       }
     };
   }, [imageUrl]);
