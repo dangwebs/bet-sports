@@ -139,10 +139,10 @@ class AIPicksService(PicksService):
             # PHASE A: Model-First Filtering (LearningWeights)
             weight = self.learning_weights.get_market_adjustment(market_type)
             
-            # STRICTER GLOBAL POLICY: Discard if Weight < 0.8
+            # (Relaxed: Don't discard based on weight alone, just deprioritize)
             if weight < 0.8:
-                logger.debug(f"AI Discarded {pick.market_label} (Weight {weight:.2f} < 0.8)")
-                continue
+                pick.priority_score *= 0.8
+                # logger.debug(f"AI Deprioritized {pick.market_label} (Weight {weight:.2f})")
 
             if weight >= 1.1:
                 analysis_parts.append(f"Historial Rentable ({weight:.1f}x)")
@@ -175,16 +175,16 @@ class AIPicksService(PicksService):
                     pass
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
-            # Criteria: Prob > 60%, Weight >= 1.02, ML > 72% (Balanced for Major Leagues)
+            # Criteria: Prob > 55%, ML > 65% (Relaxed from 60%/72% to restore volume)
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
-                    pick.probability > 0.60 and
-                    weight >= 1.02 and
-                    ml_confidence > 0.72
+                    pick.probability > 0.55 and
+                    weight >= 1.0 and
+                    ml_confidence > 0.65
                 )
             else:
                 # Fallback
-                is_ai_lock = (pick.probability > 0.70 and weight >= 1.05)
+                is_ai_lock = (pick.probability > 0.65 and weight >= 1.02)
             
             ai_label = ""
             if is_ai_lock:
@@ -202,8 +202,8 @@ class AIPicksService(PicksService):
                 implied_prob = 1.0 / pick.odds
                 discrepancy = pick.probability - implied_prob
                 
-                # REQUIREMENT: Must be at least >55% probable
-                if discrepancy > 0.10 and pick.probability > 0.55:
+                # REQUIREMENT: Must be at least >50% probable (was 55%)
+                if discrepancy > 0.05 and pick.probability > 0.50:
                     context_supports = True
                     if "OVER" in market_type and context["defensive_struggle"]: context_supports = False
                     
@@ -213,7 +213,7 @@ class AIPicksService(PicksService):
                         analysis_parts.append(f"💎 Valor Detectado (+{val_pct}% vs Mercado)")
                         pick.expected_value = (pick.probability * pick.odds) - 1
                         
-                        if pick.probability > 0.60:
+                        if pick.probability > 0.55:
                             pick.is_recommended = True
                             if not ai_label: ai_label = "💎 SMART VALUE"
 
