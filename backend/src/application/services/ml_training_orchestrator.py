@@ -307,135 +307,135 @@ class MLTrainingOrchestrator:
                 if mid not in approved_picks_map: approved_picks_map[mid] = []
                 approved_picks_map[mid].append(item['pick'])
     
-                # D. Resolve & Record Results
-                for match in daily_matches:
-                     # Skip if no stats/prediction made (error case)
-                     if match.home_goals is None: continue
-                     
-                     # Retrieve approved picks for this match (if any)
-                     my_picks = approved_picks_map.get(match.id, [])
-                     
-                     picks_list = []
-                     suggested_pick_label = False
-                     pick_was_correct = False
-                     max_ev_value = -100.0
-    
-                     for pick in my_picks:
-                        result_str, payout = self.resolution_service.resolve_pick(pick, match)
-                        is_won = (result_str == "WIN")
-                        
-                        p_detail = {
-                            "market_type": pick.market_type.value if hasattr(pick.market_type, "value") else str(pick.market_type),
-                            "market_label": pick.market_label,
-                            "was_correct": is_won,
-                            "probability": float(pick.probability),
-                            "expected_value": float(pick.expected_value),
-                            "confidence": float(pick.priority_score or pick.probability),
-                            "reasoning": pick.reasoning,
-                            "result": result_str,
-                            "suggested_stake": getattr(pick, "suggested_stake", 0.0),
-                            "kelly_percentage": getattr(pick, "kelly_percentage", 0.0),
-                            "is_ml_confirmed": getattr(pick, "is_ml_confirmed", False),
-                            "is_contrarian": float(pick.expected_value) > 0.05 # Flag as Value Bet if EV > 5%
-                        }
-                        
-                        # Store Features for FUTURE training
-                        # Re-constitute stats for feature extraction
-                        # Note: We use the stats AS THEY WERE BEFORE THE MATCH (Snapshot)
-                        raw_home_feat = team_stats_cache.get(match.home_team.name, {})
-                        raw_away_feat = team_stats_cache.get(match.away_team.name, {})
-                        feat_home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home_feat)
-                        feat_away_stats = self.statistics_service.convert_to_domain_stats(match.away_team.name, raw_away_feat)
-                        
-                        ml_features.append(self.feature_extractor.extract_features(pick, match, feat_home_stats, feat_away_stats))
-                        ml_targets.append(1 if is_won else 0)
-                        
-                        # Track ROI
-                        if p_detail["market_type"] in ["winner", "draw", "result_1x2"]:
-                             total_bets += 1
-                             total_staked += p_detail["suggested_stake"] # Use calculated unit stake
-                             total_return += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
-                             if float(pick.expected_value) > max_ev_value:
-                                  suggested_pick_label = pick.market_label
-                                  pick_was_correct = is_won
-                                  max_ev_value = float(pick.expected_value)
-    
-                        # CLV
-                        closing_odds = 0.0
-                        if pick.market_type == "winner":
-                             if match.home_goals > match.away_goals: closing_odds = match.home_odds or 0.0
-                             elif match.away_goals > match.home_goals: closing_odds = match.away_odds or 0.0
-                             else: closing_odds = match.draw_odds or 0.0
-                        elif pick.market_type == "draw":
-                             closing_odds = match.draw_odds or 0.0
-                        
-                        p_detail["opening_odds"] = pick.odds
-                        p_detail["closing_odds"] = closing_odds
-                        p_detail["clv_beat"] = pick.odds > closing_odds if closing_odds > 1.0 else False
-                        
-                        picks_list.append(p_detail)
-                        
-                        # Daily stats update
-                        date_key = match.match_date.strftime("%Y-%m-%d")
-                        if date_key not in daily_stats: 
-                            daily_stats[date_key] = {'staked': 0.0, 'return': 0.0, 'count': 0}
-                        daily_stats[date_key]['staked'] += p_detail["suggested_stake"]
-                        daily_stats[date_key]['return'] += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
-                        daily_stats[date_key]['count'] += 1
-    
-                     # Get prediction from candidates (hacky lookup)
-                     # Better: re-run prediction or store it. We stored it in 'daily_candidates'.
-                     # Let's just create a basic history entry even if no picks generated)
-                     # But we need the prediction object.
-                     # Let's find the prediction in daily_candidates or regenerate simple one.
-                     # Optimization: Store prediction in a temp map above.
-                     
-                     # Simple approach: Re-generate prediction just for logging? No, waste.
-                     # Let's map match_id -> prediction in the B loop.
-                     pass # We handle this by populating history ONLY if we processed it.
-                     
-                     # Actually, we want history for ALL matches to show "No Bet" ones too?
-                     # Yes, usually. But for now let's focus on Active Betting History.
-                     
-                     # Retrieve prediction from our map
-                     pred_obj = daily_predictions_map.get(match.id)
-                     
-                     if pred_obj:
-                         # Limit match_history to prevent huge cache objects (OOM risk)
-                         if len(match_history) > 500:
-                             match_history.pop(0)
-                             
-                         match_history.append({
-                             "match_id": match.id,
-                             "home_team": match.home_team.name,
-                             "away_team": match.away_team.name,
-                             "match_date": match.match_date.isoformat(),
-                             "predicted_winner": self._get_predicted_winner(pred_obj),
-                             "actual_winner": self._get_actual_winner(match),
-                             "predicted_home_goals": round(pred_obj.predicted_home_goals, 2),
-                             "predicted_away_goals": round(pred_obj.predicted_away_goals, 2),
-                             "actual_home_goals": match.home_goals,
-                             "actual_away_goals": match.away_goals,
-                             "was_correct": self._get_predicted_winner(pred_obj) == self._get_actual_winner(match),
-                             "confidence": round(pred_obj.confidence, 3),
-                             "picks": picks_list,
-                             "suggested_pick": suggested_pick_label,
-                             "pick_was_correct": pick_was_correct,
-                             "expected_value": max_ev_value
-                         })
-    
-                # E. Update Stats (After Day is Done) - The "Nightly Update"
-                # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
-                # E. Update Stats (After Day is Done) - The "Nightly Update"
-                # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
-                for match in daily_matches:
-                    if match.home_team.name in team_stats_cache:
-                        self.statistics_service.update_team_stats_dict(team_stats_cache[match.home_team.name], match, is_home=True)
-                    if match.away_team.name in team_stats_cache:
-                        self.statistics_service.update_team_stats_dict(team_stats_cache[match.away_team.name], match, is_home=False)
-                
-                # Yield control to event loop to allow other requests (health checks, polling) to be processed
-                await asyncio.sleep(0)
+            # D. Resolve & Record Results
+            for match in daily_matches:
+                 # Skip if no stats/prediction made (error case)
+                 if match.home_goals is None: continue
+                 
+                 # Retrieve approved picks for this match (if any)
+                 my_picks = approved_picks_map.get(match.id, [])
+                 
+                 picks_list = []
+                 suggested_pick_label = False
+                 pick_was_correct = False
+                 max_ev_value = -100.0
+
+                 for pick in my_picks:
+                    result_str, payout = self.resolution_service.resolve_pick(pick, match)
+                    is_won = (result_str == "WIN")
+                    
+                    p_detail = {
+                        "market_type": pick.market_type.value if hasattr(pick.market_type, "value") else str(pick.market_type),
+                        "market_label": pick.market_label,
+                        "was_correct": is_won,
+                        "probability": float(pick.probability),
+                        "expected_value": float(pick.expected_value),
+                        "confidence": float(pick.priority_score or pick.probability),
+                        "reasoning": pick.reasoning,
+                        "result": result_str,
+                        "suggested_stake": getattr(pick, "suggested_stake", 0.0),
+                        "kelly_percentage": getattr(pick, "kelly_percentage", 0.0),
+                        "is_ml_confirmed": getattr(pick, "is_ml_confirmed", False),
+                        "is_contrarian": float(pick.expected_value) > 0.05 # Flag as Value Bet if EV > 5%
+                    }
+                    
+                    # Store Features for FUTURE training
+                    # Re-constitute stats for feature extraction
+                    # Note: We use the stats AS THEY WERE BEFORE THE MATCH (Snapshot)
+                    raw_home_feat = team_stats_cache.get(match.home_team.name, {})
+                    raw_away_feat = team_stats_cache.get(match.away_team.name, {})
+                    feat_home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home_feat)
+                    feat_away_stats = self.statistics_service.convert_to_domain_stats(match.away_team.name, raw_away_feat)
+                    
+                    ml_features.append(self.feature_extractor.extract_features(pick, match, feat_home_stats, feat_away_stats))
+                    ml_targets.append(1 if is_won else 0)
+                    
+                    # Track ROI
+                    if p_detail["market_type"] in ["winner", "draw", "result_1x2"]:
+                         total_bets += 1
+                         total_staked += p_detail["suggested_stake"] # Use calculated unit stake
+                         total_return += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
+                         if float(pick.expected_value) > max_ev_value:
+                              suggested_pick_label = pick.market_label
+                              pick_was_correct = is_won
+                              max_ev_value = float(pick.expected_value)
+
+                    # CLV
+                    closing_odds = 0.0
+                    if pick.market_type == "winner":
+                         if match.home_goals > match.away_goals: closing_odds = match.home_odds or 0.0
+                         elif match.away_goals > match.home_goals: closing_odds = match.away_odds or 0.0
+                         else: closing_odds = match.draw_odds or 0.0
+                    elif pick.market_type == "draw":
+                         closing_odds = match.draw_odds or 0.0
+                    
+                    p_detail["opening_odds"] = pick.odds
+                    p_detail["closing_odds"] = closing_odds
+                    p_detail["clv_beat"] = pick.odds > closing_odds if closing_odds > 1.0 else False
+                    
+                    picks_list.append(p_detail)
+                    
+                    # Daily stats update
+                    date_key = match.match_date.strftime("%Y-%m-%d")
+                    if date_key not in daily_stats: 
+                        daily_stats[date_key] = {'staked': 0.0, 'return': 0.0, 'count': 0}
+                    daily_stats[date_key]['staked'] += p_detail["suggested_stake"]
+                    daily_stats[date_key]['return'] += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
+                    daily_stats[date_key]['count'] += 1
+
+                 # Get prediction from candidates (hacky lookup)
+                 # Better: re-run prediction or store it. We stored it in 'daily_candidates'.
+                 # Let's just create a basic history entry even if no picks generated)
+                 # But we need the prediction object.
+                 # Let's find the prediction in daily_candidates or regenerate simple one.
+                 # Optimization: Store prediction in a temp map above.
+                 
+                 # Simple approach: Re-generate prediction just for logging? No, waste.
+                 # Let's map match_id -> prediction in the B loop.
+                 pass # We handle this by populating history ONLY if we processed it.
+                 
+                 # Actually, we want history for ALL matches to show "No Bet" ones too?
+                 # Yes, usually. But for now let's focus on Active Betting History.
+                 
+                 # Retrieve prediction from our map
+                 pred_obj = daily_predictions_map.get(match.id)
+                 
+                 if pred_obj:
+                     # Limit match_history to prevent huge cache objects (OOM risk)
+                     if len(match_history) > 500:
+                         match_history.pop(0)
+                         
+                     match_history.append({
+                         "match_id": match.id,
+                         "home_team": match.home_team.name,
+                         "away_team": match.away_team.name,
+                         "match_date": match.match_date.isoformat(),
+                         "predicted_winner": self._get_predicted_winner(pred_obj),
+                         "actual_winner": self._get_actual_winner(match),
+                         "predicted_home_goals": round(pred_obj.predicted_home_goals, 2),
+                         "predicted_away_goals": round(pred_obj.predicted_away_goals, 2),
+                         "actual_home_goals": match.home_goals,
+                         "actual_away_goals": match.away_goals,
+                         "was_correct": self._get_predicted_winner(pred_obj) == self._get_actual_winner(match),
+                         "confidence": round(pred_obj.confidence, 3),
+                         "picks": picks_list,
+                         "suggested_pick": suggested_pick_label,
+                         "pick_was_correct": pick_was_correct,
+                         "expected_value": max_ev_value
+                     })
+
+            # E. Update Stats (After Day is Done) - The "Nightly Update"
+            # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
+            # E. Update Stats (After Day is Done) - The "Nightly Update"
+            # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
+            for match in daily_matches:
+                if match.home_team.name in team_stats_cache:
+                    self.statistics_service.update_team_stats_dict(team_stats_cache[match.home_team.name], match, is_home=True)
+                if match.away_team.name in team_stats_cache:
+                    self.statistics_service.update_team_stats_dict(team_stats_cache[match.away_team.name], match, is_home=False)
+            
+            # Yield control to event loop to allow other requests (health checks, polling) to be processed
+            await asyncio.sleep(0)
         
             # --- TRAIN ML MODEL ---
             self.cache_service.set(self.CACHE_KEY_MESSAGE, "Entrenando modelo de Machine Learning (Random Forest)...", ttl_seconds=3600)
@@ -443,6 +443,8 @@ class MLTrainingOrchestrator:
             # CRITICAL: Force Garbage Collection before training to free up RAM
             import gc
             gc.collect()
+
+            logger.info(f"ML Debug: ML_AVAILABLE={ML_AVAILABLE}, Features={len(ml_features)}")
 
             if ML_AVAILABLE and RandomForestClassifier and len(ml_features) > 100:
                 try:
@@ -476,6 +478,11 @@ class MLTrainingOrchestrator:
                     logger.info("ML Model trained and saved.")
                 except Exception as e:
                     logger.error(f"Failed to train ML model: {e}")
+            
+            else:
+                logger.error(f"Skipping ML Training. Data insufficient or libraries missing. Features: {len(ml_features)}")
+                if len(ml_features) <= 100:
+                    raise Exception(f"Insufficient training data: {len(ml_features)} samples (min 100)")
             
             # --- PREPARE RESULTS ---
             self.cache_service.set(self.CACHE_KEY_MESSAGE, "Consolidando métricas y evolución de ROI...", ttl_seconds=3600)
