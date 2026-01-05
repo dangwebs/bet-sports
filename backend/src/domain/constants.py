@@ -41,6 +41,9 @@ LEAGUES_METADATA = {
     # Portugal
     "P1": {"name": "Primeira Liga", "country": "Portugal"},
     # "P2": {"name": "Liga Portugal 2", "country": "Portugal"},
+    
+    # Colombia
+    "COL1": {"name": "Primera A", "country": "Colombia"},
 
     # International (Europe & Americas)
     "UCL": {"name": "Champions League", "country": "International"},
