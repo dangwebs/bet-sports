@@ -256,12 +256,30 @@ class GetLivePredictionsUseCase:
         
         filtered_results = []
         for p_dto in results:
-            is_recent = (now - p_dto.match.match_date) < timedelta(minutes=150)
-            if p_dto.match.match_date > now or p_dto.match.status in live_statuses or is_recent:
-                # Skip clearly finished matches past grace
-                if p_dto.match.status == "FT" and not is_recent:
-                    continue
+            # STRICT FILTER: Only show matches that are TRULY live or about to start
+            # "FT", "AET", "PEN", "FINISHED" should NOT be in the live list
+            # even if they finished recently.
+            
+            # 1. Must NOT be finished
+            if p_dto.match.status in ["FT", "AET", "PEN", "FINISHED", "postponed", "cancelled"]:
+                continue
+                
+            is_start_soon = (p_dto.match.match_date > now) and ((p_dto.match.match_date - now) < timedelta(minutes=60))
+            is_in_play = p_dto.match.status in live_statuses
+            
+            # 2. Must be In Play OR Starting Very Soon (< 1h)
+            # We don't want to show matches starting in 5 hours as "Live" yet
+            
+            # Special case: If source says it's "Live" but status is weird, trust source list?
+            # The source 'get_live_matches' usually implies relevance.
+            # But let's be strict to fix the "Button Always Active" issue.
+            
+            if is_in_play or is_start_soon:
                 filtered_results.append(p_dto)
+            
+            # Grace: If it's "NS" and time is "Now" (e.g. just started but status not updated), include it
+            elif p_dto.match.status in ["NS", "SCHEDULED"] and (now - p_dto.match.match_date) < timedelta(minutes=15):
+                 filtered_results.append(p_dto)
         
         # Cache results
         self.cache_service.set_live_matches(filtered_results, cache_key)
