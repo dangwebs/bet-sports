@@ -23,6 +23,7 @@ import {
   translateOverUnder,
 } from "../../../utils/translationUtils";
 import { getTeamLogo, getTeamDisplayName } from "../../../utils/teamUtils";
+import { TeamLogo } from "../common/TeamLogo";
 
 interface MatchDetailsModalProps {
   open: boolean;
@@ -107,16 +108,12 @@ const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                   flexDirection="column"
                   alignItems="center"
                 >
-                  <Box
-                    component="img"
+                  <TeamLogo
                     src={getTeamLogo(details.match.home_team)}
                     alt={getTeamDisplayName(details.match.home_team)}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      mb: 1,
-                      objectFit: "contain",
-                    }}
+                    width={40}
+                    height={40}
+                    sx={{ mb: 1 }}
                   />
                   <Typography
                     variant={isMobile ? "body2" : "subtitle1"}
@@ -175,16 +172,12 @@ const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                   flexDirection="column"
                   alignItems="center"
                 >
-                  <Box
-                    component="img"
+                  <TeamLogo
                     src={getTeamLogo(details.match.away_team)}
                     alt={getTeamDisplayName(details.match.away_team)}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      mb: 1,
-                      objectFit: "contain",
-                    }}
+                    width={40}
+                    height={40}
+                    sx={{ mb: 1 }}
                   />
                   <Typography
                     variant={isMobile ? "body2" : "subtitle1"}

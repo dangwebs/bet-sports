@@ -12,6 +12,7 @@ import { Flag, SportsSoccer } from "@mui/icons-material";
 import { LiveMatchRaw } from "../../../utils/matchMatching";
 import { getLeagueName } from "../LeagueSelector/constants";
 import { cleanTeamName } from "../../../utils/teamUtils";
+import { TeamLogo } from "../common/TeamLogo";
 
 // --- Estilos Ultra Premium ---
 const MatchCard = styled(Card)(() => ({
@@ -189,15 +190,14 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                   }}
                 >
                   {match.home_logo_url ? (
-                    <Box
-                      component="img"
+                    <TeamLogo
                       src={match.home_logo_url}
                       alt={cleanTeamName(
                         match.home_short_name || match.home_team
                       )}
+                      width={42}
+                      height={42}
                       sx={{
-                        width: 42,
-                        height: 42,
                         transition: "transform 0.3s",
                         "&:hover": { transform: "scale(1.1)" },
                       }}
@@ -295,15 +295,14 @@ const LiveMatchCard: React.FC<LiveMatchCardProps> = memo(
                   }}
                 >
                   {match.away_logo_url ? (
-                    <Box
-                      component="img"
+                    <TeamLogo
                       src={match.away_logo_url}
                       alt={cleanTeamName(
                         match.away_short_name || match.away_team
                       )}
+                      width={42}
+                      height={42}
                       sx={{
-                        width: 42,
-                        height: 42,
                         transition: "transform 0.3s",
                         "&:hover": { transform: "scale(1.1)" },
                       }}

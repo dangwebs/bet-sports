@@ -37,6 +37,7 @@ import {
 } from "../../../utils/translationUtils";
 import { useCacheStore } from "../../../application/stores/useCacheStore";
 import { getTeamLogo, getTeamDisplayName } from "../../../utils/teamUtils";
+import { TeamLogo } from "../common/TeamLogo";
 
 interface MatchCardProps {
   matchPrediction: MatchPrediction;
@@ -407,16 +408,12 @@ const MatchCard: React.FC<MatchCardProps> = memo(
                 alignItems="center"
                 sx={{ flex: 1, minWidth: 0 }}
               >
-                <Box
-                  component="img"
+                <TeamLogo
                   src={getTeamLogo(match.home_team)}
                   alt={getTeamDisplayName(match.home_team)}
-                  sx={{
-                    width: { xs: 36, sm: 44, md: 48 },
-                    height: { xs: 36, sm: 44, md: 48 },
-                    objectFit: "contain",
-                    mb: 0.5,
-                  }}
+                  width={{ xs: 36, sm: 44, md: 48 }}
+                  height={{ xs: 36, sm: 44, md: 48 }}
+                  sx={{ mb: 0.5 }}
                 />
                 <Typography
                   variant="body2"
@@ -457,16 +454,12 @@ const MatchCard: React.FC<MatchCardProps> = memo(
                 alignItems="center"
                 sx={{ flex: 1, minWidth: 0 }}
               >
-                <Box
-                  component="img"
+                <TeamLogo
                   src={getTeamLogo(match.away_team)}
                   alt={getTeamDisplayName(match.away_team)}
-                  sx={{
-                    width: { xs: 36, sm: 44, md: 48 },
-                    height: { xs: 36, sm: 44, md: 48 },
-                    objectFit: "contain",
-                    mb: 0.5,
-                  }}
+                  width={{ xs: 36, sm: 44, md: 48 }}
+                  height={{ xs: 36, sm: 44, md: 48 }}
+                  sx={{ mb: 0.5 }}
                 />
                 <Typography
                   variant="body2"
