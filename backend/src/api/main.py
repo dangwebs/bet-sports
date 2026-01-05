@@ -360,7 +360,42 @@ async def cache_status():
         "cached_items_sample": memory_sample,
         "cache_hits": getattr(cache, '_hits', 0),
         "cache_misses": getattr(cache, '_misses', 0),
+        "cache_misses": getattr(cache, '_misses', 0),
     }
+
+
+# Cache clear endpoint (Called by GitHub Actions)
+@app.delete(
+    "/cache/clear",
+    tags=["Maintenance"],
+    summary="Clear entire cache",
+    description="Purge all ephemeral and disk cache. Requires Admin Token.",
+)
+async def clear_cache(
+    request: Request,
+):
+    """Clear all cache data."""
+    from src.infrastructure.cache.cache_service import get_cache_service
+    
+    # 1. Verify Admin Token
+    # The workflow sends this header using secrets.RAPIDAPI_KEY or similar secret
+    admin_token = request.headers.get("X-Admin-Token")
+    expected_token = os.getenv("RAPIDAPI_KEY") or os.getenv("ADMIN_SECRET")
+    
+    if not expected_token:
+        logger.warning("No admin token configured on server. Rejecting cache clear.")
+        return JSONResponse(status_code=500, content={"error": "Server misconfiguration (No Admin Token)"})
+        
+    if admin_token != expected_token:
+        logger.warning("Unauthorized cache clear attempt.")
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    
+    # 2. Clear Cache
+    cache = get_cache_service()
+    cache.clear()
+    logger.info("🧹 Cache cleared via API Request (GitHub Actions).")
+    
+    return {"status": "success", "message": "Cache purged successfully"}
 
 
 # Root endpoint
