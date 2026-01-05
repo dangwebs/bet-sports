@@ -132,10 +132,30 @@ const MatchCard: React.FC<MatchCardProps> = memo(
     const { match, prediction } = matchPrediction;
     const { prefetchMatch } = useCacheStore();
 
-    // Prefetch on hover (Just-in-Time)
+    const prefetchTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Optimized Prefetch (Debounced)
     const handleMouseEnter = () => {
-      prefetchMatch(match.id);
+      if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+
+      prefetchTimerRef.current = setTimeout(() => {
+        prefetchMatch(match.id);
+      }, 300); // 300ms delay to verify intent
     };
+
+    const handleMouseLeave = () => {
+      if (prefetchTimerRef.current) {
+        clearTimeout(prefetchTimerRef.current);
+        prefetchTimerRef.current = null;
+      }
+    };
+
+    // Cleanup on unmount
+    React.useEffect(() => {
+      return () => {
+        if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+      };
+    }, []);
 
     // ... useMemos ...
     const formattedDate = useMemo(
@@ -217,6 +237,7 @@ const MatchCard: React.FC<MatchCardProps> = memo(
         sx={getCardSx(highlight, !!onClick)}
         onClick={onClick}
         onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         {/* Selection Checkbox - Only if handler provided */}
         {onToggleSelection && (

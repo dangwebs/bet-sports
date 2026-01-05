@@ -24,6 +24,7 @@ import {
 } from "../../../utils/translationUtils";
 import { getTeamLogo, getTeamDisplayName } from "../../../utils/teamUtils";
 import { TeamLogo } from "../common/TeamLogo";
+import { PlayArrow } from "@mui/icons-material";
 
 interface MatchDetailsModalProps {
   open: boolean;
@@ -37,6 +38,12 @@ const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
   matchPrediction,
 }) => {
   const [picksCount, setPicksCount] = React.useState<number | null>(null);
+  const [showVideo, setShowVideo] = React.useState(false);
+
+  React.useEffect(() => {
+    if (open) setShowVideo(false);
+  }, [open, matchPrediction?.match.id]);
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const details = matchPrediction;
@@ -521,7 +528,7 @@ const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
               ))}
             </Paper>
 
-            {/* highlights video */}
+            {/* highlights video - Optimized with Facade Pattern */}
             {details.prediction.highlights_url && (
               <Box mb={3}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
@@ -537,18 +544,76 @@ const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                     bgcolor: "black",
                   }}
                 >
-                  <iframe
-                    src={details.prediction.highlights_url}
-                    frameBorder="0"
-                    width="100%"
-                    height="100%"
-                    allowFullScreen
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                    }}
-                  />
+                  {!showVideo ? (
+                    <Box
+                      onClick={() => setShowVideo(true)}
+                      sx={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        background:
+                          "linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.7))",
+                        "&:hover .play-icon": {
+                          transform: "scale(1.2)",
+                          color: "#3b82f6",
+                        },
+                      }}
+                    >
+                      {/* Play Button Facade */}
+                      <Box
+                        className="play-icon"
+                        sx={{
+                          width: 64,
+                          height: 64,
+                          borderRadius: "50%",
+                          bgcolor: "rgba(255,255,255,0.1)",
+                          backdropFilter: "blur(4px)",
+                          border: "2px solid rgba(255,255,255,0.5)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transition: "all 0.3s ease",
+                        }}
+                      >
+                        <PlayArrow
+                          sx={{ fontSize: 40, color: "white", ml: 0.5 }}
+                        />
+                      </Box>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          position: "absolute",
+                          bottom: 16,
+                          color: "white",
+                          fontWeight: 600,
+                          textShadow: "0 2px 4px rgba(0,0,0,0.8)",
+                        }}
+                      >
+                        Ver Highlights
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <iframe
+                      src={`${details.prediction.highlights_url}?autoplay=1`}
+                      frameBorder="0"
+                      width="100%"
+                      height="100%"
+                      allowFullScreen
+                      allow="autoplay; encrypted-media"
+                      title="Match Highlights"
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                      }}
+                    />
+                  )}
                 </Box>
               </Box>
             )}
