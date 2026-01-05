@@ -1,10 +1,11 @@
-
 import asyncio
 import argparse
 import logging
 import sys
 import os
 from typing import List
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import multiprocessing
 
 # Setup path to include backend src
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -23,11 +24,18 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 logger = logging.getLogger("OrchestratorCLI")
 
-async def cmd_train(days_back: int = 550):
+# Detectar número de CPUs disponibles
+CPU_COUNT = int(os.getenv('N_JOBS', multiprocessing.cpu_count()))
+logger.info(f"🚀 Running with {CPU_COUNT} CPU cores")
+
+async def cmd_train(days_back: int = 550, n_jobs: int = None):
     """
-    Step 1: Retrain the ML Model.
+    Step 1: Retrain the ML Model with parallel processing.
     """
-    logger.info(f"CMD: TRAIN. Days back: {days_back}")
+    if n_jobs is None:
+        n_jobs = CPU_COUNT
+        
+    logger.info(f"CMD: TRAIN. Days back: {days_back}, n_jobs: {n_jobs}")
     from src.api.dependencies import get_ml_training_orchestrator, get_cache_service
     
     orchestrator = get_ml_training_orchestrator()
@@ -40,13 +48,16 @@ async def cmd_train(days_back: int = 550):
             logger.info("Training disabled via env var.")
             return
 
+        # Pasar n_jobs al orchestrator si lo soporta
+        # Si tu orchestrator no soporta n_jobs, necesitarás modificarlo
         training_result = await orchestrator.run_training_pipeline(
             league_ids=leagues,
-            days_back=days_back
+            days_back=days_back,
+            n_jobs=n_jobs  # Añade este parámetro si tu orchestrator lo soporta
         )
         
         # Save validation metrics to Cache/DB if needed
-        logger.info(f"Training Complete. Accuracy: {training_result.accuracy:.2%}")
+        logger.info(f"✅ Training Complete. Accuracy: {training_result.accuracy:.2%}")
         
         # Cache Result
         training_data = {
@@ -58,15 +69,32 @@ async def cmd_train(days_back: int = 550):
         cache.set(orchestrator.CACHE_KEY_RESULT, training_data, ttl_seconds=86400)
         
     except Exception as e:
-        logger.error(f"Training Failed: {e}", exc_info=True)
+        logger.error(f"❌ Training Failed: {e}", exc_info=True)
         sys.exit(1)
 
-async def cmd_predict(leagues_str: str):
+async def process_league_async(league_id: str, use_case):
     """
-    Step 2: Massive Inference for specific leagues.
+    Helper para procesar una liga de manera asíncrona.
+    """
+    if league_id not in LEAGUES_METADATA:
+        logger.warning(f"⚠️  Skipping unknown league: {league_id}")
+        return None
+    
+    try:
+        logger.info(f"🔄 Processing League: {league_id}")
+        result = await use_case.execute(league_id, limit=50)
+        logger.info(f"✅ Saved {len(result.predictions)} predictions for {league_id}")
+        return league_id, True
+    except Exception as e:
+        logger.error(f"❌ Failed to process {league_id}: {e}")
+        return league_id, False
+
+async def cmd_predict(leagues_str: str, parallel: bool = True):
+    """
+    Step 2: Massive Inference for specific leagues with parallel processing.
     """
     leagues = [l.strip() for l in leagues_str.split(',') if l.strip()]
-    logger.info(f"CMD: PREDICT. Target Leagues: {leagues}")
+    logger.info(f"CMD: PREDICT. Target Leagues: {leagues}, Parallel: {parallel}")
     
     from src.api.dependencies import (
         get_data_sources, get_prediction_service, 
@@ -84,30 +112,42 @@ async def cmd_predict(leagues_str: str):
         persistence_repository=get_persistence_repository()
     )
     
-    failed = []
-    
-    for league_id in leagues:
-        if league_id not in LEAGUES_METADATA:
-            logger.warning(f"Skipping unknown league: {league_id}")
-            continue
-            
-        try:
-            logger.info(f"Processing League: {league_id}")
-            result = await use_case.execute(league_id, limit=50) # Limit 50 upcoming
-            
-            # NOTE: saving to DB is handled inside use_case.execute() via persistence_repo
-            logger.info(f"Saved {len(result.predictions)} predictions for {league_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to process {league_id}: {e}")
-            failed.append(league_id)
-            
-    if failed:
-        logger.warning(f"Failed leagues: {failed}")
-        # We don't exit 1 here to allow other batches to succeed. 
-        # But for GitHub Actions matrix, it might be better to fail if critical?
-        # Let's print summary but exit 0 unless all failed.
-        if len(failed) == len(leagues):
+    if parallel and len(leagues) > 1:
+        # Procesar múltiples ligas en paralelo usando asyncio.gather
+        logger.info(f"🔥 Processing {len(leagues)} leagues in parallel")
+        tasks = [process_league_async(league_id, use_case) for league_id in leagues]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Analizar resultados
+        failed = []
+        succeeded = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Exception during processing: {result}")
+                failed.append("unknown")
+            elif result and result[1]:
+                succeeded.append(result[0])
+            elif result:
+                failed.append(result[0])
+        
+        logger.info(f"📊 Results: ✅ {len(succeeded)} succeeded, ❌ {len(failed)} failed")
+        
+        if failed:
+            logger.warning(f"⚠️  Failed leagues: {failed}")
+            if len(failed) == len(leagues):
+                logger.error("❌ All leagues failed!")
+                sys.exit(1)
+    else:
+        # Procesamiento secuencial (fallback)
+        logger.info(f"🔄 Processing {len(leagues)} leagues sequentially")
+        failed = []
+        for league_id in leagues:
+            result = await process_league_async(league_id, use_case)
+            if result and not result[1]:
+                failed.append(result[0])
+        
+        if failed and len(failed) == len(leagues):
+            logger.error("❌ All leagues failed!")
             sys.exit(1)
 
 async def cmd_top_picks():
@@ -125,47 +165,49 @@ async def cmd_top_picks():
     
     try:
         top_picks = await use_case.execute(limit=10)
-        logger.info(f"Generated {len(top_picks)} Top ML Verified Picks.")
-        # The use case returns them, we assume it or another step saves them if needed. 
-        # Actually GetTopMLPicksUseCase reads, it doesn't calculate and save. 
-        # We need to Ensure they are calculated. 
-        # The current 'GetTopMLPicksUseCase' simply queries 'top_ml_picks' table or similar?
-        # If it's a dynamic query, then we are good.
-        # If it requires a batch job to populates a table, we implement that here.
-        # Assumption: persistence_repository.get_top_picks() performs a query on stored predictions.
+        logger.info(f"✅ Generated {len(top_picks)} Top ML Verified Picks.")
         
     except Exception as e:
-        logger.error(f"Top Picks Generation Failed: {e}")
+        logger.error(f"❌ Top Picks Generation Failed: {e}")
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="MLOps Orchestrator")
+    parser = argparse.ArgumentParser(description="MLOps Orchestrator - Optimized for Parallel Processing")
     subparsers = parser.add_subparsers(dest='command', required=True)
     
     # Train
-    parser_train = subparsers.add_parser('train')
-    parser_train.add_argument('--days', type=int, default=550)
+    parser_train = subparsers.add_parser('train', help='Train ML model')
+    parser_train.add_argument('--days', type=int, default=550,
+                              help='Number of days back for training data (default: 550)')
+    parser_train.add_argument('--n-jobs', type=int, default=None, 
+                              help='Number of parallel jobs for ML training (default: auto-detect)')
     
     # Predict
-    parser_predict = subparsers.add_parser('predict')
-    parser_predict.add_argument('--leagues', type=str, required=True, help="Comma separated league IDs")
+    parser_predict = subparsers.add_parser('predict', help='Run predictions for leagues')
+    parser_predict.add_argument('--leagues', type=str, required=True, 
+                                help="Comma separated league IDs (e.g., 'E0,E1,E2')")
+    parser_predict.add_argument('--parallel', action='store_true', default=True,
+                                help='Process leagues in parallel (default: True)')
+    parser_predict.add_argument('--sequential', dest='parallel', action='store_false',
+                                help='Process leagues sequentially')
     
     # Top Picks
-    parser_top = subparsers.add_parser('top-picks')
+    parser_top = subparsers.add_parser('top-picks', help='Generate top ML picks')
     
     args = parser.parse_args()
     
     try:
         if args.command == 'train':
-            asyncio.run(cmd_train(args.days))
+            asyncio.run(cmd_train(args.days, args.n_jobs))
         elif args.command == 'predict':
-            asyncio.run(cmd_predict(args.leagues))
+            asyncio.run(cmd_predict(args.leagues, args.parallel))
         elif args.command == 'top-picks':
             asyncio.run(cmd_top_picks())
     except KeyboardInterrupt:
+        logger.info("⚠️  Interrupted by user")
         pass
     except Exception as e:
-        logger.error(f"Fatal: {e}")
+        logger.error(f"💥 Fatal error: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":

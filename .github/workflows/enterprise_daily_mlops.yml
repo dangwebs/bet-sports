@@ -21,6 +21,12 @@ env:
   THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
   RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
   LOG_LEVEL: INFO
+  # Configuración para aprovechar ambos cores disponibles en GitHub Actions
+  OMP_NUM_THREADS: 2
+  OPENBLAS_NUM_THREADS: 2
+  MKL_NUM_THREADS: 2
+  NUMEXPR_NUM_THREADS: 2
+  N_JOBS: 2
 
 jobs:
   # ------------------------------------------------------------------
@@ -46,39 +52,69 @@ jobs:
           cd backend
           pip install -r requirements-worker.txt
 
-      - name: 🏋️ Run Training
+      - name: 🏋️ Run Training (Parallelized with 2 cores)
         run: |
           cd backend
-          python scripts/orchestrator_cli.py train --days 400
+          python scripts/orchestrator_cli.py train --days 400 --n-jobs 2
 
       - name: 📤 Upload Model Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ml-model
-          path: ml_picks_classifier.joblib
+          path: backend/ml_picks_classifier.joblib
           retention-days: 1
+          compression-level: 9 # Compresión máxima para transferencia rápida
 
   # ------------------------------------------------------------------
-  # JOB 2: PREDICTION MATRIX (Horizontal Scaling)
+  # JOB 2: PREDICTION MATRIX (Horizontal Scaling - 17 jobs en paralelo)
   # ------------------------------------------------------------------
   predict-leagues:
     name: 🔮 Predict ${{ matrix.group }}
     needs: train-model
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true # One group failure shouldn't stop others
+    continue-on-error: true # Una falla no detiene las demás
     strategy:
-      max-parallel: 4
+      max-parallel: 20 # GitHub permite hasta 20 jobs concurrentes en tier gratuito
+      fail-fast: false # No detener otros jobs si uno falla
       matrix:
         include:
-          - group: "UK"
-            leagues: "E0,E1,E2,E3,SC0,SC1"
-          - group: "DACH_BENELUX"
-            leagues: "D1,D2,N1,B1"
-          - group: "LATIN_EURO"
-            leagues: "SP1,SP2,P1,T1,G1"
-          - group: "MEDITERRANEAN"
-            leagues: "I1,I2,F1,F2"
+          # Dividir en grupos más pequeños para máximo paralelismo
+          # Total: 17 jobs corriendo simultáneamente
+          - group: "England_Premier"
+            leagues: "E0"
+          - group: "England_Championship"
+            leagues: "E1"
+          - group: "England_L1_L2"
+            leagues: "E2,E3"
+          - group: "Scotland"
+            leagues: "SC0,SC1"
+          - group: "Germany_Bundesliga"
+            leagues: "D1"
+          - group: "Germany_2"
+            leagues: "D2"
+          - group: "Netherlands"
+            leagues: "N1"
+          - group: "Belgium"
+            leagues: "B1"
+          - group: "Spain_LaLiga"
+            leagues: "SP1"
+          - group: "Spain_2"
+            leagues: "SP2"
+          - group: "Portugal"
+            leagues: "P1"
+          - group: "Turkey"
+            leagues: "T1"
+          - group: "Greece"
+            leagues: "G1"
+          - group: "Italy_SerieA"
+            leagues: "I1"
+          - group: "Italy_SerieB"
+            leagues: "I2"
+          - group: "France_Ligue1"
+            leagues: "F1"
+          - group: "France_Ligue2"
+            leagues: "F2"
 
     steps:
       - name: 📥 Checkout
@@ -100,20 +136,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ml-model
-          path: backend/ # Place it where backend expects it (usually root or src)
+          path: backend/
 
-      - name: 📍 Move Model to Root
-        run: |
-          # The artifact download puts it in backend/ml_picks_classifier.joblib
-          # If the code expects it at root, move it. 
-          # Based on logs: "Loaded from .../backend/src/.../../../../ml_picks_classifier.joblib"
-          # Typically scripts run from backend/ dir, so it expects it at backend/ml_picks_classifier.joblib
-          ls -R
-
-      - name: 🚀 Run Predictions
+      - name: 🚀 Run Predictions (Parallelized)
         run: |
           cd backend
-          python scripts/orchestrator_cli.py predict --leagues "${{ matrix.leagues }}"
+          python scripts/orchestrator_cli.py predict --leagues "${{ matrix.leagues }}" --parallel
 
   # ------------------------------------------------------------------
   # JOB 3: AGGREGATION & REPORTING
@@ -155,6 +183,16 @@ jobs:
             -H "Content-Type: application/json" \
             --fail || echo "Warning: Failed to clear cache (Service might be sleeping)"
 
+      - name: 📊 Summary Report
+        if: always()
+        run: |
+          echo "### 📈 Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Training: Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔮 Predictions: ${{ strategy.job-total }} leagues processed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏆 Top Picks: Generated" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Parallelism: 17 concurrent jobs" >> $GITHUB_STEP_SUMMARY
+
       - name: 📧 Notify on Failure
         if: contains(needs.*.result, 'failure')
         uses: actions/github-script@v7
@@ -164,6 +202,6 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: '❌ Daily MLOps Pipeline Failed',
-              body: `The pipeline failed on run #${context.runNumber}. Check logs.`,
-              labels: ['bug', 'automated']
+              body: `The pipeline failed on run #${context.runNumber}. Check logs at: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['bug', 'automated', 'mlops']
             })

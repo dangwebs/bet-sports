@@ -87,7 +87,8 @@ class MLTrainingOrchestrator:
         league_ids: Optional[List[str]] = None, 
         days_back: int = 550, # Standardized to 550 days (1.5 years)
         start_date: Optional[str] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        n_jobs: int = -1
     ) -> TrainingResult:
         """
         Executes the full training pipeline and returns a TrainingResult.
@@ -279,7 +280,7 @@ class MLTrainingOrchestrator:
                     # For safety and context, we'll keep it simple:
                     # We can't pickle 'self', so we pass services explicitly.
                     
-                    results = Parallel(n_jobs=-1, prefer="threads")(
+                    results = Parallel(n_jobs=n_jobs, prefer="threads")(
                         delayed(_process_single_match_task)(*args) for args in parallel_inputs
                     )
                     
