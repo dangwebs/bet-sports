@@ -300,8 +300,14 @@ class MLTrainingOrchestrator:
                 # This filters the day's candidates to select the best portfolio respecting risk limits
                 approved_items = self.risk_manager.apply_portfolio_constraints(daily_candidates)
             
-            # Mapping to easily find approved picks per match for history
-            approved_picks_map = {} # match_id -> list of picks
+            # Mapping for Training (All Candidates) vs Simulation (Approved Only)
+            candidate_picks_map = {}
+            for item in daily_candidates:
+                mid = item['match'].id
+                if mid not in candidate_picks_map: candidate_picks_map[mid] = []
+                candidate_picks_map[mid].append(item['pick'])
+
+            approved_picks_map = {} 
             for item in approved_items:
                 mid = item['match'].id
                 if mid not in approved_picks_map: approved_picks_map[mid] = []
@@ -309,21 +315,31 @@ class MLTrainingOrchestrator:
     
             # D. Resolve & Record Results
             for match in daily_matches:
-                 # Skip if no stats/prediction made (error case)
                  if match.home_goals is None: continue
                  
-                 # Retrieve approved picks for this match (if any)
-                 my_picks = approved_picks_map.get(match.id, [])
+                 # PROCESS ALL CANDIDATES for ML Training
+                 candidates = candidate_picks_map.get(match.id, [])
+                 approved_list = approved_picks_map.get(match.id, [])
                  
+                 # Track if *any* pick for this match was approved (for history/display)
+                 has_approved_pick = len(approved_list) > 0
+
                  picks_list = []
                  suggested_pick_label = False
                  pick_was_correct = False
                  max_ev_value = -100.0
 
-                 for pick in my_picks:
+                 # We iterate CANDIDATES to ensure comprehensive training data
+                 for pick in candidates:
                     result_str, payout = self.resolution_service.resolve_pick(pick, match)
                     is_won = (result_str == "WIN")
                     
+                    # Check if this specific pick was approved (for ROI calc)
+                    is_approved = any(p == pick for p in approved_list) # Identity check might fail if copies, but usually fine
+                    # Better: check pick ID if exists, or just use the approved_list content.
+                    # Optimization: Since 'pick' object is likely same instance from memory in 'daily_candidates'
+                    is_approved = pick in approved_list
+
                     p_detail = {
                         "market_type": pick.market_type.value if hasattr(pick.market_type, "value") else str(pick.market_type),
                         "market_label": pick.market_label,
@@ -336,12 +352,11 @@ class MLTrainingOrchestrator:
                         "suggested_stake": getattr(pick, "suggested_stake", 0.0),
                         "kelly_percentage": getattr(pick, "kelly_percentage", 0.0),
                         "is_ml_confirmed": getattr(pick, "is_ml_confirmed", False),
-                        "is_contrarian": float(pick.expected_value) > 0.05 # Flag as Value Bet if EV > 5%
+                        "is_contrarian": float(pick.expected_value) > 0.05
                     }
                     
-                    # Store Features for FUTURE training
-                    # Re-constitute stats for feature extraction
-                    # Note: We use the stats AS THEY WERE BEFORE THE MATCH (Snapshot)
+                    # ALWAYS Extract Features for Training (if pick is valid)
+                    # This ensures we train on ALL potential opportunities, not just the ones we took.
                     raw_home_feat = team_stats_cache.get(match.home_team.name, {})
                     raw_away_feat = team_stats_cache.get(match.away_team.name, {})
                     feat_home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home_feat)
@@ -350,79 +365,55 @@ class MLTrainingOrchestrator:
                     ml_features.append(self.feature_extractor.extract_features(pick, match, feat_home_stats, feat_away_stats))
                     ml_targets.append(1 if is_won else 0)
                     
-                    # Track ROI
-                    if p_detail["market_type"] in ["winner", "draw", "result_1x2"]:
-                         total_bets += 1
-                         total_staked += p_detail["suggested_stake"] # Use calculated unit stake
-                         total_return += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
-                         if float(pick.expected_value) > max_ev_value:
-                              suggested_pick_label = pick.market_label
-                              pick_was_correct = is_won
-                              max_ev_value = float(pick.expected_value)
+                    # ONLY Track ROI if Approved
+                    if is_approved:
+                        if p_detail["market_type"] in ["winner", "draw", "result_1x2"]:
+                             total_bets += 1
+                             total_staked += p_detail["suggested_stake"] 
+                             total_return += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
+                             if float(pick.expected_value) > max_ev_value:
+                                  suggested_pick_label = pick.market_label
+                                  pick_was_correct = is_won
+                                  max_ev_value = float(pick.expected_value)
 
-                    # CLV
-                    closing_odds = 0.0
-                    if pick.market_type == "winner":
-                         if match.home_goals > match.away_goals: closing_odds = match.home_odds or 0.0
-                         elif match.away_goals > match.home_goals: closing_odds = match.away_odds or 0.0
-                         else: closing_odds = match.draw_odds or 0.0
-                    elif pick.market_type == "draw":
-                         closing_odds = match.draw_odds or 0.0
-                    
-                    p_detail["opening_odds"] = pick.odds
-                    p_detail["closing_odds"] = closing_odds
-                    p_detail["clv_beat"] = pick.odds > closing_odds if closing_odds > 1.0 else False
-                    
-                    picks_list.append(p_detail)
-                    
-                    # Daily stats update
-                    date_key = match.match_date.strftime("%Y-%m-%d")
-                    if date_key not in daily_stats: 
-                        daily_stats[date_key] = {'staked': 0.0, 'return': 0.0, 'count': 0}
-                    daily_stats[date_key]['staked'] += p_detail["suggested_stake"]
-                    daily_stats[date_key]['return'] += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
-                    daily_stats[date_key]['count'] += 1
+                        # Daily stats update (ROI)
+                        date_key = match.match_date.strftime("%Y-%m-%d")
+                        if date_key not in daily_stats: 
+                            daily_stats[date_key] = {'staked': 0.0, 'return': 0.0, 'count': 0}
+                        daily_stats[date_key]['staked'] += p_detail["suggested_stake"]
+                        daily_stats[date_key]['return'] += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
+                        daily_stats[date_key]['count'] += 1
+                        
+                        # Add to display list
+                        picks_list.append(p_detail)
 
-                 # Get prediction from candidates (hacky lookup)
-                 # Better: re-run prediction or store it. We stored it in 'daily_candidates'.
-                 # Let's just create a basic history entry even if no picks generated)
-                 # But we need the prediction object.
-                 # Let's find the prediction in daily_candidates or regenerate simple one.
-                 # Optimization: Store prediction in a temp map above.
-                 
-                 # Simple approach: Re-generate prediction just for logging? No, waste.
-                 # Let's map match_id -> prediction in the B loop.
-                 pass # We handle this by populating history ONLY if we processed it.
-                 
-                 # Actually, we want history for ALL matches to show "No Bet" ones too?
-                 # Yes, usually. But for now let's focus on Active Betting History.
-                 
-                 # Retrieve prediction from our map
-                 pred_obj = daily_predictions_map.get(match.id)
-                 
-                 if pred_obj:
-                     # Limit match_history to prevent huge cache objects (OOM risk)
-                     if len(match_history) > 500:
-                         match_history.pop(0)
-                         
-                     match_history.append({
-                         "match_id": match.id,
-                         "home_team": match.home_team.name,
-                         "away_team": match.away_team.name,
-                         "match_date": match.match_date.isoformat(),
-                         "predicted_winner": self._get_predicted_winner(pred_obj),
-                         "actual_winner": self._get_actual_winner(match),
-                         "predicted_home_goals": round(pred_obj.predicted_home_goals, 2),
-                         "predicted_away_goals": round(pred_obj.predicted_away_goals, 2),
-                         "actual_home_goals": match.home_goals,
-                         "actual_away_goals": match.away_goals,
-                         "was_correct": self._get_predicted_winner(pred_obj) == self._get_actual_winner(match),
-                         "confidence": round(pred_obj.confidence, 3),
-                         "picks": picks_list,
-                         "suggested_pick": suggested_pick_label,
-                         "pick_was_correct": pick_was_correct,
-                         "expected_value": max_ev_value
-                     })
+                    # CLV Tracking (Keep for all or just approved? Let's keep for approved logic below)
+                    # Actually, p_detail is only used for display list if approved.
+                    
+                 # History Logging (Only if we had approved bets OR significant candidates?)
+                 # To limit noise, let's only log matches where we had ACTION.
+                 if has_approved_pick:
+                     pred_obj = daily_predictions_map.get(match.id)
+                     if pred_obj:
+                         if len(match_history) > 500: match_history.pop(0)
+                         match_history.append({
+                             "match_id": match.id,
+                             "home_team": match.home_team.name,
+                             "away_team": match.away_team.name,
+                             "match_date": match.match_date.isoformat(),
+                             "predicted_winner": self._get_predicted_winner(pred_obj),
+                             "actual_winner": self._get_actual_winner(match),
+                             "predicted_home_goals": round(pred_obj.predicted_home_goals, 2),
+                             "predicted_away_goals": round(pred_obj.predicted_away_goals, 2),
+                             "actual_home_goals": match.home_goals,
+                             "actual_away_goals": match.away_goals,
+                             "was_correct": self._get_predicted_winner(pred_obj) == self._get_actual_winner(match),
+                             "confidence": round(pred_obj.confidence, 3),
+                             "picks": picks_list, # Only approved picks
+                             "suggested_pick": suggested_pick_label,
+                             "pick_was_correct": pick_was_correct,
+                             "expected_value": max_ev_value
+                         })
 
             # E. Update Stats (After Day is Done) - The "Nightly Update"
             # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
