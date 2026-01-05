@@ -130,11 +130,11 @@ class RiskManager:
         """
         try:
             # Check for NaN / Inf
-            if not math.isfinite(pick.confidence) or not math.isfinite(pick.odds) or not math.isfinite(pick.kelly_percentage):
+            if not math.isfinite(pick.probability) or not math.isfinite(pick.odds) or not math.isfinite(pick.kelly_percentage):
                 return False
                 
             # Logical Bounds
-            if pick.confidence < 0 or pick.confidence > 1.0: return False
+            if pick.probability < 0 or pick.probability > 1.0: return False
             if pick.odds < 1.01 or pick.odds > 1000.0: return False # Outlier odds
             if pick.kelly_percentage < 0 or pick.kelly_percentage > 1.0: # Stake > 100% is absurd
                 return False
