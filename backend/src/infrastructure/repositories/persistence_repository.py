@@ -260,6 +260,13 @@ class PersistenceRepository:
         finally:
             session.close()
 
+    def get_match_prediction(self, match_id: str) -> Optional[dict]:
+        """
+        Retrieve prediction data for a match (convenience method).
+        """
+        data, _ = self.get_match_prediction_with_timestamp(match_id)
+        return data
+
     def get_league_predictions(self, league_id: str) -> list[dict]:
         """
         Retrieve all valid predictions for a specific league.

@@ -10,6 +10,7 @@ from typing import Optional, List
 from dataclasses import dataclass
 from pytz import timezone
 import logging
+import asyncio
 
 from src.domain.entities.entities import Match, Prediction, TeamStatistics
 from src.domain.services.prediction_service import PredictionService
