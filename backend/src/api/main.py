@@ -142,13 +142,14 @@ async def lifespan(app: FastAPI):
             from src.api.dependencies import (
                 get_data_sources, get_prediction_service,
                 get_statistics_service, get_persistence_repository,
-                get_background_processor
+                get_background_processor, get_match_aggregator_service
             )
             
             warmup_service = CacheWarmupService(
                 data_sources=get_data_sources(),
                 prediction_service=get_prediction_service(),
                 statistics_service=get_statistics_service(),
+                match_aggregator=get_match_aggregator_service(),
                 persistence_repository=get_persistence_repository(),
                 background_processor=get_background_processor()
             )
