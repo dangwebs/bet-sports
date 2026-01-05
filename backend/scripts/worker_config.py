@@ -19,7 +19,7 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 
 # Worker Configuration
 WORKER_MODE = True  # Always True for worker script
-DAYS_BACK = int(os.getenv("DAYS_BACK", 3650))  # Historical data window (Default 10 years)
+DAYS_BACK = int(os.getenv("DAYS_BACK", 365))  # Historical data window
 PREDICTION_LIMIT = int(os.getenv("PREDICTION_LIMIT", 50))  # Max predictions per league
 
 # Leagues to process (from constants)
@@ -35,9 +35,9 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 # Performance Settings
-BATCH_SIZE = 500  # Increased batch size for faster processing
+BATCH_SIZE = 100  # Batch size for database inserts
 MAX_WORKERS = 4  # Parallel processing workers
-MEMORY_LIMIT_MB = 6144  # 6GB RAM (GitHub Actions Standard Runner has ~7GB)
+MEMORY_LIMIT_MB = 2048  # Memory limit for worker (GitHub Actions has more RAM)
 
 # Cache Settings (for worker)
 ENABLE_WORKER_CACHE = True

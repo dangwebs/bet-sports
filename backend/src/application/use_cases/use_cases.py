@@ -30,7 +30,6 @@ from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
 from src.infrastructure.data_sources.club_elo import ClubEloSource
 from src.infrastructure.data_sources.understat_source import UnderstatSource
 from src.infrastructure.data_sources.fotmob_source import FotMobSource
-from src.infrastructure.data_sources.espn import ESPNSource
 from src.application.dtos.dtos import (
     TeamDTO,
     LeagueDTO,
@@ -62,7 +61,6 @@ class DataSources:
     club_elo: Optional[ClubEloSource] = None
     understat: Optional[UnderstatSource] = None
     fotmob: Optional[FotMobSource] = None
-    espn: Optional[ESPNSource] = None
 
 
 class GetLeaguesUseCase:
@@ -617,14 +615,6 @@ class GetPredictionsUseCase:
                      risk_level=p.risk_level,
                      is_recommended=p.is_recommended,
                      priority_score=p.priority_score,
-                     is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
-                     ml_confidence=getattr(p, 'ml_confidence', 0.0),
-                     suggested_stake=getattr(p, 'suggested_stake', 0.0),
-                     kelly_percentage=getattr(p, 'kelly_percentage', 0.0),
-                     clv_beat=getattr(p, 'clv_beat', False),
-                     expected_value=getattr(p, 'expected_value', 0.0),
-                     opening_odds=getattr(p, 'odds', 0.0),
-                     closing_odds=getattr(p, 'closing_odds', 0.0),
                  )
                  for p in picks
              ]

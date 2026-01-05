@@ -363,34 +363,6 @@ async def cache_status():
     }
 
 
-@app.delete(
-    "/cache/clear",
-    tags=["Management"],
-    summary="Clear system cache",
-    description="Force clear all cache layers. Requires X-Admin-Token header.",
-)
-async def clear_cache(request: Request):
-    """Force clear cache (Protected)."""
-    from src.infrastructure.cache.cache_service import get_cache_service
-    from fastapi import HTTPException
-    
-    # Simple protection using existing secret or specific token
-    # Reuse RAPIDAPI_KEY as admin secret for simplicity in this context, 
-    # or look for specific ADMIN_TOKEN
-    expected_token = os.getenv("ADMIN_TOKEN") or os.getenv("RAPIDAPI_KEY")
-    auth_header = request.headers.get("X-Admin-Token")
-    
-    if not expected_token or auth_header != expected_token:
-        logger.warning(f"Unauthorized cache clear attempt from {request.client.host}")
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    cache = get_cache_service()
-    cache.clear()
-    logger.info("🧹 Cache force cleared via API request")
-    
-    return {"status": "success", "message": "Cache cleared successfully", "timestamp": get_current_time()}
-
-
 # Root endpoint
 @app.get(
     "/",

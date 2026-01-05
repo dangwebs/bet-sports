@@ -40,19 +40,6 @@ class MLFeatureExtractor:
             float(mt_hash)
         ]
         
-        # 2b. Context Features (League & Time)
-        league_hash = 0.0
-        month_val = 0.0
-        if match:
-             # Hash league ID to a stable float (0-1000)
-             l_str = match.league.id if hasattr(match, 'league') and match.league else "unknown"
-             league_hash = float(zlib.adler32(l_str.encode('utf-8')) % 1000)
-             # Month (1-12)
-             month_val = float(match.match_date.month)
-             
-        features.append(league_hash)
-        features.append(month_val)
-        
         # 3. Enhanced Match Stats (if available)
         if home_stats and away_stats:
             mp_h = max(1, home_stats.matches_played)

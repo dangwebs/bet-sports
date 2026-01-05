@@ -10,7 +10,6 @@ from typing import Optional, List
 from dataclasses import dataclass
 from pytz import timezone
 import logging
-import asyncio
 
 from src.domain.entities.entities import Match, Prediction, TeamStatistics
 from src.domain.services.prediction_service import PredictionService
@@ -121,15 +120,6 @@ class GetLivePredictionsUseCase:
                     source_used = "Football-Data.org"
             except Exception as e:
                 logger.error(f"Football-Data.org live fetch failed: {e}")
-
-        # Priority 3: ESPN (Critical for COL1 and others not in above)
-        if not matches and self.data_sources.espn:
-            try:
-                matches = await self.data_sources.espn.get_live_matches()
-                if matches:
-                    source_used = "ESPN"
-            except Exception as e:
-                logger.error(f"ESPN live fetch failed: {e}")
         
         if not matches:
             # Cache empty result for short period to avoid hammering API
@@ -188,7 +178,6 @@ class GetLivePredictionsUseCase:
 
         # Generate predictions for each match
         results: List[MatchPredictionDTO] = []
-        matches_to_process = []
         
         for match in matches:
             try:
@@ -212,41 +201,22 @@ class GetLivePredictionsUseCase:
                     results.append(pre_calculated_dto)
                     continue
 
-                # 2. EMERGENCY FALLBACK: Collecting for concurrent processing
-                # We defer real-time calculation to process in parallel with limits
-                matches_to_process.append(match)
+                # 2. EMERGENCY FALLBACK: Real-time calculation
+                logger.warning(f"⚠ Cache/DB miss for {match.id}. Running emergency real-time inference...")
+                prediction_dto = await self._generate_prediction(match, bulk_history)
+                match_dto = self._match_to_dto(match)
+                
+                results.append(MatchPredictionDTO(
+                    match=match_dto,
+                    prediction=prediction_dto,
+                ))
             except Exception as e:
-                logger.error(f"Error in match loop: {e}")
-                matches_to_process.append(match)
-
-        # Process misses concurrently with semaphore to avoid API hammering
-        if matches_to_process:
-            logger.warning(f"⚠ Cache/DB miss for {len(matches_to_process)} matches. Running concurrent real-time inference...")
-            sem = asyncio.Semaphore(5) # Max 5 concurrent prediction tasks (limit API calls)
-            
-            async def _safe_predict(m):
-                async with sem:
-                    try:
-                        p_dto = await self._generate_prediction(m, bulk_history)
-                        return (m, p_dto)
-                    except Exception as e:
-                        logger.error(f"Failed to generate prediction for {m.id}: {e}")
-                        return (m, None)
-
-            tasks = [_safe_predict(m) for m in matches_to_process]
-            prediction_results = await asyncio.gather(*tasks)
-            
-            for match_obj, pred_dto in prediction_results:
-                if pred_dto:
-                    results.append(MatchPredictionDTO(
-                        match=self._match_to_dto(match_obj),
-                        prediction=pred_dto
-                    ))
-                else:
-                    results.append(MatchPredictionDTO(
-                        match=self._match_to_dto(match_obj),
-                        prediction=self._empty_prediction(match_obj.id)
-                    ))
+                logger.error(f"Failed to generate/retrieve prediction for match {match.id}: {e}")
+                # Still include match without prediction to avoid breaks
+                results.append(MatchPredictionDTO(
+                    match=self._match_to_dto(match),
+                    prediction=self._empty_prediction(match.id),
+                ))
         
         from src.utils.time_utils import get_current_time
         now = get_current_time()
@@ -256,30 +226,12 @@ class GetLivePredictionsUseCase:
         
         filtered_results = []
         for p_dto in results:
-            # STRICT FILTER: Only show matches that are TRULY live or about to start
-            # "FT", "AET", "PEN", "FINISHED" should NOT be in the live list
-            # even if they finished recently.
-            
-            # 1. Must NOT be finished
-            if p_dto.match.status in ["FT", "AET", "PEN", "FINISHED", "postponed", "cancelled"]:
-                continue
-                
-            is_start_soon = (p_dto.match.match_date > now) and ((p_dto.match.match_date - now) < timedelta(minutes=60))
-            is_in_play = p_dto.match.status in live_statuses
-            
-            # 2. Must be In Play OR Starting Very Soon (< 1h)
-            # We don't want to show matches starting in 5 hours as "Live" yet
-            
-            # Special case: If source says it's "Live" but status is weird, trust source list?
-            # The source 'get_live_matches' usually implies relevance.
-            # But let's be strict to fix the "Button Always Active" issue.
-            
-            if is_in_play or is_start_soon:
+            is_recent = (now - p_dto.match.match_date) < timedelta(minutes=150)
+            if p_dto.match.match_date > now or p_dto.match.status in live_statuses or is_recent:
+                # Skip clearly finished matches past grace
+                if p_dto.match.status == "FT" and not is_recent:
+                    continue
                 filtered_results.append(p_dto)
-            
-            # Grace: If it's "NS" and time is "Now" (e.g. just started but status not updated), include it
-            elif p_dto.match.status in ["NS", "SCHEDULED"] and (now - p_dto.match.match_date) < timedelta(minutes=15):
-                 filtered_results.append(p_dto)
         
         # Cache results
         self.cache_service.set_live_matches(filtered_results, cache_key)

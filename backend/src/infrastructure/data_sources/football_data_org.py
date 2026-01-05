@@ -703,7 +703,7 @@ class FootballDataOrgSource:
         if not self.is_configured:
             return []
             
-        await self._wait_strict()
+        await self._wait_for_rate_limit()
         
         # Status 'LIVE' or 'IN_PLAY'
         data = await self._make_request("/matches", {"status": "LIVE"})
