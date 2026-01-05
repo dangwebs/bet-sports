@@ -175,16 +175,16 @@ class AIPicksService(PicksService):
                     pass
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
-            # Criteria: Prob > 55%, ML > 65% (Relaxed from 60%/72% to restore volume)
+            # Criteria: Prob > 60%, ML > 70% (High Quality Assurance)
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
-                    pick.probability > 0.55 and
+                    pick.probability > 0.60 and
                     weight >= 1.0 and
-                    ml_confidence > 0.65
+                    ml_confidence > 0.70
                 )
             else:
-                # Fallback
-                is_ai_lock = (pick.probability > 0.65 and weight >= 1.02)
+                # Fallback for old model
+                is_ai_lock = (pick.probability > 0.68 and weight >= 1.05)
             
             ai_label = ""
             if is_ai_lock:
@@ -202,8 +202,8 @@ class AIPicksService(PicksService):
                 implied_prob = 1.0 / pick.odds
                 discrepancy = pick.probability - implied_prob
                 
-                # REQUIREMENT: Must be at least >50% probable (was 55%)
-                if discrepancy > 0.05 and pick.probability > 0.50:
+                # REQUIREMENT: Must be at least >55% probable for value bets
+                if discrepancy > 0.08 and pick.probability > 0.55:
                     context_supports = True
                     if "OVER" in market_type and context["defensive_struggle"]: context_supports = False
                     
@@ -213,7 +213,7 @@ class AIPicksService(PicksService):
                         analysis_parts.append(f"💎 Valor Detectado (+{val_pct}% vs Mercado)")
                         pick.expected_value = (pick.probability * pick.odds) - 1
                         
-                        if pick.probability > 0.55:
+                        if pick.probability > 0.60:
                             pick.is_recommended = True
                             if not ai_label: ai_label = "💎 SMART VALUE"
 

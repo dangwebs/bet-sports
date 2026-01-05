@@ -602,11 +602,11 @@ class PicksService:
                  if p.expected_value > 0.05:
                      continue
                      
-                 # Normal picks must meet 50% threshold (was 65%, which proved too strict)
-                 if p.probability < 0.50:
+                 # Normal picks must meet 60% threshold (High Quality, balanced)
+                 if p.probability < 0.60:
                      p.is_recommended = False
                      p.priority_score *= 0.8 # Penalty
-                     p.reasoning += " (Prob < 50%)."
+                     p.reasoning += " (Prob < 60%)."
                      
         # Finally, sort all generated picks by probability in descending order
         picks.suggested_picks.sort(key=lambda p: p.probability, reverse=True)

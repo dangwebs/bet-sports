@@ -35,9 +35,9 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 # Performance Settings
-BATCH_SIZE = 100  # Batch size for database inserts
+BATCH_SIZE = 500  # Increased batch size for faster processing
 MAX_WORKERS = 4  # Parallel processing workers
-MEMORY_LIMIT_MB = 2048  # Memory limit for worker (GitHub Actions has more RAM)
+MEMORY_LIMIT_MB = 6144  # 6GB RAM (GitHub Actions Standard Runner has ~7GB)
 
 # Cache Settings (for worker)
 ENABLE_WORKER_CACHE = True

@@ -479,21 +479,29 @@ class MLTrainingOrchestrator:
                         # Optimized for LOW MEMORY & HIGH GENERALIZATION:
                         # - n_estimators=150
                         # - max_depth=10 
-                        # - min_samples_leaf=5 (Reliability)
-                        # - n_jobs=1
+                        # Optimized for HIGH QUALITY (GitHub Actions 6GB+ RAM):
+                        # - n_estimators=1000: High stability and noise reduction
+                        # - max_depth=25: Capture complex interactions without infinite overfitting
+                        # - min_samples_leaf=2: Robustness against outliers
+                        # - class_weight="balanced_subsample": Handle class imbalance effectively
                         clf = RandomForestClassifier(
-                            n_estimators=300, 
-                            max_depth=15, 
-                            min_samples_leaf=3,
-                            min_samples_split=10,
+                            n_estimators=1000,
+                            max_depth=25,
+                            min_samples_split=5,
+                            min_samples_leaf=2,
                             random_state=42,
-                            class_weight='balanced',
-                            n_jobs=1 
+                            n_jobs=-1,  # Use all available cores
+                            class_weight="balanced_subsample"
                         )
                         clf.fit(ml_features, ml_targets)
                         
-                        # Save to absolute path
-                        joblib.dump(clf, str(MODEL_FILE_PATH))
+                        # Verify integrity
+                        if hasattr(clf, "feature_importances_"):
+                            logger.info(f"Model trained. Top feature: {clf.feature_importances_.argmax()}")
+                        
+                        # Save model
+                        import joblib
+                        joblib.dump(clf, MODEL_FILE_PATH, compress=3) # Higher compression to save disk space)
                         return clf
     
                     loop = asyncio.get_running_loop()
