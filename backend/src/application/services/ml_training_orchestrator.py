@@ -439,11 +439,13 @@ class MLTrainingOrchestrator:
                         # - max_depth=10 (reduced from 12) to prevent potential overfitting and save memory
                         # - n_jobs=1 (CRITICAL: Avoid multiprocessing overhead in container)
                         clf = RandomForestClassifier(
-                            n_estimators=100, 
-                            max_depth=10, 
+                            n_estimators=1000,
+                            max_depth=25,
+                            min_samples_split=5,
+                            min_samples_leaf=2,
                             random_state=42,
-                            class_weight='balanced',
-                            n_jobs=1 
+                            n_jobs=-1,  # Use all available cores
+                            class_weight="balanced_subsample"
                         )
                         clf.fit(ml_features, ml_targets)
                         
