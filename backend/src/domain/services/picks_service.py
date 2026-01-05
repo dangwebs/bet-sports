@@ -30,6 +30,7 @@ from src.domain.services.risk_management.bankroll_service import BankrollService
 # Try to import joblib for ML model loading
 try:
     import joblib
+    import sklearn
     ML_AVAILABLE = True
 except ImportError:
     ML_AVAILABLE = False
