@@ -44,3 +44,28 @@ Estas reglas deben ser seguidas **A TODA COSTA** por el asistente de IA.
   1. **Sintaxis y Tipado**: Ejecutar verificaciones de sintaxis (compilación) y tipado para asegurar que no hay errores groseros.
   2. **Imports**: Limpiar importaciones no utilizadas.
   3. **Formato**: Asegurar un formato limpio y consistente.
+
+## 6. Calidad y Robustez (Testing & Typing)
+
+- **Prohibido `any`**: En TypeScript, el uso de `any` está prohibido salvo excepciones extremas documentadas. (Mejora la seguridad de tipos).
+- **Tipado Completo en Backend**: Todas las firmas de funciones en Python deben tener _type hints_ completos (argumentos y retornos).
+- **Test de Regla de Negocio**: Cualquier lógica que involucre cálculo de dinero (Stake, Bankroll) o Scoring de predicciones DEBE tener un Unit Test asociado antes de entregarse.
+
+## 7. Manejo de Errores y Logging
+
+- **No "Swallowing" Exceptions**: Está prohibido atrapar excepciones con un simple `pass` o imprimir un print y continuar. Se debe loguear con `logger.error` y traza completa, o relanzar una excepción de dominio.
+- **Fail Fast**: Si falta una configuración crítica (ej. API Key) al inicio, el servicio debe fallar inmediatamente, no arrancar a medias.
+
+## 8. Rendimiento (Performance)
+
+- **Cómputo Pesado en Background**: Cualquier tarea que tome >500ms (ej. entrenar modelo, fetch masivo) NO puede bloquear el hilo principal. Debe ir a `BackgroundTasks` o `Celery`.
+- **Optimización de Renders**: En React, componentes que reciban listas grandes (>50 items) deben usar virtualización o estar memoizados (`React.memo`).
+
+## 9. Seguridad
+
+- **Input Validation**: Todo dato que entre a la API debe ser validado por un esquema Pydantic. Nunca confiar en el frontend.
+- **Secretos**: Prohibido hardodear keys o tokens en el código, ni siquiera para "probar rápido". Siempre variables de entorno.
+
+## 10. Estándar de Commits
+
+- **Conventional Commits**: Exigir formato estándar en mensajes de git (ej. `feat:`, `fix:`, `refactor:`, `chore:`).
