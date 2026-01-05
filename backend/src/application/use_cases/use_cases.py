@@ -164,8 +164,12 @@ class GetPredictionsUseCase:
                 # PredictionsResponseDTO.generated_at is ISO string if cached as dict
                 from src.utils.time_utils import to_colombia_time
                 if db_last_updated and cached_response.get('generated_at'):
-                    from dateutil import parser
-                    gen_at = to_colombia_time(parser.parse(cached_response['generated_at']))
+                    from datetime import datetime
+                    gen_at_str = cached_response['generated_at']
+                    # Handle Z suffix for older python versions compat
+                    if gen_at_str.endswith('Z'):
+                        gen_at_str = gen_at_str[:-1] + '+00:00'
+                    gen_at = to_colombia_time(datetime.fromisoformat(gen_at_str))
                     db_last_updated = to_colombia_time(db_last_updated)
                     
                     if db_last_updated > gen_at:
@@ -662,7 +666,7 @@ class GetPredictionsUseCase:
             if p.match.status in ["FT", "AET", "PEN", "FINISHED"]:
                 continue
                 
-            if m_date > now or p.match.status in live_statuses or is_recent:
+            if m_date > now or p.match.status in live_statuses:
                  # Double check status just in case dates are weird
                  if p.match.status not in ["FT", "AET", "PEN", "FINISHED"]:
                      filtered.append(p)

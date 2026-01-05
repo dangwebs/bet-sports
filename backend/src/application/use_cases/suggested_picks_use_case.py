@@ -677,8 +677,16 @@ class GetTopMLPicksUseCase:
                 match_date_str = match_info.get("match_date")
                 if match_date_str:
                     try:
-                        from dateutil import parser
-                        m_date = parser.parse(match_date_str)
+                        # Fallback for dateutil missing
+                        m_date = None
+                        try:
+                            # Try standard ISO first
+                            m_date = match_date_str.replace("Z", "+00:00")
+                            m_date = datetime.fromisoformat(m_date)
+                        except:
+                            # If complex format, skip or log (but dateutil is gone)
+                            logger.warning(f"Could not parse date {match_date_str} without dateutil")
+                            continue
                         if m_date.tzinfo is None:
                             m_date = now.tzinfo.localize(m_date)
                         else:
