@@ -7,6 +7,11 @@ from typing import List
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import multiprocessing
 
+# Load environment variables from .env file FIRST
+from dotenv import load_dotenv
+env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(env_path)
+
 # Setup path to include backend src
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 

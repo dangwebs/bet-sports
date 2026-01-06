@@ -171,8 +171,8 @@ class GetPredictionsUseCase:
                 # PredictionsResponseDTO.generated_at is ISO string if cached as dict
                 from src.utils.time_utils import to_colombia_time
                 if cached_response.get('generated_at'):
-                    from datetime import datetime
-                    from datetime import timedelta, timezone
+                    from datetime import timedelta
+                    from datetime import timezone as dt_timezone
                     
                     gen_at_str = cached_response['generated_at']
                     # Handle Z suffix for older python versions compat
@@ -180,17 +180,19 @@ class GetPredictionsUseCase:
                         gen_at_str = gen_at_str[:-1] + '+00:00'
                     
                     # Parse and Localize
-                    gen_at = datetime.fromisoformat(gen_at_str)
+                    # Using top-level datetime import
+                    from datetime import datetime as dt
+                    gen_at = dt.fromisoformat(gen_at_str)
                     if gen_at.tzinfo is None:
-                         gen_at = gen_at.replace(tzinfo=timezone.utc)
+                         gen_at = gen_at.replace(tzinfo=dt_timezone.utc)
                     else:
-                         gen_at = gen_at.astimezone(timezone.utc)
+                         gen_at = gen_at.astimezone(dt_timezone.utc)
                          
                     # DB Timestamp is typically naive UTC in SQLAlchemy
                     if db_last_updated.tzinfo is None:
-                        db_last_updated = db_last_updated.replace(tzinfo=timezone.utc)
+                        db_last_updated = db_last_updated.replace(tzinfo=dt_timezone.utc)
                     else:
-                        db_last_updated = db_last_updated.astimezone(timezone.utc)
+                        db_last_updated = db_last_updated.astimezone(dt_timezone.utc)
                     
                     # Add a small buffer (e.g. 10 seconds) to avoid race conditions
                     if db_last_updated > (gen_at + timedelta(seconds=10)):
