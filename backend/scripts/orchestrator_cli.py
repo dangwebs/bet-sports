@@ -42,6 +42,10 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
     orchestrator = get_ml_training_orchestrator()
     cache = get_cache_service()
     
+    # [FIX] Get Persistence Repo to save results to DB (source of truth for Dashboard)
+    from src.api.dependencies import get_persistence_repository
+    repo = get_persistence_repository()
+    
     # Use DEFAULT_LEAGUES (Top Tier Only) instead of all metadata
     leagues = DEFAULT_LEAGUES
     logger.info(f"Targeting Leagues: {leagues}")
@@ -70,6 +74,12 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
             "global_averages": getattr(training_result, 'global_averages', {})
         }
         cache.set(orchestrator.CACHE_KEY_RESULT, training_data, ttl_seconds=86400)
+        
+        # [FIX] Persist to Database for Dashboard Visibility
+        # This allows the API to serve this data even after the GitHub Action runner dies
+        logger.info("💾 Persisting Training Result to Database...")
+        repo.save_training_result("latest_daily", training_result.model_dump())
+        logger.info("✅ Training Result successfully saved to DB (key: latest_daily)")
         
     except Exception as e:
         logger.error(f"❌ Training Failed: {e}", exc_info=True)
@@ -170,6 +180,11 @@ async def cmd_top_picks():
         top_picks = await use_case.execute(limit=10)
         if top_picks and top_picks.picks:
             logger.info(f"✅ Generated {len(top_picks.picks)} Top ML Verified Picks.")
+            
+            # [FIX] Persist Top Picks to Database
+            logger.info("💾 Persisting Top Picks to Database...")
+            repo.save_training_result("top_ml_picks", top_picks.model_dump())
+            logger.info("✅ Top Picks successfully saved to DB (key: top_ml_picks)")
         else:
             logger.info("ℹ️ No Top Picks generated.")
         
