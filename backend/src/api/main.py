@@ -139,6 +139,7 @@ async def lifespan(app: FastAPI):
         if not api_only_mode:
             # Initialize CacheWarmupService
             from src.domain.services.cache_warmup_service import CacheWarmupService
+            from src.domain.services.risk_management.risk_manager import RiskManager
             from src.api.dependencies import (
                 get_data_sources, get_prediction_service,
                 get_statistics_service, get_persistence_repository,
@@ -150,6 +151,7 @@ async def lifespan(app: FastAPI):
                 prediction_service=get_prediction_service(),
                 statistics_service=get_statistics_service(),
                 match_aggregator=get_match_aggregator_service(),
+                risk_manager=RiskManager(),
                 persistence_repository=get_persistence_repository(),
                 background_processor=get_background_processor()
             )
