@@ -156,12 +156,25 @@ jobs:
       - name: 🧹 Clear Render Cache
         env:
           RENDER_APP_URL: "https://football-prediction-api-8sl4.onrender.com"
+          # IMPORTANTE: Verifica que este secreto coincida con la validación de tu backend para X-Admin-Token
           ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          curl -X DELETE "${RENDER_APP_URL}/cache/clear" \
-            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --fail || echo "Warning: Failed to clear cache (Service might be sleeping)"
+          echo "Intentando limpiar caché en: $RENDER_APP_URL"
+          # Bucle de reintentos para manejar 'Cold Starts' de Render
+          for i in {1..5}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "${RENDER_APP_URL}/cache/clear" \
+              -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+              -H "Content-Type: application/json")
+            
+            if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 204 ]; then
+              echo "✅ Caché limpiada exitosamente."
+              exit 0
+            fi
+            echo "⚠️ Intento $i falló con código $HTTP_CODE. El servicio puede estar durmiendo. Reintentando en 10s..."
+            sleep 10
+          done
+          echo "❌ Error Crítico: No se pudo limpiar la caché. Los datos en producción estarán desactualizados."
+          exit 1
 
       - name: 📊 Summary Report
         if: always()

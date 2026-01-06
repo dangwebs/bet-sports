@@ -78,22 +78,6 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
             "& .MuiChip-label": { px: 1 },
           }}
         />
-        {pick.ml_confidence !== undefined && pick.ml_confidence > 0 && (
-          <Chip
-            label={`🤖 ${(pick.ml_confidence * 100).toFixed(0)}%`}
-            size="small"
-            sx={{
-              ml: 1,
-              bgcolor: "rgba(56, 189, 248, 0.5)", // Sky 400 @ 50% (Unified AI Style)
-              color: "#ffffff",
-              fontWeight: 700,
-              fontSize: "0.70rem",
-              height: 24,
-              border: "1px solid #38bdf8",
-              "& .MuiChip-label": { px: 1 },
-            }}
-          />
-        )}
         {pick.expected_value !== undefined && pick.expected_value > 0 && (
           <Chip
             label={`EV: +${pick.expected_value.toFixed(1)}%`}
