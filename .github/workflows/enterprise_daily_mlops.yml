@@ -160,8 +160,9 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
         run: |
           echo "Intentando limpiar caché en: $RENDER_APP_URL"
-          # Bucle de reintentos para manejar 'Cold Starts' de Render
-          for i in {1..5}; do
+          # Bucle de reintentos para manejar 'Cold Starts' de Render y despliegues lentos
+          # Total espera: 30 * 20s = 600s (10 minutos)
+          for i in {1..30}; do
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "${RENDER_APP_URL}/cache/clear" \
               -H "X-Admin-Token: ${ADMIN_TOKEN}" \
               -H "Content-Type: application/json")
@@ -170,8 +171,8 @@ jobs:
               echo "✅ Caché limpiada exitosamente."
               exit 0
             fi
-            echo "⚠️ Intento $i falló con código $HTTP_CODE. El servicio puede estar durmiendo. Reintentando en 10s..."
-            sleep 10
+            echo "⚠️ Intento $i falló con código $HTTP_CODE. El servicio puede estar durmiendo o desplegando. Reintentando en 20s..."
+            sleep 20
           done
           echo "❌ Error Crítico: No se pudo limpiar la caché. Los datos en producción estarán desactualizados."
           exit 1
