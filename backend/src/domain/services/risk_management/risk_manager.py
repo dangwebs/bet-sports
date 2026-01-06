@@ -46,7 +46,17 @@ class RiskManager:
             
             # --- CIRCUIT BREAKERS & DATA SANITY ---
             if not self._validate_financial_integrity(pick):
-                logger.warning(f"Pick rejected by Circuit Breaker: {pick.market_type} due to invalid financial values.")
+                # Instead of dropping, we keep them for ACCURACY tracking but disable financial recommendation
+                # This ensures we have "Stats" even if we don't have "Bets"
+                logger.info(f"Pick retained for TRACKING only (Financial Invalid): {pick.market_type} | Odds: {pick.odds}")
+                pick.is_recommended = False
+                pick.suggested_stake = 0.0
+                pick.kelly_percentage = 0.0
+                pick.reasoning += " (Tracking Only: No Financial Value)"
+                # valid_picks.append(item) 
+                # Proceed to next check or append? 
+                # If we append here and continue, we skip EV check which is good.
+                valid_picks.append(item)
                 continue
                 
             # --- EV+ VALIDATION ---
@@ -57,9 +67,19 @@ class RiskManager:
             
             # Strict > 0 check (floating point safe)
             if ev <= 0.0001:
-                # Check for "Hedging" exception if implemented later. For now, strict rejection.
-                logger.info(f"Pick rejected (Low EV): {pick.market_type}. EV={ev:.4f}")
-                continue
+                # Same here: High confidence picks might be getting dropped due to bad odds. 
+                # We keep them for tracking if probability is decent (e.g. > 50%)
+                if pick.probability > 0.50:
+                     logger.info(f"Pick retained for TRACKING only (Low EV): {pick.market_type} | EV={ev:.4f}")
+                     pick.is_recommended = False
+                     pick.suggested_stake = 0.0
+                     pick.kelly_percentage = 0.0
+                     pick.reasoning += " (Tracking Only: Low EV)"
+                     valid_picks.append(item)
+                     continue
+                else:
+                     logger.info(f"Pick rejected (Low EV & Low Prob): {pick.market_type}. EV={ev:.4f}")
+                     continue
 
             # --- ODDS FRESHNESS CHECK ---
             # Assuming pick has an 'odds_timestamp' field or similar. 

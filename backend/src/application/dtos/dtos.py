@@ -81,6 +81,8 @@ class MatchDTO(BaseModel):
     away_yellow_cards: Optional[int] = None
     home_red_cards: Optional[int] = None
     away_red_cards: Optional[int] = None
+    home_odds: Optional[float] = None
+    draw_odds: Optional[float] = None
     away_odds: Optional[float] = None
     minute: Optional[str] = None
     # Extended Stats

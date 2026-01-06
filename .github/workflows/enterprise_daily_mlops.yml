@@ -21,12 +21,12 @@ env:
   THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
   RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
   LOG_LEVEL: INFO
-  # Configuración para aprovechar ambos cores disponibles en GitHub Actions
-  OMP_NUM_THREADS: 2
-  OPENBLAS_NUM_THREADS: 2
-  MKL_NUM_THREADS: 2
-  NUMEXPR_NUM_THREADS: 2
-  N_JOBS: 2
+  # Configuración para aprovechar 4 cores (ubuntu-latest tiene 4 vCPUs)
+  OMP_NUM_THREADS: 4
+  OPENBLAS_NUM_THREADS: 4
+  MKL_NUM_THREADS: 4
+  NUMEXPR_NUM_THREADS: 4
+  N_JOBS: 4
 
 jobs:
   # ------------------------------------------------------------------
@@ -52,10 +52,10 @@ jobs:
           cd backend
           pip install -r requirements-worker.txt
 
-      - name: 🏋️ Run Training (Parallelized with 2 cores)
+      - name: 🏋️ Run Training (Parallelized with 4 cores)
         run: |
           cd backend
-          python scripts/orchestrator_cli.py train --days 400 --n-jobs 2
+          python scripts/orchestrator_cli.py train --days 400 --n-jobs 4
 
       - name: 📤 Upload Model Artifact
         uses: actions/upload-artifact@v4

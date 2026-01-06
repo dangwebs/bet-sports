@@ -453,3 +453,145 @@ class ESPNSource:
             logger.debug(f"Parse error: {e}")
             return None
 
+    def _convert_odds(self, american_odds: str) -> Optional[float]:
+        """
+        Convert American odds (e.g., "+120", "-150") to Decimal odds.
+        Returns rounded to 2 decimal places.
+        """
+        try:
+            val = int(american_odds)
+            if val > 0:
+                decimal = (val / 100) + 1
+            else:
+                decimal = (100 / abs(val)) + 1
+            return round(decimal, 2)
+        except (ValueError, TypeError):
+            return None
+
+    async def get_upcoming_matches(
+        self,
+        league_code: str,
+        days_ahead: int = 7
+    ) -> List[Match]:
+        """
+        Get upcoming matches for a league with odds.
+        """
+        matches = []
+        slug = ESPN_LEAGUE_MAPPING.get(league_code)
+        if not slug:
+            return []
+            
+        # Get dates for upcoming days
+        dates_to_fetch = []
+        now = datetime.utcnow()
+        for i in range(days_ahead + 1):
+            d = now + timedelta(days=i)
+            dates_to_fetch.append(d.strftime("%Y%m%d"))
+            
+        # Fetch scoreboard for these dates
+        for date_str in dates_to_fetch:
+            url = f"{self.BASE_URL}/{slug}/scoreboard"
+            data = await self._make_request(url, {"dates": date_str})
+            
+            if not data or "events" not in data:
+                continue
+                
+            for event in data["events"]:
+                status = event.get("status", {}).get("type", {}).get("state")
+                
+                # Check for scheduled matches
+                if status not in ["pre"]:
+                    continue
+                    
+                match_id = event.get("id")
+                
+                # Fetch summary to get Odds (pickcenter)
+                summary = await self._make_request(f"{self.BASE_URL}/{slug}/summary", {"event": match_id})
+                
+                if not summary:
+                    continue
+                    
+                match = self._parse_upcoming_match(event, summary, league_code)
+                if match:
+                    matches.append(match)
+                    
+        return matches
+
+    def _parse_upcoming_match(self, event: dict, summary: dict, league_code: str) -> Optional[Match]:
+        """Parse upcoming match data including odds."""
+        try:
+            competition = event["competitions"][0]
+            competitors = competition["competitors"]
+            home_comp = competitors[0]
+            away_comp = competitors[1]
+            
+            # Ensure home is really home
+            if home_comp["homeAway"] != "home":
+                home_comp, away_comp = away_comp, home_comp
+                
+            # Date
+            date_str = event.get("date")
+            match_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ")
+            
+            # Teams
+            home_name = home_comp["team"]["displayName"]
+            away_name = away_comp["team"]["displayName"]
+            
+            home_team = Team(
+                id=home_comp["team"]["id"],
+                name=home_name,
+                logo_url=TeamService.get_team_logo(home_name) or home_comp["team"].get("logo")
+            )
+            away_team = Team(
+                id=away_comp["team"]["id"],
+                name=away_name,
+                logo_url=TeamService.get_team_logo(away_name) or away_comp["team"].get("logo")
+            )
+            
+            # Odds Parsing
+            home_odds = None
+            draw_odds = None
+            away_odds = None
+            
+            pickcenter = summary.get("pickcenter", [])
+            
+            if pickcenter:
+                # Prioritize provider if needed, currently taking first that has data
+                for pick in pickcenter:
+                    # Look for moneyline or 3-way
+                    # ESPN structure: provider -> homeTeamOdds -> moneyLine (string like "+140")
+                    
+                    h_data = pick.get("homeTeamOdds", {})
+                    a_data = pick.get("awayTeamOdds", {})
+                    d_data = pick.get("drawOdds", {})
+                    
+                    h_val = h_data.get("moneyLine")
+                    a_val = a_data.get("moneyLine")
+                    d_val = d_data.get("moneyLine")
+                    
+                    if h_val and a_val:
+                        home_odds = self._convert_odds(str(h_val))
+                        away_odds = self._convert_odds(str(a_val))
+                        draw_odds = self._convert_odds(str(d_val)) if d_val else None
+                        
+                        if home_odds and away_odds:
+                            break # Found valid odds
+                            
+            return Match(
+                id=f"espn_{event['id']}",
+                home_team=home_team,
+                away_team=away_team,
+                league=League(id=league_code, name=ESPN_LEAGUE_MAPPING[league_code], country="Europe"),
+                match_date=match_date,
+                status="NS", # Not Started
+                
+                # Odds
+                home_odds=home_odds,
+                draw_odds=draw_odds,
+                away_odds=away_odds,
+            )
+            
+        except Exception as e:
+            logger.debug(f"Error parsing upcoming ESPN match: {e}")
+            return None
+

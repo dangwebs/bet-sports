@@ -19,7 +19,9 @@ from src.infrastructure.data_sources.football_data_uk import FootballDataUKSourc
 from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
+from src.infrastructure.data_sources.espn import ESPNSource
 from src.utils.time_utils import get_current_time
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +31,14 @@ class MatchAggregatorService:
         football_data_uk: FootballDataUKSource,
         football_data_org: FootballDataOrgSource,
         openfootball: OpenFootballSource,
-        thesportsdb: TheSportsDBClient
+        thesportsdb: TheSportsDBClient,
+        espn: ESPNSource
     ):
         self.football_data_uk = football_data_uk
         self.football_data_org = football_data_org
         self.openfootball = openfootball
         self.thesportsdb = thesportsdb
+        self.espn = espn
 
     async def get_aggregated_history(self, league_id: str, seasons: List[str]) -> List[Match]:
         """
@@ -70,7 +74,7 @@ class MatchAggregatorService:
             league_entity = League(id=league_id, name=meta["name"], country=meta["country"])
             tasks.append(self.openfootball.get_matches(league_entity))
         else:
-             tasks.append(asyncio.sleep(0))
+            tasks.append(asyncio.sleep(0))
         
         # Execute
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -147,13 +151,21 @@ class MatchAggregatorService:
         """
         Fetch upcoming matches from available sources.
         """
-        # Try Football-Data.org
+        # 1. Try ESPN (Primary - Has Odds)
+        try:
+            matches = await self.espn.get_upcoming_matches(league_id)
+            if matches:
+                 return self._sort_and_limit(matches, limit)
+        except Exception as e:
+            logger.warning(f"ESPN upcoming fetch failed for {league_id}: {e}")
+
+        # 2. Try Football-Data.org
         if self.football_data_org.is_configured:
             matches = await self.football_data_org.get_upcoming_matches(league_id)
             if matches:
                  return self._sort_and_limit(matches, limit)
         
-        # Try TheSportsDB
+        # 3. Try TheSportsDB
         try:
             matches = await self.thesportsdb.get_upcoming_fixtures(league_id, next_n=limit)
             if matches:
@@ -161,7 +173,7 @@ class MatchAggregatorService:
         except Exception:
              pass
              
-        # Try OpenFootball
+        # 4. Try OpenFootball
         try:
              from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
              if self.openfootball and league_id in LEAGUES_METADATA:
