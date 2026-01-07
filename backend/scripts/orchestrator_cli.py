@@ -92,7 +92,7 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
         logger.error(f"❌ Training Failed: {e}", exc_info=True)
         sys.exit(1)
 
-async def process_league_async(league_id: str, use_case):
+async def process_league_async(league_id: str, use_case, persistence_repository):
     """
     Helper para procesar una liga de manera asíncrona.
     """
@@ -102,8 +102,25 @@ async def process_league_async(league_id: str, use_case):
     
     try:
         logger.info(f"🔄 Processing League: {league_id}")
+        
+        # 1. Generate Predictions
         result = await use_case.execute(league_id, limit=50)
         logger.info(f"✅ Saved {len(result.predictions)} predictions for {league_id}")
+        
+        # 2. [NEW] Generate Top ML Picks for THIS League immediately
+        from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
+        
+        # Re-use the existing persistence repo
+        top_picks_use_case = GetTopMLPicksUseCase(persistence_repository)
+        
+        # Get Top 10 for this specific league
+        top_picks = await top_picks_use_case.execute(limit=10, league_id=league_id)
+        
+        if top_picks and top_picks.picks:
+            key = f"top_ml_picks_{league_id}"
+            persistence_repository.save_training_result(key, top_picks.model_dump())
+            logger.info(f"🏆 Saved {len(top_picks.picks)} League Top Picks to DB (key: {key})")
+            
         return league_id, True
     except Exception as e:
         logger.error(f"❌ Failed to process {league_id}: {e}")
@@ -123,19 +140,21 @@ async def cmd_predict(leagues_str: str, parallel: bool = True):
     )
     from src.application.use_cases.use_cases import GetPredictionsUseCase
     
+    repo = get_persistence_repository()
+    
     use_case = GetPredictionsUseCase(
         data_sources=get_data_sources(),
         prediction_service=get_prediction_service(),
         statistics_service=get_statistics_service(),
         match_aggregator=get_match_aggregator_service(),
         # risk_manager=get_risk_manager(),
-        persistence_repository=get_persistence_repository()
+        persistence_repository=repo
     )
     
     if parallel and len(leagues) > 1:
         # Procesar múltiples ligas en paralelo usando asyncio.gather
         logger.info(f"🔥 Processing {len(leagues)} leagues in parallel")
-        tasks = [process_league_async(league_id, use_case) for league_id in leagues]
+        tasks = [process_league_async(league_id, use_case, repo) for league_id in leagues]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Analizar resultados
@@ -162,7 +181,7 @@ async def cmd_predict(leagues_str: str, parallel: bool = True):
         logger.info(f"🔄 Processing {len(leagues)} leagues sequentially")
         failed = []
         for league_id in leagues:
-            result = await process_league_async(league_id, use_case)
+            result = await process_league_async(league_id, use_case, repo)
             if result and not result[1]:
                 failed.append(result[0])
         

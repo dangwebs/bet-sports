@@ -185,14 +185,15 @@ jobs:
         env:
           RENDER_APP_URL: "https://football-prediction-api-x4pm.onrender.com/"
           # IMPORTANTE: Verifica que este secreto coincida con la validación de tu backend para X-Admin-Token
-          ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
+          ADMIN_TOKEN: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
         if: needs.train-model.result == 'success'
         run: |
           echo "Intentando limpiar caché en: $RENDER_APP_URL"
           # Bucle de reintentos para manejar 'Cold Starts' de Render y despliegues lentos
           # Total espera: 30 * 20s = 600s (10 minutos)
           for i in {1..30}; do
-            HTTP_CODE=$(curl -s -L -o /dev/null -w "%{http_code}" -X DELETE "${RENDER_APP_URL%/}/cache/clear" \
+            # Capture HTTP code and response body for debugging
+            HTTP_CODE=$(curl -s -L -w "%{http_code}" -o response.txt -X DELETE "${RENDER_APP_URL%/}/cache/clear" \
               -H "X-Admin-Token: ${ADMIN_TOKEN}" \
               -H "Content-Type: application/json")
             
@@ -200,7 +201,14 @@ jobs:
               echo "✅ Caché limpiada exitosamente."
               exit 0
             fi
-            echo "⚠️ Intento $i falló con código $HTTP_CODE. El servicio puede estar durmiendo o desplegando. Reintentando en 20s..."
+            echo "⚠️ Intento $i falló con código $HTTP_CODE."
+            if [ -f response.txt ]; then
+              echo "Respuesta del servidor:"
+              cat response.txt
+              echo ""
+            fi
+            
+            echo "El servicio puede estar durmiendo o desplegando. Reintentando en 20s..."
             sleep 20
           done
           echo "❌ Error Crítico: No se pudo limpiar la caché. Los datos en producción estarán desactualizados."

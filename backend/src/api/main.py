@@ -396,24 +396,35 @@ async def clear_cache(
     from src.infrastructure.cache.cache_service import get_cache_service
     
     # 1. Verify Admin Token
-    # The workflow sends this header using secrets.RAPIDAPI_KEY or similar secret
     admin_token = request.headers.get("X-Admin-Token")
-    expected_token = os.getenv("RAPIDAPI_KEY") or os.getenv("ADMIN_SECRET")
     
-    if not expected_token:
+    # Allow ANY of the configured secrets to act as the admin token
+    # This prevents 401 errors if GitHub Secrets and Render Env Vars use different keys
+    valid_tokens = {
+        t for t in [
+            os.getenv("RAPIDAPI_KEY"), 
+            os.getenv("ADMIN_SECRET"), 
+            os.getenv("FOOTBALL_DATA_ORG_KEY")
+        ] if t and t.strip()
+    }
+    
+    if not valid_tokens:
         logger.warning("No admin token configured on server. Rejecting cache clear.")
-        return JSONResponse(status_code=500, content={"error": "Server misconfiguration (No Admin Token)"})
+        return JSONResponse(status_code=500, content={"error": "Server misconfiguration (No Admin Token set in Env Vars)"})
         
-    if admin_token != expected_token:
-        logger.warning("Unauthorized cache clear attempt.")
+    if not admin_token or admin_token not in valid_tokens:
+        logger.warning(f"Unauthorized cache clear attempt.")
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     
-    # 2. Clear Cache
-    cache = get_cache_service()
-    cache.clear()
-    logger.info("🧹 Cache cleared via API Request (GitHub Actions).")
-    
-    return {"status": "success", "message": "Cache purged successfully"}
+    try:
+        # 2. Clear Cache
+        cache = get_cache_service()
+        cache.clear()
+        logger.info("🧹 Cache cleared via API Request (GitHub Actions).")
+        return {"status": "success", "message": "Cache purged successfully"}
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": f"Internal Error: {str(e)}"})
 
 
 # Root endpoint

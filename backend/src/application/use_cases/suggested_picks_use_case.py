@@ -650,13 +650,20 @@ class GetTopMLPicksUseCase:
     def __init__(self, persistence_repository):
         self.persistence_repository = persistence_repository
         
-    async def execute(self, limit: int = 50) -> Optional['TopMLPicksDTO']:
+    async def execute(self, limit: int = 50, league_id: Optional[str] = None) -> Optional['TopMLPicksDTO']:
         """
-        Synthesize top picks from all active predictions.
+        Synthesize top picks from predictions.
+        
+        Args:
+            limit: Max number of picks to return
+            league_id: Optional filter to calculate top picks for specific league only
         """
         try:
-            # 1. Get all active predictions from DB
-            active_preds = self.persistence_repository.get_all_active_predictions()
+            # 1. Get predictions (All or League Specific)
+            if league_id:
+                active_preds = self.persistence_repository.get_league_predictions(league_id)
+            else:
+                active_preds = self.persistence_repository.get_all_active_predictions()
             
             all_picks = []
             
