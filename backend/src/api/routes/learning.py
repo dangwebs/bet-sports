@@ -157,7 +157,7 @@ async def run_training_session(
 
     # Convert Result to Response DTO (Payload optimization)
     # The UI only needs the most recent match history to avoid 50MB responses
-    history_limit = 500
+    history_limit = 5000
     display_history = result.match_history[-history_limit:] if len(result.match_history) > history_limit else result.match_history
     
     response = TrainingStatus(

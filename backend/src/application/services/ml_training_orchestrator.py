@@ -406,7 +406,7 @@ class MLTrainingOrchestrator:
                  if has_approved_pick:
                      pred_obj = daily_predictions_map.get(match.id)
                      if pred_obj:
-                         if len(match_history) > 500: match_history.pop(0)
+                         if len(match_history) > 5000: match_history.pop(0)
                          match_history.append({
                              "match_id": match.id,
                              "home_team": match.home_team.name,
