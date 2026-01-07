@@ -623,6 +623,8 @@ class PicksService:
     def _apply_ml_refinement(self, picks_container: MatchSuggestedPicks):
         """
         Uses the trained ML model to adjust confidence/priority of picks.
+        
+        Top ML picks require minimum 80% model confidence.
         """
         for pick in picks_container.suggested_picks:
             if not self.ml_model:
@@ -636,15 +638,19 @@ class PicksService:
                 ml_confidence = self.ml_model.predict_proba(features)[0][1]
                 
                 # REFACTOR: Universal ML Evaluation
-                # 1. High Confidence (> 65%)
-                if ml_confidence > 0.65:
-                    pick.priority_score *= 2.0
-                    pick.reasoning += f" ML Confianza Alta ({ml_confidence:.0%})."
-                    # We don't force is_recommended=True here, we let the score speak, 
-                    # but the label "ML Confianza Alta" causes Frontend to show it in Top ML.
+                # 1. Top ML Pick - High Confidence (>= 80%)
+                if ml_confidence >= 0.80:
+                    pick.priority_score *= 2.5
+                    pick.reasoning += f" 🎯 TOP ML ({ml_confidence:.0%})."
+                    pick.is_ml_confirmed = True
                     
-                # 2. Low Confidence (< 40%)
-                elif ml_confidence < 0.40:
+                # 2. Good Confidence (65-79%)
+                elif ml_confidence >= 0.65:
+                    pick.priority_score *= 1.5
+                    pick.reasoning += f" ML Favorable ({ml_confidence:.0%})."
+                    
+                # 3. Low Confidence (< 50%)
+                elif ml_confidence < 0.50:
                     pick.priority_score *= 0.5
                     pick.reasoning += f" ML Escéptico ({ml_confidence:.0%})."
                     

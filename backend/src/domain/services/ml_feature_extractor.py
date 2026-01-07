@@ -27,6 +27,7 @@ class MLFeatureExtractor:
         [0-3]: Basic pick features (probability, EV, risk, market hash)
         [4-12]: Shot/form features
         [13-20]: Advanced ESPN stats (possession, passes, tackles, interceptions)
+        [21-26]: Corners and cards (home, away, total for each)
         """
         # 1. Market type hash for categorization
         market_type_str = pick.market_type.value if hasattr(pick.market_type, "value") else str(pick.market_type)
@@ -102,9 +103,31 @@ class MLFeatureExtractor:
             features.append(h_interceptions)
             features.append(a_interceptions)
             
+            # ============================================================
+            # CORNERS AND CARDS FEATURES
+            # ============================================================
+            
+            # Corners per game (uses matches_with_corners for accurate average)
+            mc_h = getattr(home_stats, 'matches_with_corners', 0) or mp_h
+            mc_a = getattr(away_stats, 'matches_with_corners', 0) or mp_a
+            h_corners = getattr(home_stats, 'total_corners', 0) / max(1, mc_h)
+            a_corners = getattr(away_stats, 'total_corners', 0) / max(1, mc_a)
+            features.append(h_corners)
+            features.append(a_corners)
+            features.append(h_corners + a_corners)  # Total expected corners
+            
+            # Yellow cards per game
+            mcy_h = getattr(home_stats, 'matches_with_cards', 0) or mp_h
+            mcy_a = getattr(away_stats, 'matches_with_cards', 0) or mp_a
+            h_yellows = getattr(home_stats, 'total_yellow_cards', 0) / max(1, mcy_h)
+            a_yellows = getattr(away_stats, 'total_yellow_cards', 0) / max(1, mcy_a)
+            features.append(h_yellows)
+            features.append(a_yellows)
+            features.append(h_yellows + a_yellows)  # Total expected cards
+            
         else:
-            # Padding if no stats provided (16 zeros: 8 original + 8 new ESPN)
-            features.extend([0.0] * 16)
+            # Padding if no stats provided (22 zeros: 16 original + 6 corners/cards)
+            features.extend([0.0] * 22)
             
         return features
 
