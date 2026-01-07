@@ -13,7 +13,9 @@ env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(env_path)
 
 # Setup path to include backend src
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
 from src.utils.time_utils import COLOMBIA_TZ, get_today_str
 from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA

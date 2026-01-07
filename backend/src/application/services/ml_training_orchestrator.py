@@ -11,7 +11,14 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*utcnow
 
 # ML Imports will be lazy-loaded in the methods that need them
 # to prevent memory spikes on startup (Render Free Tier Optimization)
-ML_AVAILABLE = True # Assumed true, checked at runtime
+ML_AVAILABLE = False
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    import joblib
+    ML_AVAILABLE = True
+except ImportError:
+    RandomForestClassifier = None
+    joblib = None
 
 from src.domain.services.learning_service import LearningService
 from src.domain.services.prediction_service import PredictionService
@@ -95,15 +102,6 @@ class MLTrainingOrchestrator:
         """
         logger.info(f"Starting ML Training Pipeline (leagues={league_ids}, days_back={days_back})")
         
-        # Lazy Load ML Libraries
-        try:
-            from sklearn.ensemble import RandomForestClassifier
-            import joblib
-        except ImportError:
-            RandomForestClassifier = None
-            joblib = None
-            logger.warning("ML libraries (sklearn, joblib) not found. Training will be skipped.")
-            
         try:
             from tqdm import tqdm
         except ImportError:
@@ -290,7 +288,9 @@ class MLTrainingOrchestrator:
                     # For safety and context, we'll keep it simple:
                     # We can't pickle 'self', so we pass services explicitly.
                     
-                    results = Parallel(n_jobs=n_jobs, prefer="threads")(
+                    # [OPTIMIZATION] Use 'processes' to bypass Python GIL and use all CPU cores.
+                    # 'threads' limits CPU-bound tasks to 1 core effectively.
+                    results = Parallel(n_jobs=n_jobs, prefer="processes")(
                         delayed(_process_single_match_task)(*args) for args in parallel_inputs
                     )
                     
@@ -448,7 +448,7 @@ class MLTrainingOrchestrator:
 
             logger.info(f"ML Debug: ML_AVAILABLE={ML_AVAILABLE}, Features={len(ml_features)}")
 
-            if ML_AVAILABLE and RandomForestClassifier and len(ml_features) > 100:
+            if ML_AVAILABLE and len(ml_features) > 100:
                 try:
                     logger.info(f"Training ML Model on {len(ml_features)} samples...")
                     
@@ -460,12 +460,12 @@ class MLTrainingOrchestrator:
                         # - max_depth=10 (reduced from 12) to prevent potential overfitting and save memory
                         # - n_jobs=1 (CRITICAL: Avoid multiprocessing overhead in container)
                         clf = RandomForestClassifier(
-                            n_estimators=1000,
-                            max_depth=25,
+                            n_estimators=150, # Adjusted for 512MB RAM stability
+                            max_depth=12,     # Prevent deep trees consuming memory
                             min_samples_split=5,
                             min_samples_leaf=2,
                             random_state=42,
-                            n_jobs=-1,  # Use all available cores
+                            n_jobs=1,  # CRITICAL: Keep at 1 to avoid OOM in small containers
                             class_weight="balanced_subsample"
                         )
                         clf.fit(ml_features, ml_targets)
@@ -609,20 +609,16 @@ class MLTrainingOrchestrator:
         logger.info(f"Starting MASSIVE INFERENCE for {len(leagues)} leagues...")
         self.cache_service.set(self.CACHE_KEY_MESSAGE, f"Pre-calculando pronósticos para {len(leagues)} ligas...", ttl_seconds=3600)
         
-        from src.application.use_cases.use_cases import GetPredictionsUseCase, DataSources
+        from src.application.use_cases.use_cases import GetPredictionsUseCase
+        from src.api.dependencies import get_match_aggregator_service
         
         # We re-use orchestrator's knowledge to build the Use Case
         # This keeps logic in sync between the API and the Training Cycle
         use_case = GetPredictionsUseCase(
-            data_sources=DataSources(
-                football_data_uk=self.training_data_service.data_sources.football_data_uk,
-                football_data_org=self.training_data_service.data_sources.football_data_org,
-                openfootball=self.training_data_service.data_sources.openfootball,
-                thesportsdb=self.training_data_service.data_sources.thesportsdb,
-                fotmob=self.training_data_service.data_sources.fotmob
-            ),
+            data_sources=self.training_data_service.data_sources,
             prediction_service=self.prediction_service,
             statistics_service=self.statistics_service,
+            match_aggregator=get_match_aggregator_service(),
             persistence_repository=self.persistence_repository
         )
 

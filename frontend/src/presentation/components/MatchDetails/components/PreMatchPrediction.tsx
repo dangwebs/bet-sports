@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Typography, Paper, Divider } from "@mui/material";
+import { Box, Typography, Paper, Divider, Chip } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { Prediction } from "../../../../domain/entities/prediction";
 
@@ -31,6 +31,20 @@ export const PreMatchPrediction: React.FC<PreMatchPredictionProps> = ({
         sx={{ display: "flex", alignItems: "center", gap: 1 }}
       >
         🎯 Predicción Pre-Partido
+        {prediction.data_sources.includes("Rigorous ML") && (
+          <Chip
+            label="Rigorous ML"
+            size="small"
+            color="secondary"
+            variant="outlined"
+            sx={{
+              ml: 1,
+              borderColor: "#ec4899",
+              color: "#ec4899",
+              fontWeight: 700,
+            }}
+          />
+        )}
       </Typography>
       <Paper
         variant="outlined"

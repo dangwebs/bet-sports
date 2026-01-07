@@ -77,9 +77,6 @@ def get_match_aggregator_service() -> MatchAggregatorService:
     )
 
 
-from src.domain.services.statistics_service import StatisticsService
-
-
 @lru_cache()
 def get_prediction_service() -> PredictionService:
     """Get prediction service (cached)."""
@@ -168,17 +165,6 @@ from src.infrastructure.services.background_processor import BackgroundProcessor
 def get_background_processor() -> BackgroundProcessor:
     """Get background processor (cached singleton)."""
     return BackgroundProcessor()
-
-@lru_cache()
-def get_match_aggregator_service() -> MatchAggregatorService:
-    """Get MatchAggregatorService (cached)."""
-    return MatchAggregatorService(
-        football_data_uk=get_football_data_uk(),
-        football_data_org=get_football_data_org(),
-        openfootball=get_openfootball(),
-        thesportsdb=get_thesportsdb(),
-        espn=get_espn_source()
-    )
 
 from src.domain.services.risk_management.risk_manager import RiskManager
 

@@ -175,6 +175,7 @@ jobs:
           fail-on-cache-miss: true
 
       - name: 🏆 Generate Top Picks
+        if: needs.train-model.result == 'success'
         run: |
           cd backend
           source .venv/bin/activate
@@ -185,6 +186,7 @@ jobs:
           RENDER_APP_URL: "https://football-prediction-api-8sl4.onrender.com"
           # IMPORTANTE: Verifica que este secreto coincida con la validación de tu backend para X-Admin-Token
           ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
+        if: needs.train-model.result == 'success'
         run: |
           echo "Intentando limpiar caché en: $RENDER_APP_URL"
           # Bucle de reintentos para manejar 'Cold Starts' de Render y despliegues lentos
@@ -210,7 +212,7 @@ jobs:
           echo "### 📈 Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Training: Completed" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔮 Predictions: ${{ strategy.job-total }} leagues processed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔮 Predictions: Processed" >> $GITHUB_STEP_SUMMARY
           echo "- 🏆 Top Picks: Generated" >> $GITHUB_STEP_SUMMARY
           echo "- 🚀 Parallelism: 17 concurrent jobs" >> $GITHUB_STEP_SUMMARY
 

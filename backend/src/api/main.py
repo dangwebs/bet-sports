@@ -84,6 +84,9 @@ statistical analysis, and machine learning models.
 """
 APP_VERSION = "1.0.0"
 
+# Global reference to hold background tasks to prevent garbage collection
+background_tasks = set()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -230,7 +233,10 @@ async def lifespan(app: FastAPI):
                     logger.error(f"Background orchestrator failure: {e}") 
 
             # Trigger the sequential orchestration
-            asyncio.create_task(background_tasks_orchestrator())
+            task = asyncio.create_task(background_tasks_orchestrator())
+            background_tasks.add(task)
+            # Remove from set when done to allow GC
+            task.add_done_callback(background_tasks.discard)
             
             # Scheduler just for the CRON, no immediate run here (orchestrator handles first run)
             try:
@@ -252,11 +258,20 @@ async def lifespan(app: FastAPI):
     # 2. Shutdown Logic wrapped in try-except
     try:
         logger.info("Shutting down...")
+        
+        # Cancel background tasks
+        for task in background_tasks:
+            task.cancel()
+        logger.info(f"✓ Cancelled {len(background_tasks)} background tasks")
+
         if not api_only_mode:
-            from src.scheduler import get_scheduler
-            scheduler_to_stop = get_scheduler()
-            scheduler_to_stop.shutdown()
-            logger.info("✓ Scheduler shutdown complete")
+            try:
+                from src.scheduler import get_scheduler
+                scheduler_to_stop = get_scheduler()
+                scheduler_to_stop.shutdown()
+                logger.info("✓ Scheduler shutdown complete")
+            except ImportError:
+                logger.info("ℹ️ Scheduler shutdown skipped (module not found)")
         else:
             logger.info("✓ API-only mode shutdown (no scheduler to stop)")
             
@@ -298,7 +313,7 @@ all_origins = list(set([o.rstrip("/") for o in base_origins + env_origins if o])
 # Added allow_origin_regex for flexibility in Render subdomains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=all_origins + ["*"] if os.getenv("DEBUG") == "true" else all_origins,
+    allow_origins=all_origins, # Wildcard '*' with credentials=True is invalid. Use specific origins.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -363,7 +378,6 @@ async def cache_status():
         "ephemeral_layer": "Memory + DiskCache",
         "cached_items_sample": memory_sample,
         "cache_hits": getattr(cache, '_hits', 0),
-        "cache_misses": getattr(cache, '_misses', 0),
         "cache_misses": getattr(cache, '_misses', 0),
     }
 

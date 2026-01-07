@@ -27,6 +27,7 @@ import Info from "@mui/icons-material/Info";
 import Diamond from "@mui/icons-material/Diamond";
 import PlayCircleOutline from "@mui/icons-material/PlayCircleOutline";
 import AutoGraph from "@mui/icons-material/AutoGraph";
+import Psychology from "@mui/icons-material/Psychology";
 import { styled } from "@mui/material/styles";
 import type { MatchPrediction } from "../../../types";
 import {
@@ -264,6 +265,42 @@ const MatchCard: React.FC<MatchCardProps> = memo(
                 }}
               />
             )}
+          </Box>
+        )}
+
+        {/* Rigorous ML Badge - Only if Rigorous ML is used */}
+        {prediction.data_sources.includes("Rigorous ML") && !highlight && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: 12,
+              right: hasRichData ? (highlight ? 96 : 80) : 12,
+              zIndex: 1,
+              mr: hasRichData ? 1 : 0,
+            }}
+          >
+            <Tooltip title="Predicción generada por Modelo ML Riguroso">
+              <Chip
+                icon={
+                  <Psychology
+                    sx={{
+                      fontSize: "0.9rem !important",
+                      color: "#ec4899 !important", // Pink-500
+                    }}
+                  />
+                }
+                label="ML"
+                size="small"
+                sx={{
+                  bgcolor: "rgba(236, 72, 153, 0.15)", // Pink background
+                  color: "#ec4899",
+                  border: "1px solid rgba(236, 72, 153, 0.3)",
+                  fontWeight: 700,
+                  height: 24,
+                  "& .MuiChip-label": { px: 1 },
+                }}
+              />
+            </Tooltip>
           </Box>
         )}
 
