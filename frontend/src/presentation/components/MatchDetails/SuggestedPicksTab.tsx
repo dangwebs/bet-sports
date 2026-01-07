@@ -179,6 +179,23 @@ const getPickCategory = (marketType: string): string => {
   if (type.includes("HANDICAP") || type.includes("VA_HANDICAP"))
     return "HANDICAPS";
   if (type.includes("BTTS")) return "BTTS";
+
+  // Explicitly check for Double Chance BEFORE winner
+  if (
+    type.includes("DOUBLE") ||
+    type.includes("CHANCE") ||
+    type.includes("DOBLE")
+  )
+    return "DOUBLE_CHANCE";
+
+  if (
+    type.includes("WIN") ||
+    type.includes("DRAW") ||
+    type.includes("RESULT")
+  ) {
+    return "WINNER";
+  }
+
   if (
     type.includes("GOAL") ||
     type.includes("OVER") ||
@@ -186,13 +203,7 @@ const getPickCategory = (marketType: string): string => {
   ) {
     return "GOALS";
   }
-  if (
-    type.includes("WIN") ||
-    type.includes("DRAW") ||
-    type.includes("CHANCE")
-  ) {
-    return "WINNER";
-  }
+
   return "OTHER";
 };
 
@@ -254,6 +265,7 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
     const counts = {
       TOP_ML: 0,
       WINNER: 0,
+      DOUBLE_CHANCE: 0,
       GOALS: 0,
       BTTS: 0,
       HANDICAPS: 0,
@@ -294,6 +306,7 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
         "CARDS",
         "BTTS",
         "WINNER",
+        "DOUBLE_CHANCE",
         "HANDICAPS",
       ];
 
@@ -427,6 +440,9 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
         {categoryCounts.CARDS > 0 && <Tab value="CARDS" label="Tarjetas" />}
         {categoryCounts.BTTS > 0 && <Tab value="BTTS" label="Ambos Marcan" />}
         {categoryCounts.WINNER > 0 && <Tab value="WINNER" label="Ganador" />}
+        {categoryCounts.DOUBLE_CHANCE > 0 && (
+          <Tab value="DOUBLE_CHANCE" label="Doble Oportunidad" />
+        )}
         {categoryCounts.HANDICAPS > 0 && (
           <Tab value="HANDICAPS" label="Hándicaps" />
         )}

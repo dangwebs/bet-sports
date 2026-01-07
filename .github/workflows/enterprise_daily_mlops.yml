@@ -2,7 +2,7 @@ name: Enterprise Daily MLOps
 
 on:
   schedule:
-    - cron: "0 */12 * * *" # Every 12 hours (00:00, 12:00 UTC)
+    - cron: "0 11 * * *" # Daily at 6:00 AM Colombia (11:00 UTC)
   workflow_dispatch:
     inputs:
       force_train:

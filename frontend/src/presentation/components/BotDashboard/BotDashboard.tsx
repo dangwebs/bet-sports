@@ -44,19 +44,53 @@ interface MarketStats {
 const calculateMarketStats = (
   matches: MatchPredictionHistory[]
 ): MarketStats[] => {
-  const statsMap: Record<string, { total: number; won: number; lost: number }> =
-    {};
+  // Categories: Winner, Double Chance, Goals, BTTS, Corners, Cards, Handicap
+  const categories: Record<
+    string,
+    { total: number; won: number; lost: number; label: string }
+  > = {
+    winner: { total: 0, won: 0, lost: 0, label: "Ganador del Partido (1X2)" },
+    double_chance: { total: 0, won: 0, lost: 0, label: "Doble Oportunidad" },
+    goals: { total: 0, won: 0, lost: 0, label: "Goles (Más/Menos)" },
+    btts: { total: 0, won: 0, lost: 0, label: "Ambos Marcan" },
+    corners: { total: 0, won: 0, lost: 0, label: "Córners" },
+    cards: { total: 0, won: 0, lost: 0, label: "Tarjetas" },
+    handicap: { total: 0, won: 0, lost: 0, label: "Hándicap" },
+  };
 
-  const marketLabels: Record<string, string> = {
-    winner: "1X2 (Resultado)",
-    goals_over_2_5: "Más de 2.5 Goles",
-    goals_under_2_5: "Menos de 2.5 Goles",
-    btts_yes: "Ambos Anotan (Sí)",
-    btts_no: "Ambos Anotan (No)",
-    corners_over: "Corners (Más)",
-    corners_under: "Corners (Menos)",
-    cards_over: "Tarjetas (Más)",
-    cards_under: "Tarjetas (Menos)",
+  const getCategory = (marketType: string): string => {
+    const type = marketType.toLowerCase();
+
+    if (type.includes("corner")) return "corners";
+    if (type.includes("card") || type.includes("tarjeta")) return "cards";
+    if (type.includes("handicap")) return "handicap";
+    if (type.includes("btts") || type.includes("ambos")) return "btts";
+
+    // Explicitly check for Double Chance BEFORE winner
+    if (
+      type.includes("double") ||
+      type.includes("chance") ||
+      type.includes("doble")
+    )
+      return "double_chance";
+
+    if (
+      type.includes("winner") ||
+      type.includes("result") ||
+      type.includes("1x2")
+    )
+      return "winner";
+
+    if (
+      type.includes("goal") ||
+      type.includes("gol") ||
+      type.includes("over") ||
+      type.includes("under")
+    ) {
+      return "goals";
+    }
+
+    return "other";
   };
 
   for (const match of matches) {
@@ -64,25 +98,24 @@ const calculateMarketStats = (
       for (const pick of match.picks) {
         if (pick.was_correct === undefined) continue;
 
-        const key = pick.market_type || "unknown";
-        if (!statsMap[key]) {
-          statsMap[key] = { total: 0, won: 0, lost: 0 };
-        }
-
-        statsMap[key].total++;
-        if (pick.was_correct) {
-          statsMap[key].won++;
-        } else {
-          statsMap[key].lost++;
+        const categoryKey = getCategory(pick.market_type || "");
+        if (categories[categoryKey]) {
+          categories[categoryKey].total++;
+          if (pick.was_correct) {
+            categories[categoryKey].won++;
+          } else {
+            categories[categoryKey].lost++;
+          }
         }
       }
     }
   }
 
-  return Object.entries(statsMap)
+  return Object.entries(categories)
+    .filter(([_, value]) => value.total > 0)
     .map(([key, value]) => ({
       market_type: key,
-      market_label: marketLabels[key] || key,
+      market_label: value.label,
       total: value.total,
       won: value.won,
       lost: value.lost,
