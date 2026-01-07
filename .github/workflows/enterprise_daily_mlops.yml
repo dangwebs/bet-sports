@@ -192,7 +192,7 @@ jobs:
           # Bucle de reintentos para manejar 'Cold Starts' de Render y despliegues lentos
           # Total espera: 30 * 20s = 600s (10 minutos)
           for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "${RENDER_APP_URL}/cache/clear" \
+            HTTP_CODE=$(curl -s -L -o /dev/null -w "%{http_code}" -X DELETE "${RENDER_APP_URL%/}/cache/clear" \
               -H "X-Admin-Token: ${ADMIN_TOKEN}" \
               -H "Content-Type: application/json")
             
