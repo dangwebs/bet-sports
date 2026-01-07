@@ -121,6 +121,13 @@ async def process_league_async(league_id: str, use_case, persistence_repository)
             persistence_repository.save_training_result(key, top_picks.model_dump())
             logger.info(f"🏆 Saved {len(top_picks.picks)} League Top Picks to DB (key: {key})")
             
+            # [NEW] Log the actual picks for immediate visibility in CI/CD logs
+            print(f"\n--- 📢 LOG: Picks Inserted for {league_id} ---")
+            for i, p in enumerate(top_picks.picks, 1):
+                match_str = f"{p.match_id}" # Simplified, ideally we'd have team names but DTO might not have them easily accessible without lookup
+                print(f"#{i} [{p.market_label}] {p.selection} @ {p.odds} | Stake: {p.suggested_stake} | Conf: {p.confidence_level}")
+            print(f"--- End of Batch {league_id} ---\n")
+            
         return league_id, True
     except Exception as e:
         logger.error(f"❌ Failed to process {league_id}: {e}")
