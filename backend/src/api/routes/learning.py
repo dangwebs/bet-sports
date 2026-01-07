@@ -359,19 +359,51 @@ async def get_global_top_ml_picks(
 ):
     """
     Returns the top aggregated ML picks across all leagues.
-    Retrieves from pre-calculated 'top_ml_picks' TrainingResult.
+    Aggregates decentralized 'top_ml_picks_{league_id}' keys from decentralized workers.
     """
     from src.application.dtos.dtos import TopMLPicksDTO
+    from src.core.constants import DEFAULT_LEAGUES
     
-    # 1. Check persistence layer for pre-calculated top picks
-    data = persistence_repo.get_training_result("top_ml_picks")
+    all_picks = []
+    found_any = False
     
-    if data:
-        # Note: The data saved in DB already has date filtering applied by GetTopMLPicksUseCase.execute()
-        # but we can re-verify here if needed.
-        return data
-        
-    # 2. Fallback: Generate it on the fly (More expensive)
+    # 1. Attempt 'Map-Reduce': Gather decentralized results
+    # This is much faster than re-calculating from raw predictions
+    for league_id in DEFAULT_LEAGUES:
+        key = f"top_ml_picks_{league_id}"
+        data = persistence_repo.get_training_result(key)
+        if data and "picks" in data:
+            found_any = True
+            # We assume data is a dict structure matching TopMLPicksDTO
+            # Extract picks list
+            picks_list = data.get("picks", [])
+            for p in picks_list:
+                # Enforce league_id if missing (optional)
+                if hasattr(p, 'league_id') and not p.get('league_id'):
+                    p['league_id'] = league_id
+                all_picks.extend(picks_list)
+                
+    if found_any and all_picks:
+        # Convert dictionaries back to objects (if needed) or just sort if they are dicts
+        # The stored data is JSON (dicts). We need to sort them.
+        # Check structure: 'priority_score' is key for sorting
+        try:
+            # Sort by priority_score descending
+            sorted_picks = sorted(all_picks, key=lambda x: x.get('priority_score', 0), reverse=True)
+            
+            # Slice to limit
+            top_n = sorted_picks[:limit]
+            
+            # Wrap in DTO
+            # Note: We return the raw dict structure corresponding to TopMLPicksDTO
+            return {"picks": top_n, "generated_at": get_current_time().isoformat()}
+        except Exception as e:
+            logger.error(f"Error sorting aggregated picks: {e}")
+            # Fallback will trigger below
+            pass
+
+    # 2. Fallback: Generate it on the fly (More expensive but reliable source of truth)
+    logger.info("⚠️ No decentralized top picks found. Generating on the fly...")
     from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
     use_case = GetTopMLPicksUseCase(persistence_repo)
     result = await use_case.execute(limit=limit)
