@@ -259,14 +259,41 @@ class FootballDataUKSource:
             logger.error(f"Error processing CSV from {url}: {e}")
             return None
     
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
-        """Parse date from CSV format and localize to COLOMBIA_TZ."""
-        from src.utils.time_utils import COLOMBIA_TZ
-        formats = ["%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"]
-        for fmt in formats:
+    def _parse_date(self, date_str: str, time_str: Optional[str] = None) -> Optional[datetime]:
+        """
+        Parse date and time from CSV format and standardize to UTC.
+        
+        Football-Data.co.uk times are in UK local time (GMT/BST).
+        We convert to UTC for consistent storage.
+        """
+        import pytz
+        
+        date_formats = ["%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"]
+        uk_tz = pytz.timezone("Europe/London")
+        
+        for fmt in date_formats:
             try:
                 dt = datetime.strptime(date_str, fmt)
-                return COLOMBIA_TZ.localize(dt)
+                
+                # If time is provided, parse and combine
+                if time_str and time_str.strip():
+                    try:
+                        time_parts = time_str.strip().split(":")
+                        hour = int(time_parts[0])
+                        minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+                        dt = dt.replace(hour=hour, minute=minute)
+                    except (ValueError, IndexError):
+                        # If time parsing fails, default to 15:00 (common kickoff)
+                        dt = dt.replace(hour=15, minute=0)
+                else:
+                    # No time provided, default to 15:00 (typical afternoon kickoff)
+                    dt = dt.replace(hour=15, minute=0)
+                
+                # Localize to UK time, then convert to UTC
+                dt_uk = uk_tz.localize(dt)
+                dt_utc = dt_uk.astimezone(timezone.utc)
+                return dt_utc
+                
             except (ValueError, TypeError):
                 continue
         return None
@@ -300,10 +327,20 @@ class FootballDataUKSource:
             logger.warning(f"Missing required columns in data. Available: {df.columns.tolist()}")
             return matches
         
+        # Check if Time column exists in DataFrame
+        has_time_column = 'Time' in df.columns
+        
         for idx, row in df.iterrows():
             try:
-                # Parse date
-                match_date = self._parse_date(str(row['Date']))
+                # Parse date and time
+                time_str = None
+                if has_time_column:
+                    time_val = row['Time']
+                    # Handle NaN and convert to string
+                    if pd.notna(time_val):
+                        time_str = str(time_val).strip()
+                
+                match_date = self._parse_date(str(row['Date']), time_str)
                 if not match_date:
                     continue
                 

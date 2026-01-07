@@ -11,7 +11,7 @@ Endpoints:
 
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import httpx
 import asyncio
@@ -389,7 +389,7 @@ class ESPNSource:
                 
             # Date
             date_str = event.get("date") # "2024-12-01T13:30Z"
-            match_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ")
+            match_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc)
             
             # Teams with logos from TeamService
             home_name = home_comp["team"]["displayName"]
@@ -531,7 +531,7 @@ class ESPNSource:
                 
             # Date
             date_str = event.get("date")
-            match_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ")
+            match_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc)
             
             # Teams
             home_name = home_comp["team"]["displayName"]

@@ -43,7 +43,8 @@ import { useMatchHistoryTable } from "../../hooks/useMatchHistoryTable";
 // --- Utility Functions ---
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
-  return date.toLocaleDateString("es-ES", {
+  return date.toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
     day: "numeric",
     month: "short",
     year: "numeric",

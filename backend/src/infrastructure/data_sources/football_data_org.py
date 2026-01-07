@@ -451,10 +451,9 @@ class FootballDataOrgSource:
                 country=league.country,
             )
             
-            # Parse date
+            # Parse date - keep in UTC (frontend converts to local time for display)
             utc_date = match_data.get("utcDate", "")
-            from src.utils.time_utils import COLOMBIA_TZ
-            match_date = datetime.fromisoformat(utc_date.replace("Z", "+00:00")).astimezone(COLOMBIA_TZ)
+            match_date = datetime.fromisoformat(utc_date.replace("Z", "+00:00"))
             
             # Get score if available
             score = match_data.get("score", {}).get("fullTime", {})

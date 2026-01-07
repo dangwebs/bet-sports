@@ -66,12 +66,14 @@ const formatPercent = (value: number): string =>
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
-  return date.toLocaleDateString("es-ES", {
+  return date.toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
     weekday: "short",
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   });
 };
 
@@ -231,19 +233,44 @@ const MatchCard: React.FC<MatchCardProps> = memo(
               right: 12,
               zIndex: 1,
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               gap: 0.5,
-              alignItems: "flex-end",
+              alignItems: "center",
             }}
           >
+            {/* ML Chip - appears to left of Destacado when both are present */}
+            {prediction.data_sources.includes("Rigorous ML") && (
+              <Tooltip title="Predicción generada por Modelo ML Riguroso">
+                <Chip
+                  icon={
+                    <Psychology
+                      sx={{
+                        fontSize: "0.9rem !important",
+                        color: "#ec4899 !important",
+                      }}
+                    />
+                  }
+                  label="ML"
+                  size="small"
+                  sx={{
+                    bgcolor: "rgba(236, 72, 153, 0.15)",
+                    color: "#ec4899",
+                    border: "1px solid rgba(236, 72, 153, 0.3)",
+                    fontWeight: 700,
+                    height: 24,
+                    "& .MuiChip-label": { px: 1 },
+                  }}
+                />
+              </Tooltip>
+            )}
             <Chip
               label="Destacado"
               size="small"
               sx={{
-                bgcolor: "#3b82f6", // Neon Blue
+                bgcolor: "#3b82f6",
                 color: "#ffffff",
                 fontWeight: 700,
-                boxShadow: "0 0 15px rgba(59, 130, 246, 0.6)", // Prominent glow
+                boxShadow: "0 0 15px rgba(59, 130, 246, 0.6)",
                 border: "1px solid rgba(255, 255, 255, 0.2)",
               }}
             />
@@ -257,8 +284,8 @@ const MatchCard: React.FC<MatchCardProps> = memo(
                 target="_blank"
                 size="small"
                 sx={{
-                  bgcolor: "rgba(59, 130, 246, 0.3)", // Stronger blue background
-                  color: "#ffffff", // White text
+                  bgcolor: "rgba(59, 130, 246, 0.3)",
+                  color: "#ffffff",
                   border: "1px solid rgba(59, 130, 246, 0.5)",
                   "&:hover": { bgcolor: "rgba(59, 130, 246, 0.5)" },
                   "& .MuiChip-icon": { color: "#ffffff" },

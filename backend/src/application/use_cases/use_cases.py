@@ -502,7 +502,7 @@ class GetPredictionsUseCase:
                             )
                             
                             # Tag as ML-derived
-                            if "ML_Rigorous" not in prediction.data_sources:
+                            if "Rigorous ML" not in prediction.data_sources:
                                 prediction.data_sources.append("Rigorous ML")
                             
 

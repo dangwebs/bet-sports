@@ -118,14 +118,26 @@ class OpenFootballSource:
                 if not date_str:
                     continue
                     
-                from src.utils.time_utils import COLOMBIA_TZ
+                from datetime import timezone
                 dt = datetime.strptime(date_str, "%Y-%m-%d")
-                match_date = COLOMBIA_TZ.localize(dt)
                 
-                # Check if authorized time is present
-                if item.get("time"):
-                    # Combine date and time if needed (simple implementation just uses date)
-                    pass
+                # Parse time if available (format: "HH:MM" or "HH:MM:SS")
+                time_str = item.get("time")
+                if time_str:
+                    try:
+                        time_parts = time_str.split(":")
+                        hour = int(time_parts[0])
+                        minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+                        dt = dt.replace(hour=hour, minute=minute)
+                    except (ValueError, IndexError):
+                        # Default to 15:00 if time parsing fails
+                        dt = dt.replace(hour=15, minute=0)
+                else:
+                    # No time provided, default to 15:00 (typical afternoon kickoff)
+                    dt = dt.replace(hour=15, minute=0)
+                
+                # Store as UTC (frontend handles display conversion)
+                match_date = dt.replace(tzinfo=timezone.utc)
 
                 home_name = item.get("team1", "Unknown")
                 away_name = item.get("team2", "Unknown")

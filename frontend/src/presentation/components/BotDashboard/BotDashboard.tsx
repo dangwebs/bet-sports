@@ -14,27 +14,93 @@ import {
   Button,
   Snackbar,
   LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Grid,
 } from "@mui/material";
-import Grid from "@mui/material/Grid";
-import {
-  SmartToy,
-  TrendingUp,
-  Assessment,
-  History,
-  AttachMoney,
-  FilterList,
-} from "@mui/icons-material";
-import MatchHistoryTable from "./MatchHistoryTable";
-import DashboardSkeleton from "./DashboardSkeleton";
-import StatCard from "./StatCard";
-import RoiEvolutionChart from "./RoiEvolutionChart";
-import PicksStatsTable from "./PicksStatsTable";
-import { TrainingStatus, MatchPredictionHistory } from "../../../types";
+import { SmartToy, History, CheckCircle, Cancel } from "@mui/icons-material";
+import { MatchPredictionHistory } from "../../../types";
 import { useBotStore } from "../../../application/stores/useBotStore";
 import { useSmartPolling } from "../../../hooks/useSmartPolling";
+import MatchHistoryTable from "./MatchHistoryTable";
+import StatCard from "./StatCard";
+
+// Helper to calculate stats by market type
+interface MarketStats {
+  market_type: string;
+  market_label: string;
+  total: number;
+  won: number;
+  lost: number;
+  accuracy: number;
+}
+
+const calculateMarketStats = (
+  matches: MatchPredictionHistory[]
+): MarketStats[] => {
+  const statsMap: Record<string, { total: number; won: number; lost: number }> =
+    {};
+
+  const marketLabels: Record<string, string> = {
+    winner: "1X2 (Resultado)",
+    goals_over_2_5: "Más de 2.5 Goles",
+    goals_under_2_5: "Menos de 2.5 Goles",
+    btts_yes: "Ambos Anotan (Sí)",
+    btts_no: "Ambos Anotan (No)",
+    corners_over: "Corners (Más)",
+    corners_under: "Corners (Menos)",
+    cards_over: "Tarjetas (Más)",
+    cards_under: "Tarjetas (Menos)",
+  };
+
+  for (const match of matches) {
+    if (match.picks) {
+      for (const pick of match.picks) {
+        if (pick.was_correct === undefined) continue;
+
+        const key = pick.market_type || "unknown";
+        if (!statsMap[key]) {
+          statsMap[key] = { total: 0, won: 0, lost: 0 };
+        }
+
+        statsMap[key].total++;
+        if (pick.was_correct) {
+          statsMap[key].won++;
+        } else {
+          statsMap[key].lost++;
+        }
+      }
+    }
+  }
+
+  return Object.entries(statsMap)
+    .map(([key, value]) => ({
+      market_type: key,
+      market_label: marketLabels[key] || key,
+      total: value.total,
+      won: value.won,
+      lost: value.lost,
+      accuracy: value.total > 0 ? (value.won / value.total) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+};
+
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    day: "numeric",
+    month: "short",
+  });
+};
 
 const BotDashboard: React.FC = () => {
-  // Use Bot Store for persistent state
   const {
     stats,
     loading,
@@ -45,37 +111,27 @@ const BotDashboard: React.FC = () => {
     reconcile,
   } = useBotStore();
 
-  // Smart polling: check backend every 30 seconds while tab is visible
   useSmartPolling({
     intervalMs: 30000,
     onPoll: reconcile,
-    enabled: !loading, // Don't poll while training
+    enabled: !loading,
   });
 
-  const [startDate, setStartDate] = React.useState<string>(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    // If it's January, default to previous year to show backtest history
-    const targetYear = now.getMonth() === 0 ? year - 1 : year;
-    return `${targetYear}-01-01`;
-  });
-  // Display filter date (separate from training date - allows client-side filtering)
   const [displayStartDate, setDisplayStartDate] = React.useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();
     const targetYear = now.getMonth() === 0 ? year - 1 : year;
     return `${targetYear}-01-01`;
   });
-  const [initialLoading, setInitialLoading] = React.useState(true);
+
   const [activeTab, setActiveTab] = React.useState(0);
+  const [yearMode, setYearMode] = React.useState<"current" | "previous">(() => {
+    return new Date().getMonth() === 0 ? "previous" : "current";
+  });
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
   };
-
-  const [yearMode, setYearMode] = React.useState<"current" | "previous">(() => {
-    return new Date().getMonth() === 0 ? "previous" : "current";
-  });
 
   const handleYearToggle = (
     _event: React.MouseEvent<HTMLElement>,
@@ -85,42 +141,21 @@ const BotDashboard: React.FC = () => {
       setYearMode(newMode);
       const currentYear = new Date().getFullYear();
       const targetYear = newMode === "current" ? currentYear : currentYear - 1;
-
-      // Siempre usar 1 de enero como fecha de inicio
-      setStartDate(`${targetYear}-01-01`);
       setDisplayStartDate(`${targetYear}-01-01`);
     }
   };
 
-  // Helper to calculate days back based on selected start date
-  const getDaysBack = React.useCallback(() => {
-    const start = new Date(startDate);
-    const now = new Date();
-    const diffTime = Math.max(0, now.getTime() - start.getTime());
-    return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-  }, [startDate]);
-
-  // Client-side filtering for display metrics (allows filtering without re-training)
-  const filteredStats = useMemo(() => {
+  // Filter stats by display date
+  const filteredData = useMemo(() => {
     if (!stats?.match_history) return null;
 
     const displayDate = new Date(displayStartDate);
-
-    // Filter match history by display date
     const filteredHistory = stats.match_history.filter(
       (m: MatchPredictionHistory) => new Date(m.match_date) >= displayDate
     );
 
-    // Recalculate metrics from filtered data
-    const matchesProcessed = filteredHistory.length;
-    const correctPredictions = filteredHistory.filter(
-      (m: MatchPredictionHistory) => m.was_correct
-    ).length;
-    const accuracy =
-      matchesProcessed > 0 ? correctPredictions / matchesProcessed : 0;
-
-    // Recalculate picks stats
-    let totalBets = 0;
+    // Calculate totals
+    let totalPicks = 0;
     let picksWon = 0;
     let picksLost = 0;
 
@@ -128,7 +163,7 @@ const BotDashboard: React.FC = () => {
       if (match.picks) {
         for (const pick of match.picks) {
           if (pick.was_correct !== undefined) {
-            totalBets++;
+            totalPicks++;
             if (pick.was_correct) picksWon++;
             else picksLost++;
           }
@@ -136,517 +171,204 @@ const BotDashboard: React.FC = () => {
       }
     }
 
-    // New AI Specific Metrics
-    let aiPicksTotal = 0;
-    let aiPicksWon = 0;
-    for (const match of filteredHistory) {
-      if (match.picks) {
-        for (const pick of match.picks) {
-          if (pick.is_ml_confirmed && pick.was_correct !== undefined) {
-            aiPicksTotal++;
-            if (pick.was_correct) aiPicksWon++;
-          }
-        }
-      }
-    }
-    const aiAccuracy = aiPicksTotal > 0 ? aiPicksWon / aiPicksTotal : 0;
-
-    // Estimate ROI from filtered data (simplified calculation)
-    const estimatedRoi =
-      totalBets > 0 ? ((picksWon * 1.8 - totalBets) / totalBets) * 100 : 0;
-    const estimatedProfit = picksWon * 0.8 - picksLost;
-
-    // Filter ROI evolution
-    const filteredRoiEvolution =
-      stats.roi_evolution?.filter(
-        (point) => new Date(point.date) >= displayDate
-      ) || [];
+    const marketStats = calculateMarketStats(filteredHistory);
 
     return {
-      ...stats,
-      matches_processed: matchesProcessed,
-      correct_predictions: correctPredictions,
-      accuracy,
-      total_bets: totalBets,
-      roi: estimatedRoi,
-      profit_units: estimatedProfit,
       match_history: filteredHistory,
-      roi_evolution: filteredRoiEvolution,
-      ai_accuracy: aiAccuracy,
-      ai_total_picks: aiPicksTotal,
-    } as TrainingStatus & { ai_accuracy: number; ai_total_picks: number };
+      total_picks: totalPicks,
+      picks_won: picksWon,
+      picks_lost: picksLost,
+      accuracy: totalPicks > 0 ? (picksWon / totalPicks) * 100 : 0,
+      market_stats: marketStats,
+    };
   }, [stats, displayStartDate]);
 
-  const clvBeatRate = useMemo(() => {
-    if (!filteredStats?.match_history) return 0;
-    let beat = 0;
-    let total = 0;
-    filteredStats.match_history.forEach((m) => {
-      m.picks?.forEach((p) => {
-        // Check if CLV data is available (some older picks might not have it)
-        if (p.clv_beat !== undefined) {
-          total++;
-          if (p.clv_beat) beat++;
-        }
-      });
-    });
-    return total > 0 ? (beat / total) * 100 : 0;
-  }, [filteredStats]);
-
-  // Helper to generate mock data for local development
-  const generateMockData = React.useCallback(
-    async (days: number) => {
-      const { mockMatchHistory } = await import("../../../mock/predictionMock");
-
-      // Enrich mock history with picks for visualization
-      const enrichedHistory = mockMatchHistory.map((m: any) => {
-        const picks = m.picks ? [...m.picks] : [];
-
-        // If legacy mock data, add winner pick
-        if (picks.length === 0 && m.suggested_pick) {
-          picks.push({
-            market_type: "winner",
-            market_label: m.suggested_pick,
-            was_correct: m.pick_was_correct,
-            confidence: m.confidence,
-            expected_value: m.expected_value || 0,
-          });
-        }
-
-        // Add random corner/card picks for visualization
-        if (Math.random() > 0.6) {
-          picks.push({
-            market_type: Math.random() > 0.5 ? "corners_over" : "corners_under",
-            market_label: "Corners Bet",
-            was_correct: Math.random() > 0.4,
-            confidence: 0.65,
-            expected_value: 4.2,
-          });
-        }
-        if (Math.random() > 0.6) {
-          picks.push({
-            market_type: Math.random() > 0.5 ? "cards_over" : "cards_under",
-            market_label: "Cards Bet",
-            was_correct: Math.random() > 0.4,
-            confidence: 0.6,
-            expected_value: 3.5,
-          });
-        }
-        return { ...m, picks };
-      });
-
-      // Generate mock ROI evolution based on selected days
-      const roiEvolution = [];
-      let currentRoi = 0;
-      const start = new Date(startDate);
-
-      for (let i = 0; i < days; i++) {
-        const d = new Date(start);
-        d.setDate(d.getDate() + i);
-        currentRoi += (Math.random() - 0.45) * 2;
-        roiEvolution.push({
-          date: d.toISOString().split("T")[0],
-          roi: currentRoi,
-        });
-      }
-
-      return {
-        matches_processed: mockMatchHistory.length,
-        correct_predictions: mockMatchHistory.filter((m) => m.was_correct)
-          .length,
-        accuracy:
-          mockMatchHistory.filter((m) => m.was_correct).length /
-          mockMatchHistory.length,
-        total_bets: mockMatchHistory.filter((m) => m.suggested_pick).length,
-        roi: currentRoi,
-        profit_units: currentRoi * 2.5,
-        market_stats: {},
-        match_history: enrichedHistory,
-        roi_evolution: roiEvolution,
-      } as TrainingStatus;
-    },
-    [startDate]
-  );
-
-  // Run training analysis - use store's fetchTrainingData
+  // Run training on mount
   const runTraining = React.useCallback(
     async (forceRecalculate = false) => {
-      const daysBack = getDaysBack();
+      const now = new Date();
+      const start = new Date(displayStartDate);
+      const diffTime = Math.max(0, now.getTime() - start.getTime());
+      const daysBack = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
-      // Use store action instead of manual API calls
       await fetchTrainingData({
         forceRecalculate,
         daysBack,
-        startDate,
+        startDate: displayStartDate,
       });
-
-      // Fallback to mock data in DEV if needed (only if store fetch failed)
-      if (import.meta.env.DEV && !stats && error) {
-        const mockStats = await generateMockData(daysBack);
-        // Update store with mock data
-        useBotStore.getState().updateStats(mockStats);
-      }
     },
-    [getDaysBack, fetchTrainingData, startDate, generateMockData]
+    [displayStartDate, fetchTrainingData]
   );
 
-  // Auto-run training when date changes
   React.useEffect(() => {
     runTraining();
   }, [runTraining]);
 
-  // Load cached data from bot training
-  React.useEffect(() => {
-    // Disable skeleton after short delay
-    const timer = setTimeout(() => setInitialLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Notification State
+  // Notification state
   const [notification, setNotification] = React.useState<{
     open: boolean;
     message: string;
     severity: "success" | "error" | "info";
-  }>({
-    open: false,
-    message: "",
-    severity: "info",
-  });
-
-  // Track if training was manually triggered (not initial load or cache fetch)
-  const isManualTrainingRef = React.useRef(false);
+  }>({ open: false, message: "", severity: "info" });
 
   const handleCloseNotification = () => {
     setNotification((prev) => ({ ...prev, open: false }));
   };
 
-  // Watch for training completion to show notification (only for manual training)
-  const prevLoadingRef = React.useRef(loading);
+  if (loading && !filteredData) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-  React.useEffect(() => {
-    if (prevLoadingRef.current && !loading && isManualTrainingRef.current) {
-      // Just finished manual training
-      isManualTrainingRef.current = false; // Reset flag
-
-      if (error) {
-        setNotification({
-          open: true,
-          message: `Error en el entrenamiento: ${error}`,
-          severity: "error",
-        });
-      } else if (stats) {
-        setNotification({
-          open: true,
-          message: `¡Entrenamiento completado! Precisión: ${(
-            stats.accuracy * 100
-          ).toFixed(1)}% | ROI: ${stats.roi.toFixed(1)}%`,
-          severity: "success",
-        });
-      }
-    }
-    prevLoadingRef.current = loading;
-  }, [loading, error, stats]);
+  if (error && !filteredData) {
+    return (
+      <Alert severity="error" sx={{ m: 2 }}>
+        {error}
+      </Alert>
+    );
+  }
 
   return (
-    <Box sx={{ pb: 6 }}>
-      {/* Show skeleton on initial load */}
-      {initialLoading && <DashboardSkeleton />}
+    <Box sx={{ minHeight: "100vh", p: 3 }}>
+      <Box maxWidth="1400px" mx="auto">
+        {/* Header */}
+        <Box
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          mb={4}
+          flexWrap="wrap"
+          gap={2}
+        >
+          <Box display="flex" alignItems="center" gap={2}>
+            <SmartToy sx={{ fontSize: 40, color: "#fbbf24" }} />
+            <Box>
+              <Typography variant="h4" fontWeight={700} color="white">
+                Estadísticas del Bot
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Historial de picks y porcentaje de aciertos
+              </Typography>
+            </Box>
+          </Box>
 
-      {/* Show dashboard content after loading */}
-      <Box
-        sx={{
-          opacity: initialLoading ? 0 : 1,
-          transition: "opacity 0.5s ease-in-out",
-        }}
-      >
-        <Box display="flex" alignItems="center" gap={2} mb={5}>
-          <Box position="relative">
-            {loading ? (
-              <CircularProgress size={40} sx={{ color: "#fbbf24" }} />
-            ) : (
-              <Box>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    isManualTrainingRef.current = true;
-                    runTraining(true);
-                  }}
-                  startIcon={<SmartToy />}
-                  sx={{
-                    background:
-                      "linear-gradient(135deg, #fbbf24 0%, #d97706 100%)",
-                    color: "#fff",
-                    fontWeight: 800,
-                    textTransform: "none",
-                    fontSize: "0.95rem",
-                    padding: "10px 28px",
-                    borderRadius: "16px",
-                    boxShadow:
-                      "0 4px 15px rgba(251, 191, 36, 0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-                    border: "1px solid rgba(251, 191, 36, 0.5)",
-                    backdropFilter: "blur(4px)",
-                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                    "&:hover": {
-                      background:
-                        "linear-gradient(135deg, #f59e0b 0%, #b45309 100%)",
-                      transform: "translateY(-2px) scale(1.02)",
-                      boxShadow:
-                        "0 8px 30px rgba(251, 191, 36, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)",
-                      border: "1px solid rgba(251, 191, 36, 0.8)",
-                    },
-                  }}
-                >
-                  Recalcular Modelo IA
-                </Button>
-              </Box>
-            )}
-          </Box>
-          <Box>
-            <Typography variant="h4" fontWeight={700} color="white">
-              Estadísticas del Modelo
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-              Rendimiento del modelo predictivo (Backtesting)
-            </Typography>
-          </Box>
-        </Box>
-        <Box ml="auto" display="flex" alignItems="center" gap={2}>
-          <ToggleButtonGroup
-            value={yearMode}
-            exclusive
-            onChange={handleYearToggle}
-            size="small"
-            sx={{
-              height: 40,
-              bgcolor: "rgba(30, 41, 59, 0.6)",
-              "& .MuiToggleButton-root": {
-                color: "rgba(255, 255, 255, 0.7)",
-                borderColor: "rgba(148, 163, 184, 0.3)",
-                textTransform: "none",
-                px: 2,
-                "&.Mui-selected": {
-                  color: "#fbbf24",
-                  bgcolor: "rgba(251, 191, 36, 0.1)",
-                  "&:hover": {
-                    bgcolor: "rgba(251, 191, 36, 0.2)",
+          <Box display="flex" alignItems="center" gap={2}>
+            <ToggleButtonGroup
+              value={yearMode}
+              exclusive
+              onChange={handleYearToggle}
+              size="small"
+              sx={{
+                bgcolor: "rgba(30, 41, 59, 0.6)",
+                "& .MuiToggleButton-root": {
+                  color: "rgba(255, 255, 255, 0.7)",
+                  textTransform: "none",
+                  "&.Mui-selected": {
+                    color: "#fbbf24",
+                    bgcolor: "rgba(251, 191, 36, 0.1)",
                   },
                 },
-                "&:hover": {
-                  bgcolor: "rgba(148, 163, 184, 0.1)",
-                },
-              },
-            }}
-          >
-            <ToggleButton value="previous">Año Anterior</ToggleButton>
-            <ToggleButton value="current">Año Actual</ToggleButton>
-          </ToggleButtonGroup>
+              }}
+            >
+              <ToggleButton value="previous">Año Anterior</ToggleButton>
+              <ToggleButton value="current">Año Actual</ToggleButton>
+            </ToggleButtonGroup>
 
-          <TextField
-            label="Filtrar desde"
-            type="date"
-            value={displayStartDate}
-            onChange={(e) => setDisplayStartDate(e.target.value)}
-            InputLabelProps={{
-              shrink: true,
-            }}
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <FilterList sx={{ mr: 1, color: "rgba(255,255,255,0.5)" }} />
-              ),
-            }}
-            sx={{
-              bgcolor: "rgba(30, 41, 59, 0.6)",
-              input: { color: "white" },
-              label: { color: "rgba(255, 255, 255, 0.7)" },
-              "& .MuiOutlinedInput-root": {
-                "& fieldset": { borderColor: "rgba(148, 163, 184, 0.3)" },
-                "&:hover fieldset": { borderColor: "rgba(148, 163, 184, 0.5)" },
-                "&.Mui-focused fieldset": { borderColor: "#fbbf24" },
-              },
-              "& .MuiSvgIcon-root": { color: "white" },
-            }}
-          />
+            <TextField
+              label="Desde"
+              type="date"
+              value={displayStartDate}
+              onChange={(e) => setDisplayStartDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              size="small"
+              sx={{
+                "& .MuiInputBase-root": {
+                  bgcolor: "rgba(30, 41, 59, 0.6)",
+                  color: "white",
+                },
+                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.7)" },
+              }}
+            />
+          </Box>
         </Box>
 
         {trainingStatus === "IN_PROGRESS" && (
-          <Alert severity="info" sx={{ mb: 4, mt: 3 }}>
+          <Alert severity="info" sx={{ mb: 3 }}>
             <Typography variant="body2">
-              ⏳{" "}
-              {trainingMessage || "Se están calculando los datos del modelo..."}
+              ⏳ {trainingMessage || "Cargando datos..."}
             </Typography>
             <LinearProgress sx={{ mt: 1, borderRadius: 2 }} />
           </Alert>
         )}
 
-        {/* Tab Navigation */}
-        <Box sx={{ mb: 4 }}>
-          <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-            sx={{
-              "& .MuiTabs-indicator": { display: "none" },
-              "& .MuiTab-root": {
-                textTransform: "none",
-                fontWeight: 700,
-                fontSize: "0.95rem",
-                mr: 1.5,
-                color: "rgba(255,255,255,0.5)",
-                borderRadius: "12px",
-                transition: "all 0.3s ease",
-                minHeight: 44,
-                "&:hover": {
-                  color: "#fff",
-                  bgcolor: "rgba(255,255,255,0.05)",
-                },
-                "&.Mui-selected": {
-                  color: "#fff",
-                  bgcolor: "rgba(59, 130, 246, 0.2)",
-                  border: "1px solid rgba(59, 130, 246, 0.4)",
-                  boxShadow: "0 0 15px rgba(59, 130, 246, 0.15)",
-                },
+        {/* Tabs */}
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          sx={{
+            mb: 3,
+            "& .MuiTab-root": {
+              textTransform: "none",
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.5)",
+              "&.Mui-selected": {
+                color: "#fff",
+                bgcolor: "rgba(59, 130, 246, 0.2)",
               },
-            }}
-          >
-            <Tab label="📊 Resumen General" />
-            <Tab label="📈 Rendimiento por Mercado" />
-            <Tab label="📝 Historial Completo" />
-          </Tabs>
-        </Box>
+            },
+          }}
+        >
+          <Tab label="📊 Resumen" />
+          <Tab label="📝 Historial" />
+        </Tabs>
 
-        {filteredStats ? (
+        {filteredData ? (
           <Box>
-            {/* Tab 0: Resumen General */}
+            {/* Tab 0: Resumen */}
             {activeTab === 0 && (
               <Box>
-                <Grid container spacing={3} sx={{ mt: 1 }}>
-                  <Grid size={{ xs: 12, md: 3 }}>
+                {/* Summary Cards */}
+                <Grid container spacing={3} sx={{ mb: 4 }}>
+                  <Grid size={{ xs: 12, md: 4 }}>
                     <StatCard
-                      title="ROI (Retorno de Inversión)"
-                      value={`${
-                        filteredStats.roi > 0 ? "+" : ""
-                      }${filteredStats.roi.toFixed(1)}%`}
-                      icon={<TrendingUp />}
-                      color={filteredStats.roi >= 0 ? "#22c55e" : "#ef4444"}
-                      subtitle="Rentabilidad sobre capital apostado"
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 3 }}>
-                    <StatCard
-                      title="Beneficio Neto"
-                      value={`${
-                        filteredStats.profit_units > 0 ? "+" : ""
-                      }${filteredStats.profit_units.toFixed(1)} u`}
-                      icon={<AttachMoney />}
-                      color={
-                        filteredStats.profit_units >= 0 ? "#fbbf24" : "#ef4444"
-                      }
-                      subtitle="Unidades ganadas/perdidas"
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 3 }}>
-                    <StatCard
-                      title="Precisión del Modelo"
-                      value={`${(filteredStats.accuracy * 100).toFixed(1)}%`}
-                      icon={<Assessment />}
-                      color="#3b82f6"
-                      subtitle={`En ${filteredStats.matches_processed} partidos analizados`}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 3 }}>
-                    <StatCard
-                      title="CLV Beat Rate"
-                      value={`${clvBeatRate.toFixed(1)}%`}
-                      icon={<TrendingUp />}
-                      color={clvBeatRate > 50 ? "#10b981" : "#f59e0b"}
-                      subtitle="% Picks mejor que línea de cierre"
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 3 }}>
-                    <StatCard
-                      title="Efectividad IA"
-                      value={`${(
-                        (filteredStats as any).ai_accuracy * 100
-                      ).toFixed(1)}%`}
-                      icon={<SmartToy />}
-                      color={
-                        (filteredStats as any).ai_accuracy > 0.6
-                          ? "#8b5cf6"
-                          : "#f59e0b"
-                      }
-                      subtitle={`En ${
-                        (filteredStats as any).ai_total_picks
-                      } picks confirmados`}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 3 }}>
-                    <StatCard
-                      title="Picks Generados"
-                      value={filteredStats.total_bets.toString()}
+                      title="Total Picks"
+                      value={filteredData.total_picks.toString()}
                       icon={<History />}
-                      color="#8b5cf6"
-                      subtitle="Total de picks en el período"
+                      color="#3b82f6"
+                      subtitle="Picks analizados en el período"
                     />
                   </Grid>
-
-                  {/* ROI Chart */}
-                  {filteredStats.roi_evolution &&
-                    filteredStats.roi_evolution.length > 1 && (
-                      <Grid size={{ xs: 12 }}>
-                        <Card
-                          sx={{
-                            height: 400,
-                            bgcolor: "rgba(30, 41, 59, 0.6)",
-                            backdropFilter: "blur(10px)",
-                            border: "1px solid rgba(148, 163, 184, 0.1)",
-                            mt: 2,
-                          }}
-                        >
-                          <CardContent
-                            sx={{
-                              p: 2,
-                              "&:last-child": { pb: 2 },
-                              height: "100%",
-                              display: "flex",
-                              flexDirection: "column",
-                            }}
-                          >
-                            <Typography
-                              variant="subtitle1"
-                              fontWeight={700}
-                              color="white"
-                              gutterBottom
-                              sx={{ mb: 1 }}
-                            >
-                              📈 Evolución del ROI
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ mb: 1 }}
-                            >
-                              Retorno de inversión acumulado basado en apuestas
-                              simuladas
-                            </Typography>
-                            <Box flex={1} width="100%">
-                              <RoiEvolutionChart
-                                data={filteredStats.roi_evolution}
-                              />
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    )}
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <StatCard
+                      title="Picks Ganados"
+                      value={`${
+                        filteredData.picks_won
+                      } (${filteredData.accuracy.toFixed(1)}%)`}
+                      icon={<CheckCircle />}
+                      color="#22c55e"
+                      subtitle="Picks acertados"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <StatCard
+                      title="Picks Perdidos"
+                      value={filteredData.picks_lost.toString()}
+                      icon={<Cancel />}
+                      color="#ef4444"
+                      subtitle="Picks fallados"
+                    />
+                  </Grid>
                 </Grid>
-              </Box>
-            )}
 
-            {/* Tab 1: Rendimiento por Mercado */}
-            {activeTab === 1 && (
-              <Box mt={2}>
+                {/* Accuracy by Market Type */}
                 <Card
                   sx={{
                     bgcolor: "rgba(30, 41, 59, 0.6)",
@@ -654,46 +376,156 @@ const BotDashboard: React.FC = () => {
                     border: "1px solid rgba(148, 163, 184, 0.1)",
                   }}
                 >
-                  <CardContent sx={{ p: 2 }}>
+                  <CardContent>
                     <Typography
-                      variant="subtitle1"
+                      variant="h6"
                       fontWeight={700}
                       color="white"
                       gutterBottom
                     >
-                      Estadísticas de Picks por Tipo
+                      Porcentaje de Aciertos por Tipo
                     </Typography>
                     <Typography variant="body2" color="text.secondary" mb={2}>
-                      Desglose de rendimiento por tipo de mercado
+                      Rendimiento desglosado por cada tipo de mercado
                     </Typography>
-                    <PicksStatsTable matches={filteredStats.match_history} />
+
+                    <TableContainer
+                      component={Paper}
+                      sx={{ bgcolor: "transparent" }}
+                    >
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell
+                              sx={{
+                                color: "rgba(255,255,255,0.7)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Tipo de Mercado
+                            </TableCell>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: "rgba(255,255,255,0.7)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Total
+                            </TableCell>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: "rgba(255,255,255,0.7)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Ganados
+                            </TableCell>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: "rgba(255,255,255,0.7)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Perdidos
+                            </TableCell>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: "rgba(255,255,255,0.7)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              % Aciertos
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {filteredData.market_stats.map((stat) => (
+                            <TableRow key={stat.market_type}>
+                              <TableCell sx={{ color: "white" }}>
+                                {stat.market_label}
+                              </TableCell>
+                              <TableCell align="center" sx={{ color: "white" }}>
+                                {stat.total}
+                              </TableCell>
+                              <TableCell
+                                align="center"
+                                sx={{ color: "#22c55e" }}
+                              >
+                                {stat.won}
+                              </TableCell>
+                              <TableCell
+                                align="center"
+                                sx={{ color: "#ef4444" }}
+                              >
+                                {stat.lost}
+                              </TableCell>
+                              <TableCell align="center">
+                                <Chip
+                                  label={`${stat.accuracy.toFixed(1)}%`}
+                                  size="small"
+                                  sx={{
+                                    bgcolor:
+                                      stat.accuracy >= 55
+                                        ? "rgba(34, 197, 94, 0.2)"
+                                        : stat.accuracy >= 45
+                                        ? "rgba(251, 191, 36, 0.2)"
+                                        : "rgba(239, 68, 68, 0.2)",
+                                    color:
+                                      stat.accuracy >= 55
+                                        ? "#22c55e"
+                                        : stat.accuracy >= 45
+                                        ? "#fbbf24"
+                                        : "#ef4444",
+                                    fontWeight: 700,
+                                  }}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredData.market_stats.length === 0 && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={5}
+                                align="center"
+                                sx={{ color: "text.secondary" }}
+                              >
+                                No hay datos disponibles
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </CardContent>
                 </Card>
               </Box>
             )}
 
-            {/* Tab 2: Historial Completo */}
-            {activeTab === 2 && (
-              <Box mt={2}>
+            {/* Tab 1: Historial */}
+            {activeTab === 1 && (
+              <Box>
                 <Typography
                   variant="h5"
                   fontWeight={700}
                   color="white"
                   gutterBottom
-                  sx={{ mb: 2 }}
                 >
-                  Histórico de Predicciones
+                  Historial de Picks
                 </Typography>
                 <Typography variant="body2" color="text.secondary" mb={3}>
-                  {filteredStats.match_history.length} partidos filtrados desde{" "}
-                  {new Date(displayStartDate).toLocaleDateString("es-ES")}
+                  {filteredData.match_history.length} partidos desde{" "}
+                  {formatDate(displayStartDate)}
                 </Typography>
-                <MatchHistoryTable matches={filteredStats.match_history} />
+                <MatchHistoryTable matches={filteredData.match_history} />
               </Box>
             )}
           </Box>
         ) : (
-          /* EMPTY STATE */
+          /* Empty State */
           <Box
             display="flex"
             flexDirection="column"
@@ -712,23 +544,18 @@ const BotDashboard: React.FC = () => {
               sx={{ fontSize: 64, color: "rgba(255, 255, 255, 0.2)", mb: 2 }}
             />
             <Typography variant="h6" color="white" gutterBottom>
-              Modelo no inicializado
+              No hay datos disponibles
             </Typography>
             <Typography
               variant="body1"
               color="text.secondary"
               sx={{ maxWidth: 500, mb: 3 }}
             >
-              No hay datos de entrenamiento disponibles. Esto es normal en el
-              primer arraque. Haz clic en "Recalcular Modelo IA" para iniciar el
-              análisis histórico.
+              No hay datos de entrenamiento. Haz clic en el botón para iniciar.
             </Typography>
             <Button
               variant="contained"
-              onClick={() => {
-                isManualTrainingRef.current = true;
-                runTraining(true);
-              }}
+              onClick={() => runTraining(true)}
               startIcon={<SmartToy />}
               sx={{
                 background: "linear-gradient(135deg, #fbbf24 0%, #d97706 100%)",
@@ -736,14 +563,13 @@ const BotDashboard: React.FC = () => {
                 fontWeight: 700,
                 px: 4,
                 py: 1.5,
-                borderRadius: "12px",
               }}
             >
-              Iniciar Entrenamiento Inicial
+              Cargar Datos
             </Button>
           </Box>
         )}
-        {/* Training Notification Snackbar */}
+
         <Snackbar
           open={notification.open}
           autoHideDuration={6000}
@@ -754,7 +580,6 @@ const BotDashboard: React.FC = () => {
             onClose={handleCloseNotification}
             severity={notification.severity}
             variant="filled"
-            sx={{ width: "100%", fontWeight: 600 }}
           >
             {notification.message}
           </Alert>
