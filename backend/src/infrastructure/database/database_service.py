@@ -39,7 +39,9 @@ class DatabaseService:
             # Create session factory
             self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
             
-            logger.info(f"DatabaseService initialized with {self.db_url.split('@')[-1] if '@' in self.db_url else 'local DB'}")
+            # Verify connection immediately
+            with self.engine.connect() as conn:
+                logger.info(f"✅ Database connection successful: {self.db_url.split('@')[-1] if '@' in self.db_url else 'local DB'}")
             
         except Exception as e:
             logger.error(f"Failed to initialize DatabaseService: {e}")

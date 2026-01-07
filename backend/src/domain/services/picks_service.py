@@ -454,6 +454,10 @@ class PicksService:
         home_win_prob: float = 0.0,
         draw_prob: float = 0.0,
         away_win_prob: float = 0.0,
+        predicted_home_corners: float = 0.0,
+        predicted_away_corners: float = 0.0,
+        predicted_home_yellow_cards: float = 0.0,
+        predicted_away_yellow_cards: float = 0.0,
         market_odds: Optional[dict[str, float]] = None,
     ) -> MatchSuggestedPicks:
         """
@@ -517,13 +521,21 @@ class PicksService:
         
         # --- MODIFIED: Corners & Cards (Totals) ---
         # 100% REAL DATA: Combined totals (Match Corners, Match Cards) require BOTH teams.
-        if (home_stats is not None and home_stats.matches_played > 0) and (away_stats is not None and away_stats.matches_played > 0):
-            corners_picks = self._generate_corners_picks(home_stats, away_stats, match, league_averages, market_odds)
+        # 100% REAL DATA: Combined totals (Match Corners, Match Cards) require BOTH teams.
+        # NOW RELAXED: If we have predictions (which use league avg fallback), we can generate picks too.
+        if (home_stats is not None and home_stats.matches_played > 0) or has_prediction_data:
+            corners_picks = self._generate_corners_picks(
+                home_stats, away_stats, match, league_averages, market_odds,
+                predicted_home_corners, predicted_away_corners
+            )
             for pick in corners_picks:
                 picks.add_pick(pick)
         
             # Generate cards picks
-            cards_picks = self._generate_cards_picks(home_stats, away_stats, match, league_averages, market_odds)
+            cards_picks = self._generate_cards_picks(
+                home_stats, away_stats, match, league_averages, market_odds,
+                predicted_home_yellow_cards, predicted_away_yellow_cards
+            )
             for pick in cards_picks:
                 picks.add_pick(pick)
             
@@ -813,17 +825,21 @@ class PicksService:
         match: Match,
         league_averages: Optional[LeagueAverages] = None,
         market_odds: Optional[dict[str, float]] = None,
+        pred_home: float = 0.0,
+        pred_away: float = 0.0
     ) -> list[SuggestedPick]:
         """Generate corners picks for combined match total."""
-        # Tiered fallback: Team Averages -> League Averages
+        # Tiered fallback: Team Averages -> Prediction (League Base) -> 0
         h_avg = home_stats.avg_corners_per_match if home_stats and home_stats.matches_played >= 3 else None
         a_avg = away_stats.avg_corners_per_match if away_stats and away_stats.matches_played >= 3 else None
         
-        if h_avg is not None and a_avg is not None:
-            total_avg = h_avg + a_avg
-        else:
-            # 100% REAL DATA: No fallback to league averages for combined markets
-            total_avg = 0.0
+        if h_avg is not None and h_avg > 0:
+            pred_home = (pred_home + h_avg) / 2 if pred_home > 0 else h_avg
+        
+        if a_avg is not None and a_avg > 0:
+             pred_away = (pred_away + a_avg) / 2 if pred_away > 0 else a_avg
+             
+        total_avg = pred_home + pred_away
             
         return self._generate_total_stat_picks(
             stat_avg=total_avg,
@@ -844,17 +860,21 @@ class PicksService:
         match: Match,
         league_averages: Optional[LeagueAverages] = None,
         market_odds: Optional[dict[str, float]] = None,
+        pred_home: float = 0.0,
+        pred_away: float = 0.0
     ) -> list[SuggestedPick]:
         """Generate cards picks for combined match total."""
-        # Tiered fallback: Team Averages -> League Averages
+        # Tiered fallback: Team Averages -> Prediction -> 0
         h_avg = home_stats.avg_yellow_cards_per_match if home_stats and home_stats.matches_played >= 3 else None
         a_avg = away_stats.avg_yellow_cards_per_match if away_stats and away_stats.matches_played >= 3 else None
         
-        if h_avg is not None and a_avg is not None:
-            total_avg = h_avg + a_avg
-        else:
-            # 100% REAL DATA: No fallback to league averages for combined markets
-            total_avg = 0.0
+        if h_avg is not None and h_avg > 0:
+            pred_home = (pred_home + h_avg) / 2 if pred_home > 0 else h_avg
+        
+        if a_avg is not None and a_avg > 0:
+             pred_away = (pred_away + a_avg) / 2 if pred_away > 0 else a_avg
+             
+        total_avg = pred_home + pred_away
             
         return self._generate_total_stat_picks(
             stat_avg=total_avg,

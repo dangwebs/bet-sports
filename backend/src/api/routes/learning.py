@@ -396,6 +396,7 @@ async def get_global_top_ml_picks(
             
             # Wrap in DTO
             # Note: We return the raw dict structure corresponding to TopMLPicksDTO
+            logger.info(f"✅ Serving {len(top_n)} Top ML Picks to frontend")
             return {"picks": top_n, "generated_at": get_current_time().isoformat()}
         except Exception as e:
             logger.error(f"Error sorting aggregated picks: {e}")

@@ -65,25 +65,12 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
             {pick.market_label}
           </Typography>
         </Box>
-        <Chip
-          label={`${(pick.probability * 100).toFixed(0)}%`}
-          size="small"
-          sx={{
-            bgcolor: color,
-            color: "white",
-            fontWeight: 700,
-            fontSize: "0.75rem",
-            height: 24,
-            minWidth: 45,
-            "& .MuiChip-label": { px: 1 },
-          }}
-        />
         {pick.expected_value !== undefined && pick.expected_value > 0 && (
           <Chip
             label={`EV: +${pick.expected_value.toFixed(1)}%`}
             size="small"
             sx={{
-              ml: 1,
+              mr: 1, // Changed ml: 1 to mr: 1 for spacing before probability
               bgcolor: "rgba(245, 158, 11, 0.5)", // Amber 500 @ 50%
               color: "#ffffff",
               fontWeight: 700,
@@ -99,7 +86,7 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
             label={`Stake: ${pick.suggested_stake.toFixed(2)}u`}
             size="small"
             sx={{
-              ml: 1,
+              mr: 1, // Changed ml: 1 to mr: 1
               bgcolor: "rgba(14, 165, 233, 0.5)", // Sky 500 @ 50%
               color: "#ffffff",
               fontWeight: 700,
@@ -110,6 +97,19 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
             }}
           />
         )}
+        <Chip
+          label={`${(pick.probability * 100).toFixed(0)}%`}
+          size="small"
+          sx={{
+            bgcolor: color,
+            color: "white",
+            fontWeight: 700,
+            fontSize: "0.75rem",
+            height: 24,
+            minWidth: 45,
+            "& .MuiChip-label": { px: 1 },
+          }}
+        />
       </Box>
       {pick.reasoning && (
         <Typography

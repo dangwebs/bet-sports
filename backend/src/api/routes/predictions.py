@@ -76,6 +76,9 @@ async def get_league_predictions(
             # We still return the empty DTO rather than 404 to avoid frontend errors
             # but we could raise 404 if preferred.
             
+        if result.predictions:
+            logger.info(f"✅ Serving {len(result.predictions)} predictions for league {league_id} to frontend")
+            
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -113,8 +116,10 @@ async def get_match_prediction(match_id: str) -> MatchPredictionDTO:
     cached_match = cache.get(cache_key)
     if cached_match:
         if isinstance(cached_match, dict):
+            logger.info(f"✅ Serving match {match_id} from cache")
             return MatchPredictionDTO(**cached_match)
         # If it's already an object (unlikely with simple cache but possible)
+        logger.info(f"✅ Serving match {match_id} from cache object")
         return cached_match
         
     # 2. Try DB (Persistence Repository)
@@ -124,6 +129,7 @@ async def get_match_prediction(match_id: str) -> MatchPredictionDTO:
             if db_data:
                 # Cache it for next time (short TTL e.g. 5 min to allow updates)
                 cache.set(cache_key, db_data, ttl_seconds=300)
+                logger.info(f"✅ Serving match {match_id} from DB")
                 return MatchPredictionDTO(**db_data)
         except Exception as e:
             logger.error(f"Error fetching match {match_id} from DB: {e}")

@@ -156,7 +156,7 @@ class GetPredictionsUseCase:
         except Exception as e:
             logger.error(f"❌ Failed to load ML model: {e}")
     
-    async def execute(self, league_id: str, limit: int = 20) -> PredictionsResponseDTO:
+    async def execute(self, league_id: str, limit: int = 20, force_refresh: bool = False) -> PredictionsResponseDTO:
         """
         Get predictions for upcoming matches in a league.
         
@@ -178,83 +178,86 @@ class GetPredictionsUseCase:
         # Unified Cache Key for League Forecasts
         cache_key = f"forecasts:league_{league_id}"
         
-        # 0.1 Check for new data in DB first (Versioning/Sync)
-        db_data, db_last_updated = (None, None)
-        if self.persistence_repository:
-            db_data, db_last_updated = self.persistence_repository.get_training_result_with_timestamp(cache_key)
-        
-        # 0.2 Try Ephemeral Cache (Memory/Disk)
-        cached_response = cache_service.get(cache_key)
-        
-        # SYNC LOGIC: If we have cached response, check if it's stale compared to DB
-        is_stale = False
-        if cached_response and db_last_updated:
-            try:
-                # Use 'generated_at' from cache or a specific 'cached_db_timestamp'
-                # PredictionsResponseDTO.generated_at is ISO string if cached as dict
-                from src.utils.time_utils import to_colombia_time
-                if cached_response.get('generated_at'):
-                    from datetime import timedelta
-                    from datetime import timezone as dt_timezone
-                    
-                    gen_at_str = cached_response['generated_at']
-                    # Handle Z suffix for older python versions compat
-                    if gen_at_str.endswith('Z'):
-                        gen_at_str = gen_at_str[:-1] + '+00:00'
-                    
-                    # Parse and Localize
-                    # Using top-level datetime import
-                    from datetime import datetime as dt
-                    gen_at = dt.fromisoformat(gen_at_str)
-                    if gen_at.tzinfo is None:
-                         gen_at = gen_at.replace(tzinfo=dt_timezone.utc)
-                    else:
-                         gen_at = gen_at.astimezone(dt_timezone.utc)
-                         
-                    # DB Timestamp is typically naive UTC in SQLAlchemy
-                    if db_last_updated.tzinfo is None:
-                        db_last_updated = db_last_updated.replace(tzinfo=dt_timezone.utc)
-                    else:
-                        db_last_updated = db_last_updated.astimezone(dt_timezone.utc)
-                    
-                    # Add a small buffer (e.g. 10 seconds) to avoid race conditions
-                    if db_last_updated > (gen_at + timedelta(seconds=10)):
-                        logger.info(f"🔄 Cache stale for {league_id} (DB: {db_last_updated} > Cache: {gen_at}). Refreshing...")
+        if force_refresh:
+            logger.info(f"🔄 Force Refresh requested for {league_id}. Skipping cache lookup.")
+        else:
+            # 0.1 Check for new data in DB first (Versioning/Sync)
+            db_data, db_last_updated = (None, None)
+            if self.persistence_repository:
+                db_data, db_last_updated = self.persistence_repository.get_training_result_with_timestamp(cache_key)
+            
+            # 0.2 Try Ephemeral Cache (Memory/Disk)
+            cached_response = cache_service.get(cache_key)
+            
+            # SYNC LOGIC: If we have cached response, check if it's stale compared to DB
+            is_stale = False
+            if cached_response and db_last_updated:
+                try:
+                    # Use 'generated_at' from cache or a specific 'cached_db_timestamp'
+                    # PredictionsResponseDTO.generated_at is ISO string if cached as dict
+                    from src.utils.time_utils import to_colombia_time
+                    if cached_response.get('generated_at'):
+                        from datetime import timedelta
+                        from datetime import timezone as dt_timezone
+                        
+                        gen_at_str = cached_response['generated_at']
+                        # Handle Z suffix for older python versions compat
+                        if gen_at_str.endswith('Z'):
+                            gen_at_str = gen_at_str[:-1] + '+00:00'
+                        
+                        # Parse and Localize
+                        # Using top-level datetime import
+                        from datetime import datetime as dt
+                        gen_at = dt.fromisoformat(gen_at_str)
+                        if gen_at.tzinfo is None:
+                                gen_at = gen_at.replace(tzinfo=dt_timezone.utc)
+                        else:
+                                gen_at = gen_at.astimezone(dt_timezone.utc)
+                                
+                        # DB Timestamp is typically naive UTC in SQLAlchemy
+                        if db_last_updated.tzinfo is None:
+                            db_last_updated = db_last_updated.replace(tzinfo=dt_timezone.utc)
+                        else:
+                            db_last_updated = db_last_updated.astimezone(dt_timezone.utc)
+                        
+                        # Add a small buffer (e.g. 10 seconds) to avoid race conditions
+                        if db_last_updated > (gen_at + timedelta(seconds=10)):
+                            logger.info(f"🔄 Cache stale for {league_id} (DB: {db_last_updated} > Cache: {gen_at}). Refreshing...")
+                            is_stale = True
+                        else:
+                                logger.info(f"✓ Cache valid for {league_id}. DB: {db_last_updated} <= Cache: {gen_at}")
+                except Exception as e:
+                    logger.warning(f"Error comparing cache vs db timestamp: {e}")
+                    # If error in comparison, err on side of caution if DB data exists
+                    if db_data:
                         is_stale = True
-                    else:
-                         logger.info(f"✓ Cache valid for {league_id}. DB: {db_last_updated} <= Cache: {gen_at}")
-            except Exception as e:
-                logger.warning(f"Error comparing cache vs db timestamp: {e}")
-                # If error in comparison, err on side of caution if DB data exists
-                if db_data:
-                    is_stale = True
-        
-        if cached_response and not is_stale:
-            logger.info(f"Serving cached (ephemeral) predictions for {league_id}")
-            response = PredictionsResponseDTO(**cached_response)
-            
-            # STRICT DATE FILTERING (even for cache)
-            filtered = self._filter_future_matches(response.predictions)
-            if len(filtered) != len(response.predictions):
-                logger.info(f"Filtered {len(response.predictions) - len(filtered)} past matches from cached {league_id}")
-                response.predictions = filtered
-            
-            return response
-            
-        # 0.3 Try Persistent DB (PostgreSQL fallback)
-        if db_data:
-            logger.info(f"Serving persistent (PostgreSQL) predictions for {league_id}")
-            # Warm up ephemeral cache for next time
-            cache_service.set(cache_key, db_data, ttl_seconds=86400)
-            response = PredictionsResponseDTO(**db_data)
-            
-            # STRICT DATE FILTERING
-            filtered = self._filter_future_matches(response.predictions)
-            if len(filtered) != len(response.predictions):
-                logger.info(f"Filtered {len(response.predictions) - len(filtered)} past matches from DB {league_id}")
-                response.predictions = filtered
-            
-            return response
+
+            if cached_response and not is_stale:
+                logger.info(f"Serving cached (ephemeral) predictions for {league_id}")
+                response = PredictionsResponseDTO(**cached_response)
+                
+                # STRICT DATE FILTERING (even for cache)
+                filtered = self._filter_future_matches(response.predictions)
+                if len(filtered) != len(response.predictions):
+                    logger.info(f"Filtered {len(response.predictions) - len(filtered)} past matches from cached {league_id}")
+                    response.predictions = filtered
+                
+                return response
+                
+            # 0.3 Try Persistent DB (PostgreSQL fallback)
+            if db_data:
+                logger.info(f"Serving persistent (PostgreSQL) predictions for {league_id}")
+                # Warm up ephemeral cache for next time
+                cache_service.set(cache_key, db_data, ttl_seconds=86400)
+                response = PredictionsResponseDTO(**db_data)
+                
+                # STRICT DATE FILTERING
+                filtered = self._filter_future_matches(response.predictions)
+                if len(filtered) != len(response.predictions):
+                    logger.info(f"Filtered {len(response.predictions) - len(filtered)} past matches from DB {league_id}")
+                    response.predictions = filtered
+                
+                return response
         
         # 0.3 Check if running in API-only mode
         import os
@@ -551,7 +554,11 @@ class GetPredictionsUseCase:
                     'predicted_away_goals': prediction.predicted_away_goals if prediction else 0.0,
                     'home_win_probability': prediction.home_win_probability if prediction else 0.0,
                     'draw_probability': prediction.draw_probability if prediction else 0.0,
-                    'away_win_probability': prediction.away_win_probability if prediction else 0.0
+                    'away_win_probability': prediction.away_win_probability if prediction else 0.0,
+                    'predicted_home_corners': prediction.predicted_home_corners if prediction else 0.0,
+                    'predicted_away_corners': prediction.predicted_away_corners if prediction else 0.0,
+                    'predicted_home_yellow_cards': prediction.predicted_home_yellow_cards if prediction else 0.0,
+                    'predicted_away_yellow_cards': prediction.predicted_away_yellow_cards if prediction else 0.0
                 }
             }
             match_tasks.append(task_data)
@@ -583,6 +590,10 @@ class GetPredictionsUseCase:
                         home_win_prob=task['prediction_data']['home_win_probability'],
                         draw_prob=task['prediction_data']['draw_probability'],
                         away_win_prob=task['prediction_data']['away_win_probability'],
+                        predicted_home_corners=task['prediction_data'].get('predicted_home_corners', 0.0),
+                        predicted_away_corners=task['prediction_data'].get('predicted_away_corners', 0.0),
+                        predicted_home_yellow_cards=task['prediction_data'].get('predicted_home_yellow_cards', 0.0),
+                        predicted_away_yellow_cards=task['prediction_data'].get('predicted_away_yellow_cards', 0.0),
                     )
                     suggested_picks_results.append(res)
                 except Exception as e:
@@ -769,6 +780,14 @@ class GetPredictionsUseCase:
                      risk_level=p.risk_level,
                      is_recommended=p.is_recommended,
                      priority_score=p.priority_score,
+                     is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
+                     ml_confidence=getattr(p, 'ml_confidence', 0.0),
+                     suggested_stake=getattr(p, 'suggested_stake', 0.0),
+                     kelly_percentage=getattr(p, 'kelly_percentage', 0.0),
+                     clv_beat=getattr(p, 'clv_beat', False),
+                     expected_value=getattr(p, 'expected_value', 0.0),
+                     opening_odds=getattr(p, 'odds', 0.0),
+                     closing_odds=getattr(p, 'closing_odds', 0.0),
                  )
                  for p in picks
              ]

@@ -92,7 +92,7 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
         logger.error(f"❌ Training Failed: {e}", exc_info=True)
         sys.exit(1)
 
-async def process_league_async(league_id: str, use_case, persistence_repository):
+async def process_league_async(league_id: str, use_case, persistence_repository, force: bool = False):
     """
     Helper para procesar una liga de manera asíncrona.
     """
@@ -104,7 +104,7 @@ async def process_league_async(league_id: str, use_case, persistence_repository)
         logger.info(f"🔄 Processing League: {league_id}")
         
         # 1. Generate Predictions
-        result = await use_case.execute(league_id, limit=50)
+        result = await use_case.execute(league_id, limit=50, force_refresh=True if 'force' in locals() and force else False)
         logger.info(f"✅ Saved {len(result.predictions)} predictions for {league_id}")
         
         # 2. [NEW] Generate Top ML Picks for THIS League immediately
@@ -121,11 +121,10 @@ async def process_league_async(league_id: str, use_case, persistence_repository)
             persistence_repository.save_training_result(key, top_picks.model_dump())
             logger.info(f"🏆 Saved {len(top_picks.picks)} League Top Picks to DB (key: {key})")
             
-            # [NEW] Log the actual picks for immediate visibility in CI/CD logs
             print(f"\n--- 📢 LOG: Picks Inserted for {league_id} ---")
             for i, p in enumerate(top_picks.picks, 1):
-                match_str = f"{p.match_id}" # Simplified, ideally we'd have team names but DTO might not have them easily accessible without lookup
-                print(f"#{i} [{p.market_label}] {p.selection} @ {p.odds} | Stake: {p.suggested_stake} | Conf: {p.confidence_level}")
+                # match_id is not available in SuggestedPickDTO
+                print(f"#{i} [{p.market_label}] Conf: {p.confidence_level} | Stake: {p.suggested_stake}")
             print(f"--- End of Batch {league_id} ---\n")
             
         return league_id, True
@@ -133,7 +132,7 @@ async def process_league_async(league_id: str, use_case, persistence_repository)
         logger.error(f"❌ Failed to process {league_id}: {e}")
         return league_id, False
 
-async def cmd_predict(leagues_str: str, parallel: bool = True):
+async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = False):
     """
     Step 2: Massive Inference for specific leagues with parallel processing.
     """
@@ -161,7 +160,7 @@ async def cmd_predict(leagues_str: str, parallel: bool = True):
     if parallel and len(leagues) > 1:
         # Procesar múltiples ligas en paralelo usando asyncio.gather
         logger.info(f"🔥 Processing {len(leagues)} leagues in parallel")
-        tasks = [process_league_async(league_id, use_case, repo) for league_id in leagues]
+        tasks = [process_league_async(league_id, use_case, repo, force=force) for league_id in leagues]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Analizar resultados
@@ -188,7 +187,7 @@ async def cmd_predict(leagues_str: str, parallel: bool = True):
         logger.info(f"🔄 Processing {len(leagues)} leagues sequentially")
         failed = []
         for league_id in leagues:
-            result = await process_league_async(league_id, use_case, repo)
+            result = await process_league_async(league_id, use_case, repo, force=force)
             if result and not result[1]:
                 failed.append(result[0])
         
@@ -244,6 +243,8 @@ def main():
                                 help='Process leagues in parallel (default: True)')
     parser_predict.add_argument('--sequential', dest='parallel', action='store_false',
                                 help='Process leagues sequentially')
+    parser_predict.add_argument('--force', action='store_true',
+                                help='Force regeneration of predictions (ignore cache)')
     
     # Top Picks
     parser_top = subparsers.add_parser('top-picks', help='Generate top ML picks')
@@ -254,7 +255,7 @@ def main():
         if args.command == 'train':
             asyncio.run(cmd_train(args.days, args.n_jobs))
         elif args.command == 'predict':
-            asyncio.run(cmd_predict(args.leagues, args.parallel))
+            asyncio.run(cmd_predict(args.leagues, args.parallel, args.force))
         elif args.command == 'top-picks':
             asyncio.run(cmd_top_picks())
     except KeyboardInterrupt:

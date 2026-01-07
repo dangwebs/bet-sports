@@ -42,6 +42,10 @@ class AIPicksService(PicksService):
         home_win_prob: float = 0.0,
         draw_prob: float = 0.0,
         away_win_prob: float = 0.0,
+        predicted_home_corners: float = 0.0,
+        predicted_away_corners: float = 0.0,
+        predicted_home_yellow_cards: float = 0.0,
+        predicted_away_yellow_cards: float = 0.0,
         market_odds: Optional[dict[str, float]] = None,
     ) -> MatchSuggestedPicks:
         """
@@ -52,7 +56,10 @@ class AIPicksService(PicksService):
         candidates_container = super().generate_suggested_picks(
             match, home_stats, away_stats, league_averages, h2h_stats,
             predicted_home_goals, predicted_away_goals,
-            home_win_prob, draw_prob, away_win_prob, market_odds
+            home_win_prob, draw_prob, away_win_prob,
+            predicted_home_corners, predicted_away_corners,
+            predicted_home_yellow_cards, predicted_away_yellow_cards,
+            market_odds
         )
         
         # Extract the raw list for processing

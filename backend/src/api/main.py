@@ -98,6 +98,75 @@ async def lifespan(app: FastAPI):
     
     if api_only_mode:
         logger.info("🚀 Starting in API-ONLY MODE (Lightweight)")
+    else:
+        logger.info("🚀 Starting in FULL MODE")
+
+    # --- CACHE HYDRATION (STRICT) ---
+    try:
+        from src.infrastructure.cache.cache_service import get_cache_service
+        from src.infrastructure.repositories.persistence_repository import get_persistence_repository
+        
+        logger.info("🧹 Startup: Clearing all cache data...")
+        cache = get_cache_service()
+        cache.clear()
+        
+        logger.info("💧 Startup: Hydrating cache from persistent database...")
+        repo = get_persistence_repository()
+        
+        # Hydrate Match Predictions and Forecasts
+        active_predictions = repo.get_all_active_predictions()
+        if active_predictions:
+            hydrated_count = 0
+            forecasts_count = 0
+            
+            for pred in active_predictions:
+                if isinstance(pred, dict) and 'match_id' in pred:
+                    m_id = pred['match_id']
+                    
+                    # 1. Hydrate raw prediction (for internal use/live logic)
+                    cache.set_predictions(m_id, pred)
+                    hydrated_count += 1
+                    
+                    # 2. Hydrate 'forecasts' (for /suggested-picks endpoint)
+                    # We must transform the raw repo data to the expected DTO dict
+                    try:
+                        prediction_data = pred.get("prediction", {})
+                        if "suggested_picks" in prediction_data:
+                            # Construct minimal DTO dict
+                            forecast_dto = {
+                                "match_id": m_id,
+                                "suggested_picks": prediction_data["suggested_picks"],
+                                "generated_at": pred.get("last_updated"), # or now
+                                "combination_warning": None,
+                                "highlights_url": pred.get("prediction", {}).get("highlights_url"),
+                                "real_time_odds": pred.get("prediction", {}).get("real_time_odds")
+                            }
+                            # Cache with the key expected by suggested_picks.py
+                            cache.set(f"forecasts:match_{m_id}", forecast_dto, 86400)
+                            forecasts_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to hydrate forecast for {m_id}: {e}")
+        
+            logger.info(f"✅ Hydrated {hydrated_count} active predictions")
+            logger.info(f"✅ Hydrated {forecasts_count} match pick forecasts (DTOs)")
+        else:
+            logger.info("ℹ️ No active predictions found in DB to hydrate")
+            
+        # Hydrate Top ML Picks (Decentralized keys)
+        top_picks_map = repo.get_training_results_by_pattern("top_ml_picks_%")
+        if top_picks_map:
+            formatted_picks_count = 0
+            for key, data in top_picks_map.items():
+                # Cache using the same key pattern
+                cache.set(key, data, 86400) # 24h TTL for picks
+                formatted_picks_count += 1
+            logger.info(f"✅ Successfully hydrated {formatted_picks_count} Top ML Pick lists into cache")
+        else:
+            logger.info("ℹ️ No Top ML Picks found in DB to hydrate")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to hydrate cache on startup: {e}")
+    # --------------------------------
         logger.info("   - ML computations: DISABLED")
         logger.info("   - Background tasks: DISABLED")
         logger.info("   - Data source: PostgreSQL only")

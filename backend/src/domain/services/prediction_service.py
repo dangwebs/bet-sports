@@ -612,20 +612,26 @@ class PredictionService:
         if not home_stats or not away_stats:
              return (0.0, 0.0, 0.0, 0.0)
              
-        # STRICT RULE: Require at least 4 matches with corner data for both teams
-        if home_stats.matches_played < 4 or away_stats.matches_played < 4:
-            return (0.0, 0.0, 0.0, 0.0)
+        # STRICT RULE RELAXED: Use League Averages if data is insufficient (< 4 matches)
+        # matches_played might be 0 for OpenFootball data, so we check explicit count
+        
+        home_n = home_stats.matches_played if home_stats else 0
+        away_n = away_stats.matches_played if away_stats else 0
 
-        home_avg = home_stats.avg_corners_per_match
-        away_avg = away_stats.avg_corners_per_match
+        use_league_avg_fallback = home_n < 4 or away_n < 4
+
+        home_avg = home_stats.avg_corners_per_match if home_stats and home_n >= 4 else 0.0
+        away_avg = away_stats.avg_corners_per_match if away_stats and away_n >= 4 else 0.0
             
         # Estimate expected corners (Heuristic: Home Avg + Away Avg)
         # Global approx average is ~10.
-        # We split the total expected between home and away based on their relative contribution
-        total_expected = home_avg + away_avg
-        total_expected = home_avg + away_avg
-        if total_expected == 0: 
-            total_expected = league_averages.avg_corners if league_averages else 9.5
+        total_expected = 0.0
+        
+        if not use_league_avg_fallback and (home_avg + away_avg) > 0:
+             total_expected = home_avg + away_avg
+        else:
+             # Fallback to League Average
+             total_expected = league_averages.avg_corners if league_averages else 9.5
         
         # Simple proportional split
         if (home_avg + away_avg) > 0:
@@ -657,18 +663,23 @@ class PredictionService:
         if not home_stats or not away_stats:
              return (0.0, 0.0, 0.0, 0.0)
 
-        # STRICT RULE: Require at least 4 matches with card data for both teams
-        if home_stats.matches_played < 4 or away_stats.matches_played < 4:
-            return (0.0, 0.0, 0.0, 0.0)
+        # STRICT RULE RELAXED: Use League Averages if data is insufficient (< 4 matches)
+        
+        home_n = home_stats.matches_played if home_stats else 0
+        away_n = away_stats.matches_played if away_stats else 0
+        
+        use_league_avg_fallback = home_n < 4 or away_n < 4
 
-        home_avg = home_stats.avg_yellow_cards_per_match
-        away_avg = away_stats.avg_yellow_cards_per_match
+        home_avg = home_stats.avg_yellow_cards_per_match if home_stats and home_n >= 4 else 0.0
+        away_avg = away_stats.avg_yellow_cards_per_match if away_stats and away_n >= 4 else 0.0
             
         # Estimate expected cards
-        total_expected = home_avg + away_avg
-        total_expected = home_avg + away_avg
-        if total_expected == 0: 
-            total_expected = league_averages.avg_cards if league_averages else 4.5
+        total_expected = 0.0
+        
+        if not use_league_avg_fallback and (home_avg + away_avg) > 0:
+             total_expected = home_avg + away_avg
+        else:
+             total_expected = league_averages.avg_cards if league_averages else 4.5
         
         # Simple proportional split
         if (home_avg + away_avg) > 0:

@@ -171,6 +171,23 @@ class PersistenceRepository:
         finally:
             session.close()
 
+    def get_training_results_by_pattern(self, pattern: str) -> dict[str, dict]:
+        """
+        Retrieve all training results where the key matches the SQL pattern (e.g. 'top_ml_%').
+        Returns a dict mapping key -> data.
+        """
+        session = self.db_service.get_session()
+        try:
+            records = session.query(TrainingResultModel).filter(
+                TrainingResultModel.key.like(pattern)
+            ).all()
+            return {r.key: r.data for r in records}
+        except Exception as e:
+            logger.error(f"Failed to retrieve training results by pattern '{pattern}': {e}")
+            return {}
+        finally:
+            session.close()
+
     def save_match_prediction(self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400) -> bool:
         """Save or update a match prediction with an expiration time."""
         try:
