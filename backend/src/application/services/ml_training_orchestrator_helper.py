@@ -9,8 +9,7 @@ def _process_single_match_task(
     picks_service,
     statistics_service,
     resolution_service,
-    feature_extractor,
-    risk_manager
+    feature_extractor
 ):
     """
     Standalone function to process a single match for prediction and pick generation.
