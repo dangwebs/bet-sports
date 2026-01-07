@@ -15,7 +15,7 @@ import asyncio
 from src.infrastructure.services.background_processor import BackgroundProcessor
 
 from src.domain.entities.entities import Match, League, Prediction, TeamStatistics
-from src.domain.services.risk_management.risk_manager import RiskManager
+# from src.domain.services.risk_management.risk_manager import RiskManager
 from src.domain.services.prediction_service import PredictionService
 from src.domain.services.picks_service import PicksService
 from src.domain.services.ai_picks_service import AIPicksService
@@ -119,7 +119,7 @@ class GetPredictionsUseCase:
         prediction_service: PredictionService,
         statistics_service: StatisticsService,
         match_aggregator: MatchAggregatorService,
-        risk_manager: RiskManager,
+        # risk_manager: RiskManager,
         persistence_repository: Optional["PersistenceRepository"] = None,
         background_processor: Optional[BackgroundProcessor] = None,
     ):
@@ -127,7 +127,7 @@ class GetPredictionsUseCase:
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
         self.match_aggregator = match_aggregator
-        self.risk_manager = risk_manager
+        # self.risk_manager = risk_manager
         self.persistence_repository = persistence_repository
         from src.domain.services.learning_service import LearningService
         self.picks_service = AIPicksService(learning_weights=get_learning_service().get_learning_weights() if 'get_learning_service' in globals() else {})
@@ -477,7 +477,9 @@ class GetPredictionsUseCase:
         # Apply Risk Logic (Circuit Breakers + Portfolio)
         # Note: apply_portfolio_constraints modifies the 'pick' objects in-place (updating reasoning, capping stake)
         # and returns the approved list.
-        approved_items = self.risk_manager.apply_portfolio_constraints(flat_picks_map)
+        # Bypassed: We approve ALL candidates directly
+        # approved_items = self.risk_manager.apply_portfolio_constraints(flat_picks_map)
+        approved_items = flat_picks_map
         
         # Re-organize back to structure (picks that were NOT approved are implicitly removed? 
         # Actually risk manager caps them or flags them. If fully rejected, we should remove.)

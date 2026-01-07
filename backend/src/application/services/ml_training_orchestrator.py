@@ -21,7 +21,7 @@ from src.application.services.training_data_service import TrainingDataService
 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 from src.domain.services.picks_service import PicksService
 from src.domain.services.ai_picks_service import AIPicksService
-from src.domain.services.risk_management.risk_manager import RiskManager
+# from src.domain.services.risk_management.risk_manager import RiskManager
 from src.domain.entities.entities import Match
 from src.infrastructure.cache.cache_service import CacheService
 from src.utils.time_utils import get_current_time
@@ -75,7 +75,7 @@ class MLTrainingOrchestrator:
         self.cache_service = cache_service
         self.persistence_repository = persistence_repository
         self.feature_extractor = MLFeatureExtractor()
-        self.risk_manager = RiskManager()
+        # self.risk_manager = RiskManager()
         
         # Cache Keys
         self.CACHE_KEY_STATUS = "ml_training_status"
@@ -266,7 +266,7 @@ class MLTrainingOrchestrator:
                         self.statistics_service,
                         self.resolution_service,
                         self.feature_extractor,
-                        self.risk_manager
+                        # self.risk_manager
                     ))
                 
                 # Execute in parallel using all available cores (n_jobs=-1)
@@ -297,8 +297,9 @@ class MLTrainingOrchestrator:
                                 daily_candidates.append({'pick': p, 'match': match_res, 'prediction': pred_res})
                                 
                 # C. Apply Portfolio Constraints (Risk Manager)
-                # This filters the day's candidates to select the best portfolio respecting risk limits
-                approved_items = self.risk_manager.apply_portfolio_constraints(daily_candidates)
+                # Bypassed: We approve ALL candidates directly
+                # approved_items = self.risk_manager.apply_portfolio_constraints(daily_candidates)
+                approved_items = daily_candidates
             
             # Mapping for Training (All Candidates) vs Simulation (Approved Only)
             candidate_picks_map = {}
