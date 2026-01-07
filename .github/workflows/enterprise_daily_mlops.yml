@@ -79,7 +79,7 @@ jobs:
           cd backend
           source .venv/bin/activate
           # $(nproc) detecta dinámicamente los cores disponibles para usar toda la potencia real
-          python scripts/orchestrator_cli.py train --days 400 --n-jobs $(nproc)
+          python scripts/orchestrator_cli.py train --days 550 --n-jobs $(nproc)
 
       - name: 📤 Upload Model Artifact
         uses: actions/upload-artifact@v4
