@@ -29,3 +29,6 @@ orjson
 
 # Task scheduling (for worker script)
 apscheduler==3.10.4
+
+# Console Interface
+tqdm==4.66.4

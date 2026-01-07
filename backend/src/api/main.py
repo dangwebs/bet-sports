@@ -13,6 +13,7 @@ from datetime import datetime
 
 # Suppress DeprecationWarnings from utcnow() used in external libraries or old code
 warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*utcnow.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*ast.Num.*")
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware

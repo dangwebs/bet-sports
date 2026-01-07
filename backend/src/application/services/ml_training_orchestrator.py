@@ -103,6 +103,11 @@ class MLTrainingOrchestrator:
             RandomForestClassifier = None
             joblib = None
             logger.warning("ML libraries (sklearn, joblib) not found. Training will be skipped.")
+            
+        try:
+            from tqdm import tqdm
+        except ImportError:
+            tqdm = None
         
         # 0. Set Status to IN_PROGRESS immediately
         # This tells the frontend to hide the Dashboard button but allow navigation
@@ -206,7 +211,12 @@ class MLTrainingOrchestrator:
         MIN_TRAIN_SAMPLES = 50 
         
         try:
-            for daily_matches in matches_by_day:
+            # Console Progress Bar
+            iterator = matches_by_day
+            if tqdm:
+                iterator = tqdm(matches_by_day, desc="Processing Days", unit="day")
+                
+            for daily_matches in iterator:
             
                 # A. Rolling Training DISABLED for performance on 512MB RAM / 0.1 CPU
                 # Retraining inside the loop is too heavy. We rely on Heuristics for the backtest,
