@@ -26,8 +26,9 @@ export const useLeagues = (): UseLeaguesResult => {
     try {
       const response = await api.getLeagues();
       setCountries(response.countries);
-    } catch (err: any) {
-      setError(err.message || "Error cargando las ligas");
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error("Error desconocido");
+      setError(error.message || "Error cargando las ligas");
     } finally {
       setLoading(false);
     }

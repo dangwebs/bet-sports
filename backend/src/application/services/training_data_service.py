@@ -50,9 +50,9 @@ class TrainingDataService:
             gh_start_dt = None
             if days_back:
                 gh_start_dt = get_current_time() - timedelta(days=days_back)
-            elif start_date:
                 try: gh_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-                except ValueError: pass
+                except ValueError as e:
+                    logger.debug(f"GitHub date parsing skipped (invalid format): {e}")
             gh_matches = await gh_data.get_finished_matches(league_codes=leagues, date_from=gh_start_dt)
         except Exception as e:
             logger.warning(f"GitHub Dataset fetch failed: {e}")
@@ -106,7 +106,8 @@ class TrainingDataService:
             from src.infrastructure.data_sources.espn import ESPNSource
             espn = ESPNSource()
             espn_matches = await espn.get_finished_matches(league_codes=leagues, days_back=60)
-        except Exception: pass
+        except Exception as e:
+            logger.warning(f"ESPN fetch failed for training data: {e}")
 
 
         # --- UNIFY & ENRICH ---
@@ -127,7 +128,8 @@ class TrainingDataService:
             try:
                 start_dt = COLOMBIA_TZ.localize(datetime.strptime(start_date, "%Y-%m-%d"))
                 all_matches = [m for m in all_matches if get_sortable_date(m) >= start_dt]
-            except ValueError: pass
+            except ValueError as e:
+                logger.debug(f"Start date parsing skipped (invalid format): {e}")
         elif days_back:
             start_dt = get_current_time().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_back)
             all_matches = [m for m in all_matches if get_sortable_date(m) >= start_dt]

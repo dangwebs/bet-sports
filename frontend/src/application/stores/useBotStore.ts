@@ -120,11 +120,13 @@ export const useBotStore = create<BotState>()(
             await api.post("/train/run-now");
             await get().pollTrainingStatus();
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const error =
+            err instanceof Error ? err : new Error("Error desconocido");
           const isNetworkError =
-            err.message === "Network Error" ||
-            err.code === "ERR_NETWORK" ||
-            err.code === "ECONNABORTED";
+            error.message === "Network Error" ||
+            (err as { code?: string })?.code === "ERR_NETWORK" ||
+            (err as { code?: string })?.code === "ECONNABORTED";
 
           if (isNetworkError) {
             useOfflineStore.getState().setBackendAvailable(false);
@@ -133,7 +135,7 @@ export const useBotStore = create<BotState>()(
           set({
             error: isNetworkError
               ? null
-              : err.message || "Error al cargar los datos de entrenamiento",
+              : error.message || "Error al cargar los datos de entrenamiento",
             trainingStatus: isNetworkError ? "IDLE" : "ERROR",
             trainingMessage: isNetworkError
               ? "Buscando servidor..."
@@ -181,7 +183,7 @@ export const useBotStore = create<BotState>()(
                 statusRes.message || "El entrenamiento falló en el servidor"
               );
             }
-          } catch (e: any) {
+          } catch (e: unknown) {
             if (attempts > 10) {
               // Only show error after repeated failures
               set({ error: "Error de conexión al monitorear entrenamiento" });

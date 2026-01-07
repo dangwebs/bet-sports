@@ -113,12 +113,14 @@ export const usePredictionStore = create<PredictionState>()(
           // Successful fetch means backend is likely available
           useOfflineStore.getState().setBackendAvailable(true);
           useOfflineStore.getState().updateLastSync();
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const error =
+            err instanceof Error ? err : new Error("Error desconocido");
           // Check for network error / unreachable backend
           const isNetworkError =
-            err.message === "Network Error" ||
-            err.code === "ERR_NETWORK" ||
-            err.code === "ECONNABORTED";
+            error.message === "Network Error" ||
+            (err as { code?: string })?.code === "ERR_NETWORK" ||
+            (err as { code?: string })?.code === "ECONNABORTED";
           if (isNetworkError) {
             useOfflineStore.getState().setBackendAvailable(false);
           }
@@ -128,7 +130,7 @@ export const usePredictionStore = create<PredictionState>()(
           set({
             leaguesError: isNetworkError
               ? null
-              : err.message || "Error al cargar las ligas",
+              : error.message || "Error al cargar las ligas",
           });
         } finally {
           if (!background) {
@@ -183,9 +185,12 @@ export const usePredictionStore = create<PredictionState>()(
           // Predictions are fetched fresh each time, no need to persist
           useOfflineStore.getState().setBackendAvailable(true);
           useOfflineStore.getState().updateLastSync();
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const error =
+            err instanceof Error ? err : new Error("Error desconocido");
           const isNetworkError =
-            err.message === "Network Error" || err.code === "ERR_NETWORK";
+            error.message === "Network Error" ||
+            (err as { code?: string })?.code === "ERR_NETWORK";
           if (isNetworkError) {
             useOfflineStore.getState().setBackendAvailable(false);
           }
@@ -194,7 +199,7 @@ export const usePredictionStore = create<PredictionState>()(
           set({
             predictionsError: isNetworkError
               ? null
-              : err.message || "Error al cargar las predicciones",
+              : error.message || "Error al cargar las predicciones",
           });
         } finally {
           if (!background) {
@@ -218,9 +223,12 @@ export const usePredictionStore = create<PredictionState>()(
           const matchPredictions = await predictionsApi.getTeamMatches(query);
           set({ searchMatches: matchPredictions });
           useOfflineStore.getState().setBackendAvailable(true);
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const error =
+            err instanceof Error ? err : new Error("Error desconocido");
           const isNetworkError =
-            err.message === "Network Error" || err.code === "ERR_NETWORK";
+            error.message === "Network Error" ||
+            (err as { code?: string })?.code === "ERR_NETWORK";
           if (isNetworkError) {
             useOfflineStore.getState().setBackendAvailable(false);
           }

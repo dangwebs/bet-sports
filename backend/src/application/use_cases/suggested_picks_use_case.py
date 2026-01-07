@@ -690,9 +690,9 @@ class GetTopMLPicksUseCase:
                             # Try standard ISO first
                             m_date = match_date_str.replace("Z", "+00:00")
                             m_date = datetime.fromisoformat(m_date)
-                        except:
+                        except (ValueError, AttributeError) as e:
                             # If complex format, skip or log (but dateutil is gone)
-                            logger.warning(f"Could not parse date {match_date_str} without dateutil")
+                            logger.warning(f"Could not parse date {match_date_str}: {e}")
                             continue
                         if m_date.tzinfo is None:
                             m_date = now.tzinfo.localize(m_date)

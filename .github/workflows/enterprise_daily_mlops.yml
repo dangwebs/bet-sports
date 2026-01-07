@@ -41,7 +41,7 @@ jobs:
   train-model:
     name: 🧠 Train ML Model
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 55 # Compliance with rules.md §15.A (60 min max, 5 min buffer)
     outputs:
       cache-key: ${{ steps.set-cache-key.outputs.key }}
     steps:

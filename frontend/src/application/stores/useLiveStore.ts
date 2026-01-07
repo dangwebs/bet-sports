@@ -50,11 +50,13 @@ export const useLiveStore = create<LiveState>()(
 
           useOfflineStore.getState().setBackendAvailable(true);
           useOfflineStore.getState().updateLastSync();
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const error =
+            err instanceof Error ? err : new Error("Error desconocido");
           const isNetworkError =
-            err.message === "Network Error" ||
-            err.code === "ERR_NETWORK" ||
-            err.code === "ECONNABORTED";
+            error.message === "Network Error" ||
+            (err as { code?: string })?.code === "ERR_NETWORK" ||
+            (err as { code?: string })?.code === "ECONNABORTED";
           if (isNetworkError) {
             useOfflineStore.getState().setBackendAvailable(false);
           }
@@ -63,7 +65,7 @@ export const useLiveStore = create<LiveState>()(
           set({
             error: isNetworkError
               ? null
-              : err.message || "Error al cargar partidos en vivo",
+              : error.message || "Error al cargar partidos en vivo",
           });
         } finally {
           set({ loading: false });

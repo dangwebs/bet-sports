@@ -1,14 +1,15 @@
 import React from "react";
 import { Box } from "@mui/material";
+import { SxProps, Theme, ResponsiveStyleValue } from "@mui/system";
 import { useImageColor } from "../../../hooks/useImageColor";
 
 interface TeamLogoProps {
   src: string;
   alt: string;
   size?: number | string;
-  width?: any;
-  height?: any;
-  sx?: any;
+  width?: ResponsiveStyleValue<number | string>;
+  height?: ResponsiveStyleValue<number | string>;
+  sx?: SxProps<Theme>;
 }
 
 export const TeamLogo: React.FC<TeamLogoProps> = ({

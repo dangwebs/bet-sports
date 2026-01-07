@@ -245,7 +245,8 @@ class FootballDataUKSource:
             if 'Date' in df.columns and not df.empty:
                 try:
                     latest_date = df['Date'].iloc[-1]
-                except: pass
+                except (IndexError, KeyError) as e:
+                    logger.debug(f"Could not extract latest date from CSV: {e}")
             
             logger.info(f"Downloaded {len(df)} matches from {url}. Latest match date in CSV: {latest_date}")
             return (df, now)
