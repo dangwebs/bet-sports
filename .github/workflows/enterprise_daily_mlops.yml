@@ -183,7 +183,7 @@ jobs:
 
       - name: 🧹 Clear Render Cache
         env:
-          RENDER_APP_URL: "https://football-prediction-api-8sl4.onrender.com"
+          RENDER_APP_URL: "https://football-prediction-api-x4pm.onrender.com/"
           # IMPORTANTE: Verifica que este secreto coincida con la validación de tu backend para X-Admin-Token
           ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
         if: needs.train-model.result == 'success'
