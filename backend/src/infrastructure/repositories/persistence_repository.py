@@ -334,6 +334,69 @@ class PersistenceRepository:
         
         return success
 
+    # =============================================================================
+    # API Response Caching (for Football-Data.org, etc.)
+    # =============================================================================
+    
+    def get_cached_response(self, endpoint: str, params: dict = None) -> Optional[dict]:
+        """
+        Retrieve a cached API response if it exists and hasn't expired.
+        """
+        params_key = json.dumps(params or {}, sort_keys=True)
+        session = self.db_service.Session()
+        try:
+            record = session.query(ApiCacheModel).filter(
+                ApiCacheModel.endpoint == endpoint,
+                ApiCacheModel.params == params_key,
+                ApiCacheModel.expires_at > datetime.utcnow()
+            ).first()
+            if record:
+                return record.response_json
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to read API cache: {e}")
+            return None
+        finally:
+            session.close()
+
+    def save_cached_response(self, endpoint: str, data: dict, params: dict = None, ttl_seconds: int = 3600) -> bool:
+        """
+        Save an API response to the cache with an expiration time.
+        """
+        from datetime import timedelta
+        
+        params_key = json.dumps(params or {}, sort_keys=True)
+        sanitized_data = self._sanitize_json_data(data)
+        expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+        
+        def _op(session):
+            # Try to find existing record
+            record = session.query(ApiCacheModel).filter(
+                ApiCacheModel.endpoint == endpoint,
+                ApiCacheModel.params == params_key
+            ).first()
+            
+            if record:
+                record.response_json = sanitized_data
+                record.expires_at = expires_at
+                record.created_at = datetime.utcnow()
+            else:
+                record = ApiCacheModel(
+                    endpoint=endpoint,
+                    params=params_key,
+                    response_json=sanitized_data,
+                    expires_at=expires_at
+                )
+                session.add(record)
+            return True
+        
+        try:
+            self._execute_with_retry(_op, retries=2, delay=1)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save API cache: {e}")
+            return False
+
 def get_persistence_repository() -> PersistenceRepository:
     """Get the persistence repository instance."""
     return PersistenceRepository()
