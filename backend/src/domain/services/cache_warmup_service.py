@@ -44,8 +44,8 @@ class CacheWarmupService:
         Warms up predictions for specific leagues or all priority leagues.
         """
         if not league_ids:
-            # Default priority leagues (§15.B compliant - 7 top-tier only)
-            league_ids = ['E0', 'SP1', 'D1', 'I1', 'F1', 'B1', 'P1']
+            # Default priority leagues (§15.B compliant - 6 top-tier only)
+            league_ids = ['E0', 'SP1', 'D1', 'I1', 'F1', 'P1']
             
         logger.info(f"🔥 Starting Unified Cache Warmup for {len(league_ids)} leagues...")
         
