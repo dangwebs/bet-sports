@@ -10,7 +10,7 @@ from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
 from src.infrastructure.repositories.persistence_repository import PersistenceRepository
 from src.domain.services.match_aggregator_service import MatchAggregatorService
-from src.domain.services.risk_management.risk_manager import RiskManager
+# from src.domain.services.risk_management.risk_manager import RiskManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,6 @@ class CacheWarmupService:
         prediction_service: PredictionService,
         statistics_service: StatisticsService,
         match_aggregator: MatchAggregatorService,
-        risk_manager: RiskManager,
         persistence_repository: Optional[PersistenceRepository] = None,
         background_processor: Optional[any] = None,
     ):
@@ -35,7 +34,7 @@ class CacheWarmupService:
             prediction_service=prediction_service,
             statistics_service=statistics_service,
             match_aggregator=match_aggregator,
-            risk_manager=risk_manager,
+            # risk_manager=risk_manager,
             persistence_repository=persistence_repository,
             background_processor=background_processor
         )
