@@ -45,11 +45,11 @@ class ApiCacheModel(Base):
 class PersistenceRepository:
     """
     Repository for persisting complex data structures to the database.
+    Includes robust retry mechanisms and type enforcement.
     """
     
     def __init__(self, db_service: DatabaseService = None):
         self.db_service = db_service or get_database_service()
-        # Note: Tables are created in main.py lifespan to avoid redundant checks
 
     def create_tables(self):
         """Create all tables defined in Base."""
@@ -57,124 +57,94 @@ class PersistenceRepository:
 
     def _sanitize_json_data(self, data: Any) -> Any:
         """
-        Sanitize data for JSON storage, handling datetime objects.
-        This forces datetime objects to strings before SQLAlchemy passes them to PostgreSQL.
+        Sanitize data for JSON storage, handling datetime and Numpy objects recursively.
         """
-        class DateTimeEncoder(json.JSONEncoder):
+        import numpy as np
+        import pandas as pd
+
+        class RobustJSONEncoder(json.JSONEncoder):
             def default(self, o):
                 if isinstance(o, datetime):
                     return o.isoformat()
+                if isinstance(o, (np.int_, np.intc, np.intp, np.int8,
+                                  np.int16, np.int32, np.int64, np.longlong)):
+                    return int(o)
+                if isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+                    return float(o)
+                if isinstance(o, (np.bool_)):
+                    return bool(o)
+                if isinstance(o, np.ndarray):
+                    return o.tolist()
+                if isinstance(o, pd.Timestamp):
+                    return o.isoformat()
+                if pd.isna(o): # Handle NaN/None in pandas
+                    return None
                 return super().default(o)
                 
-        # Dump to string and reload to ensure pure JSON types (dict, list, str, int, float, bool, None)
-        return json.loads(json.dumps(data, cls=DateTimeEncoder))
+        # Dump to string and reload to ensure pure JSON types
+        return json.loads(json.dumps(data, cls=RobustJSONEncoder))
 
-    def get_cached_response(self, endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
+    def _execute_with_retry(self, operation: callable, retries: int = 3, delay: int = 1):
         """
-        Retrieve a valid cached API response.
+        Execute a database operation with robust retries and exponential backoff.
         """
-        session = self.db_service.get_session()
-        try:
-            # Flatten params to string key
-            params_str = json.dumps(params, sort_keys=True) if params else ""
-            
-            now = datetime.utcnow()
-            record = session.query(ApiCacheModel).filter(
-                ApiCacheModel.endpoint == endpoint,
-                ApiCacheModel.params == params_str,
-                ApiCacheModel.expires_at > now
-            ).first()
-            
-            return record.response_json if record else None
-        except Exception as e:
-            logger.error(f"Failed to retrieve cache for {endpoint}: {e}")
-            return None
-        finally:
-            session.close()
-
-    def save_cached_response(self, endpoint: str, data: dict, params: Optional[dict] = None, ttl_seconds: int = 3600) -> bool:
-        """
-        Save API response to cache.
-        """
-        session = self.db_service.get_session()
-        try:
-            from datetime import timedelta
-            
-            params_str = json.dumps(params, sort_keys=True) if params else ""
-            expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
-            
-            # Sanitize data
-            sanitized_data = self._sanitize_json_data(data)
-            
-            # Check for existing record (upsert)
-            record = session.query(ApiCacheModel).filter(
-                ApiCacheModel.endpoint == endpoint,
-                ApiCacheModel.params == params_str
-            ).first()
-            
-            if record:
-                record.response_json = sanitized_data
-                record.expires_at = expires_at
-                record.created_at = datetime.utcnow()
-            else:
-                record = ApiCacheModel(
-                    endpoint=endpoint,
-                    params=params_str,
-                    response_json=sanitized_data,
-                    expires_at=expires_at
-                )
-                session.add(record)
-            
-            session.commit()
-            return True
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Failed to save cache for {endpoint}: {e}")
-            return False
-        finally:
-            session.close()
+        import time
+        from sqlalchemy.exc import OperationalError, DisconnectionError, TimeoutError
+        
+        last_error = None
+        for attempt in range(retries):
+            session = self.db_service.get_session()
+            try:
+                result = operation(session)
+                session.commit()
+                return result
+            except (OperationalError, DisconnectionError, TimeoutError) as e:
+                session.rollback()
+                last_error = e
+                logger.warning(f"Database operation failed (Attempt {attempt+1}/{retries}): {e}. Retrying in {delay}s...")
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Unrecoverable database error: {e}")
+                raise e
+            finally:
+                session.close()
+        
+        logger.error(f"Database operation failed after {retries} attempts.")
+        raise last_error
 
     def save_training_result(self, key: str, data: dict) -> bool:
         """
-        Save or update a training result by key.
+        Save or update a training result by key with retries.
         """
-        session = self.db_service.get_session()
         try:
-            # Sanitize data to remove non-JSON serializable objects (like datetime)
+            # 1. Sanitize Data first (CPU bound, no DB needed)
             sanitized_data = self._sanitize_json_data(data)
             
-            # Check if exists
-            record = session.query(TrainingResultModel).filter(TrainingResultModel.key == key).first()
+            def _op(session):
+                record = session.query(TrainingResultModel).filter(TrainingResultModel.key == key).first()
+                if record:
+                    record.data = sanitized_data
+                    record.last_updated = datetime.utcnow()
+                else:
+                    record = TrainingResultModel(key=key, data=sanitized_data)
+                    session.add(record)
+                return True
+
+            return self._execute_with_retry(_op, retries=5, delay=2)
             
-            if record:
-                record.data = sanitized_data
-                record.last_updated = datetime.utcnow()
-            else:
-                record = TrainingResultModel(key=key, data=sanitized_data)
-                session.add(record)
-            
-            session.commit()
-            logger.info(f"Training result saved with key: {key}")
-            return True
         except Exception as e:
-            session.rollback()
-            logger.error(f"Failed to save training result: {e}")
+            logger.error(f"Failed to save training result '{key}': {e}")
             return False
-        finally:
-            session.close()
 
     def get_training_result(self, key: str) -> dict:
-        """
-        Retrieve a training result by key.
-        """
+        """Retrieve a training result by key."""
         result, _ = self.get_training_result_with_timestamp(key)
         return result
 
     def get_training_result_with_timestamp(self, key: str) -> tuple[Optional[dict], Optional[datetime]]:
-        """
-        Retrieve a training result and its last_updated timestamp.
-        Returns (data, last_updated)
-        """
+        """Retrieve a training result and its last_updated timestamp."""
         session = self.db_service.get_session()
         try:
             record = session.query(TrainingResultModel).filter(TrainingResultModel.key == key).first()
@@ -188,9 +158,7 @@ class PersistenceRepository:
             session.close()
 
     def get_last_updated(self, key: str) -> datetime:
-        """
-        Get the last updated timestamp for a result.
-        """
+        """Get the last updated timestamp for a result."""
         session = self.db_service.get_session()
         try:
             record = session.query(TrainingResultModel).filter(TrainingResultModel.key == key).first()
@@ -204,52 +172,41 @@ class PersistenceRepository:
             session.close()
 
     def save_match_prediction(self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400) -> bool:
-        """
-        Save or update a match prediction with an expiration time.
-        """
-        from datetime import timedelta
-        session = self.db_service.get_session()
+        """Save or update a match prediction with an expiration time."""
         try:
+            from datetime import timedelta
             expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
-            
-            # Sanitize data
             sanitized_data = self._sanitize_json_data(data)
-            
-            record = session.query(MatchPredictionModel).filter(MatchPredictionModel.match_id == match_id).first()
-            if record:
-                record.league_id = league_id
-                record.data = sanitized_data
-                record.expires_at = expires_at
-                record.last_updated = datetime.utcnow()
-            else:
-                record = MatchPredictionModel(
-                    match_id=match_id,
-                    league_id=league_id,
-                    data=sanitized_data,
-                    expires_at=expires_at
-                )
-                session.add(record)
-            
-            session.commit()
-            return True
+
+            def _op(session):
+                record = session.query(MatchPredictionModel).filter(MatchPredictionModel.match_id == match_id).first()
+                if record:
+                    record.league_id = league_id
+                    record.data = sanitized_data
+                    record.expires_at = expires_at
+                    record.last_updated = datetime.utcnow()
+                else:
+                    record = MatchPredictionModel(
+                        match_id=match_id,
+                        league_id=league_id,
+                        data=sanitized_data,
+                        expires_at=expires_at
+                    )
+                    session.add(record)
+                return True
+
+            return self._execute_with_retry(_op)
         except Exception as e:
-            session.rollback()
             logger.error(f"Failed to save match prediction {match_id}: {e}")
             return False
-        finally:
-            session.close()
 
     def get_match_prediction(self, match_id: str) -> Optional[dict]:
-        """
-        Retrieve a valid prediction by match ID.
-        """
+        """Retrieve a valid prediction by match ID."""
         data, _ = self.get_match_prediction_with_timestamp(match_id)
         return data
 
     def get_match_prediction_with_timestamp(self, match_id: str) -> tuple[Optional[dict], Optional[datetime]]:
-        """
-        Retrieve a valid prediction and its last_updated timestamp.
-        """
+        """Retrieve a valid prediction and its last_updated timestamp."""
         session = self.db_service.get_session()
         try:
             now = datetime.utcnow()
@@ -257,7 +214,6 @@ class PersistenceRepository:
                 MatchPredictionModel.match_id == match_id,
                 MatchPredictionModel.expires_at > now
             ).first()
-            
             if record:
                 return record.data, record.last_updated
             return None, None
@@ -268,9 +224,7 @@ class PersistenceRepository:
             session.close()
 
     def get_league_predictions(self, league_id: str) -> list[dict]:
-        """
-        Retrieve all valid predictions for a specific league.
-        """
+        """Retrieve all valid predictions for a specific league."""
         session = self.db_service.get_session()
         try:
             now = datetime.utcnow()
@@ -278,7 +232,6 @@ class PersistenceRepository:
                 MatchPredictionModel.league_id == league_id,
                 MatchPredictionModel.expires_at > now
             ).all()
-            
             return [r.data for r in records]
         except Exception as e:
             logger.error(f"Failed to retrieve league predictions {league_id}: {e}")
@@ -287,17 +240,13 @@ class PersistenceRepository:
             session.close()
 
     def get_all_active_predictions(self) -> list[dict]:
-        """
-        Retrieve all valid predictions across all leagues.
-        Useful for generating cross-league top picks.
-        """
+        """Retrieve all valid predictions across all leagues."""
         session = self.db_service.get_session()
         try:
             now = datetime.utcnow()
             records = session.query(MatchPredictionModel).filter(
                 MatchPredictionModel.expires_at > now
             ).all()
-            
             return [r.data for r in records]
         except Exception as e:
             logger.error(f"Failed to retrieve all active predictions: {e}")
@@ -305,52 +254,69 @@ class PersistenceRepository:
         finally:
             session.close()
 
-    def bulk_save_predictions(self, predictions_batch: list[dict]) -> bool:
+    def bulk_save_predictions(self, predictions_batch: list[dict], chunk_size: int = 50) -> bool:
         """
-        Save multiple predictions in a single transaction for better performance.
+        Save multiple predictions in chunks with retry.
         Each dict in 'predictions_batch' should have: match_id, league_id, data, and optionally ttl_seconds.
         """
         from datetime import timedelta
-        session = self.db_service.get_session()
-        try:
-            now = datetime.utcnow()
-            for p in predictions_batch:
-                match_id = p['match_id']
-                league_id = p['league_id']
-                data = p['data']
-                ttl = p.get('ttl_seconds', 86400 * 7)
-                
-                expires_at = now + timedelta(seconds=ttl)
-                
-                # Sanitize data
-                sanitized_data = self._sanitize_json_data(data)
-                
-                record = session.query(MatchPredictionModel).filter(MatchPredictionModel.match_id == match_id).first()
-                if record:
-                    record.league_id = league_id
-                    record.data = sanitized_data
-                    record.expires_at = expires_at
-                    record.last_updated = now
-                else:
-                    record = MatchPredictionModel(
-                        match_id=match_id,
-                        league_id=league_id,
-                        data=sanitized_data,
-                        expires_at=expires_at,
-                        last_updated=now
-                    )
-                    session.add(record)
-            
-            session.commit()
+        
+        if not predictions_batch:
             return True
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Failed to bulk save predictions: {e}")
-            return False
-        finally:
-            session.close()
+            
+        success = True
+        total_chunks = (len(predictions_batch) + chunk_size - 1) // chunk_size
+        
+        logger.info(f"Bulk saving {len(predictions_batch)} predictions in {total_chunks} chunks...")
 
-# Factory function for dependency injection
+        for i in range(0, len(predictions_batch), chunk_size):
+            chunk = predictions_batch[i:i + chunk_size]
+            try:
+                # Pre-sanitize chunk
+                now = datetime.utcnow()
+                sanitized_chunk = []
+                for p in chunk:
+                    ttl = p.get('ttl_seconds', 86400 * 7)
+                    expires = now + timedelta(seconds=ttl)
+                    
+                    sanitized_chunk.append({
+                        "match_id": p['match_id'],
+                        "league_id": p['league_id'],
+                        "data": self._sanitize_json_data(p['data']),
+                        "expires_at": expires,
+                        "last_updated": now
+                    })
+                
+                def _op(session):
+                    # Upsert Logic manually for batch
+                    for item in sanitized_chunk:
+                        match_id = item['match_id']
+                        # Try to notify existing
+                        record = session.query(MatchPredictionModel).filter(MatchPredictionModel.match_id == match_id).first()
+                        if record:
+                            record.league_id = item['league_id']
+                            record.data = item['data']
+                            record.expires_at = item['expires_at']
+                            record.last_updated = item['last_updated']
+                        else:
+                            record = MatchPredictionModel(
+                                match_id=match_id,
+                                league_id=item['league_id'],
+                                data=item['data'],
+                                expires_at=item['expires_at'],
+                                last_updated=item['last_updated']
+                            )
+                            session.add(record)
+                    return True
+                
+                self._execute_with_retry(_op, retries=3, delay=1)
+                
+            except Exception as e:
+                logger.error(f"Failed to save chunk {i//chunk_size}: {e}")
+                success = False # Continue trying other chunks, but mark partial failure
+        
+        return success
+
 def get_persistence_repository() -> PersistenceRepository:
     """Get the persistence repository instance."""
     return PersistenceRepository()

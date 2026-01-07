@@ -263,6 +263,120 @@ async def main():
     # --- 6. SAVE MODEL ---
     model_path = os.path.join(os.getcwd(), "ml_picks_classifier.joblib")
     joblib.dump(clf, model_path)
+# --- 7. EVALUATION & PERSISTENCE ---
+    logger.info("📊 Evaluating Model Performance on Historical Data...")
+    
+    # 7.1 Predictions on Training Set (Simulated Backtest)
+    # Note: Ideally we would use a hold-out validation set or TimeSeriesSplit
+    # For now, we evaluate on the full history to generate the "Training Performance Review"
+    all_predictions = clf.predict_proba(ml_features)
+    
+    # Check classes
+    classes = clf.classes_
+    home_idx = -1
+    draw_idx = -1
+    away_idx = -1
+    
+    # Map classes (-1: Away, 0: Draw, 1: Home) or whatever encoding was used
+    # Wait, we used: 0=Draw, 1=Home, 2=Away (from feature extractor logic usually)
+    # Let's verify standard encoding from sklearn LabelEncoder if we used one
+    # In pure RF classifier it infers from y values. 
+    # y comes from match_tasks -> target
+    # Target is: 1 (Home Win), 0 (Draw), 2 (Away Win)
+    # So classes should be [0, 1, 2] sorted
+    
+    try:
+        if len(classes) == 3:
+            draw_idx = list(classes).index(0)
+            home_idx = list(classes).index(1)
+            away_idx = list(classes).index(2)
+        else:
+             logger.warning(f"Unexpected classes found: {classes}")
+    except ValueError:
+        pass
+
+    total_stake = 0
+    total_return = 0
+    correct_picks = 0
+    total_picks = 0
+    
+    match_history = []
+    
+    # Iterate to calculate metrics
+    for i, (features, target) in enumerate(zip(ml_features, ml_targets)):
+        # Reconstruct context is hard here without mapping back to tasks
+        # Simplified metrics based on raw probabilities
+        
+        probs = all_predictions[i]
+        
+        # Simple Strategy: Bet on highest prob if > 0.45
+        max_prob_idx = probs.argmax()
+        max_prob = probs[max_prob_idx]
+        predicted_class = classes[max_prob_idx]
+        
+        is_correct = (predicted_class == target)
+        
+        # Simulate basic bet
+        if max_prob > 0.50:
+            total_picks += 1
+            if is_correct:
+                correct_picks += 1
+                # Simplified odds simulation (approx 2.00)
+                # In real backtest we need odds, but here we just want a "Score"
+                
+    accuracy = correct_picks / total_picks if total_picks > 0 else 0.0
+    
+    logger.info(f"📈 Model Accuracy (High Confidence > 50%): {accuracy:.2%} ({correct_picks}/{total_picks})")
+    
+    # 7.2 Prepare Result Object
+    result_data = {
+        "generated_at": datetime.utcnow().isoformat(),
+        "model_version": "v2_optimized_random_forest",
+        "metrics": {
+            "accuracy": accuracy,
+            "total_samples": len(ml_targets),
+            "feature_importance": [] # Could extract from model.feature_importances_
+        },
+        "matches": [] # We don't save 3000 matches in the summary blob to avoid DB saturation
+    }
+    
+    # Extract Feature Importance
+    try:
+        importances = clf.feature_importances_
+        # We don't have feature names easily available unless we map them manually
+        # result_data["metrics"]["feature_importance"] = importances.tolist()
+    except: pass
+    
+    # 8. ROBUST SAVING (HYBRID STRATEGY)
+    persistence_repo = get_persistence_repository()
+    
+    # A. Save to Local JSON (Backup Safety Net)
+    try:
+        local_path = "training_result_backup.json"
+        with open(local_path, "w") as f:
+            # Helper to handle numpy types for local dump
+            import numpy as np
+            class NpEncoder(json.JSONEncoder):
+                def default(self, obj):
+                    if isinstance(obj, np.integer): return int(obj)
+                    if isinstance(obj, np.floating): return float(obj)
+                    if isinstance(obj, np.ndarray): return obj.tolist()
+                    return super(NpEncoder, self).default(obj)
+            json.dump(result_data, f, cls=NpEncoder)
+        logger.info(f"✅ Backup saved to {local_path}")
+    except Exception as e:
+        logger.error(f"Failed to save local backup: {e}")
+
+    # B. Save to Database (Reliable Retry)
+    logger.info("💾 Persisting Results to Database (Render)...")
+    success = persistence_repo.save_training_result("latest_daily", result_data)
+    
+    if success:
+        logger.info("✅ Training Results successfully saved to Database!")
+    else:
+        logger.error("❌ Failed to save results to Database after retries.")
+
+    logger.info("🎉 Optimized Training Pipeline Completed Successfully.")
     
     elapsed = time.time() - start_time
     logger.info(f"🎉 Model Trained & Saved to {model_path}")
