@@ -282,7 +282,7 @@ class MLTrainingOrchestrator:
                 # Execute in parallel using all available cores (n_jobs=-1)
                 # We use 'loky' backend which is robust for pickling
                 if parallel_inputs:
-                    from joblib import Parallel, delayed
+                    from sklearn.utils.parallel import Parallel, delayed
                     
                     # Inner function defined here to be picklable? No, must be top-level or static.
                     # But we can use 'delayed' on a standalone function.

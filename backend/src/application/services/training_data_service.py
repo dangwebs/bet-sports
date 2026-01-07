@@ -137,20 +137,67 @@ class TrainingDataService:
 
     async def _backfill_gap(self, league_code: str, start_date: datetime, end_date: datetime) -> List[Match]:
         """
-        Fetch matches from API-Football to fill gap between static CSVs and today.
+        Fetch matches from fallback sources (Football-Data.org, OpenFootball) 
+        to fill gap between static CSVs and today.
         """
-        return [] # DISABLED PER USER REQUEST
-        # try:
-        #     from src.infrastructure.data_sources.api_football import APIFootballSource
-        #     api_fb = APIFootballSource()
-        #     if not api_fb.is_configured:
-        #         return []
-        #         
-        #     return await api_fb.get_finished_matches(
-        #         date_from=start_date.strftime("%Y-%m-%d"),
-        #         date_to=end_date.strftime("%Y-%m-%d"),
-        #         league_codes=[league_code]
-        #     )
-        # except Exception as e:
-        #     logger.warning(f"Backfill failed for {league_code}: {e}")
-        #     return []
+        backfilled_matches = []
+        
+        # 1. Try Football-Data.org (Best for recent finished matches)
+        try:
+            if self.data_sources.football_data_org.is_configured:
+                logger.info(f"Backfilling {league_code} via Football-Data.org from {start_date.date()} to {end_date.date()}...")
+                fd_matches = await self.data_sources.football_data_org.get_finished_matches(
+                    date_from=start_date.strftime("%Y-%m-%d"),
+                    date_to=end_date.strftime("%Y-%m-%d"),
+                    league_codes=[league_code]
+                )
+                if fd_matches:
+                    backfilled_matches.extend(fd_matches)
+                    logger.info(f"✓ Found {len(fd_matches)} backfill matches in Football-Data.org for {league_code}")
+                    return backfilled_matches # Return early if successful
+                else:
+                    logger.info(f"No matches found in Football-Data.org for {league_code} gap.")
+        except Exception as e:
+            logger.warning(f"Backfill source Football-Data.org failed for {league_code}: {e}")
+
+        # 2. Try OpenFootball (Good for historical breadth or if API fails)
+        try:
+             # Need to construct a League object for OpenFootball
+             # We rely on metadata from FootballDataUK for name/country
+             from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
+             from src.domain.entities.entities import League
+             
+             if league_code in LEAGUES_METADATA:
+                 meta = LEAGUES_METADATA[league_code]
+                 league = League(
+                     id=league_code,
+                     name=meta["name"],
+                     country=meta["country"]
+                 )
+                 
+                 of_matches = await self.data_sources.openfootball.get_matches(league)
+                 
+                 # Filter for the gap
+                 # OpenFootball returns entire season usually
+                 relevant_matches = []
+                 for m in of_matches:
+                     # Ensure timezone awareness for comparison
+                     m_date = m.match_date
+                     if m_date.tzinfo is None:
+                         # Assume same TZ as start_date/end_date if they are offset-aware, or naive comparison
+                         # Best to make m_date offset aware if start_date is
+                         if start_date.tzinfo:
+                             from src.utils.time_utils import COLOMBIA_TZ
+                             m_date = COLOMBIA_TZ.localize(m_date)
+                     
+                     if start_date <= m_date <= end_date:
+                         relevant_matches.append(m)
+                 
+                 if relevant_matches:
+                     backfilled_matches.extend(relevant_matches)
+                     logger.info(f"✓ Found {len(relevant_matches)} backfill matches in OpenFootball for {league_code}")
+                     
+        except Exception as e:
+            logger.warning(f"Backfill source OpenFootball failed for {league_code}: {e}")
+
+        return backfilled_matches

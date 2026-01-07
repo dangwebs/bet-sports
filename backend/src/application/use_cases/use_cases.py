@@ -49,6 +49,10 @@ from src.application.use_cases.suggested_picks_use_case import (
     GetLearningStatsUseCase,
     GetTopMLPicksUseCase
 )
+import joblib
+import os
+from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
 
 
 logger = logging.getLogger(__name__)
@@ -131,7 +135,26 @@ class GetPredictionsUseCase:
         self.persistence_repository = persistence_repository
         from src.domain.services.learning_service import LearningService
         self.picks_service = AIPicksService(learning_weights=get_learning_service().get_learning_weights() if 'get_learning_service' in globals() else {})
+
         self.background_processor = background_processor
+        
+        # Load ML Model for Rigorous Probability Calculation
+        self.ml_model = None
+        try:
+            # Path relative to backend/src/application/use_cases/ -> backend/ml_picks_classifier.joblib
+            # Based on orchestrator path: backend/src/application/services/../../../ml_picks_classifier.joblib
+            model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../backend/ml_picks_classifier.joblib'))
+            # Fallback check
+            if not os.path.exists(model_path):
+                 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../ml_picks_classifier.joblib'))
+            
+            if os.path.exists(model_path):
+                self.ml_model = joblib.load(model_path)
+                logger.info(f"✅ Loaded ML Model for rigorous probabilities from {model_path}")
+            else:
+                logger.warning(f"⚠️ ML Model not found at {model_path}. Using heuristic probabilities.")
+        except Exception as e:
+            logger.error(f"❌ Failed to load ML model: {e}")
     
     async def execute(self, league_id: str, limit: int = 20) -> PredictionsResponseDTO:
         """
@@ -381,8 +404,111 @@ class GetPredictionsUseCase:
                     away_stats=away_stats,
                     league_averages=league_averages,
                     global_averages=global_averages,
+
                     data_sources=data_sources_used,
                 )
+                
+                # --- RIGOROUS ML PROBABILITY OVERRIDE ---
+                if self.ml_model:
+                    try:
+                        # Construct Pseudo-Picks for Evaluation
+                        # We evaluate 5 key outcomes: Home, Draw, Away, Over 2.5, Under 2.5
+                        outcomes = [
+                            (MarketType.WINNER, prediction.home_win_probability, "Home"),
+                            (MarketType.WINNER, prediction.draw_probability, "Draw"), # Use WINNER for 1x2/Draw as generic Outcome type unless RESULT_1X2 is preferred
+                            (MarketType.WINNER, prediction.away_win_probability, "Away"), 
+                            (MarketType.GOALS_OVER_2_5, prediction.over_25_probability, "Over"),
+                            (MarketType.GOALS_UNDER_2_5, prediction.under_25_probability, "Under")
+                        ]
+                        
+                        features_batch = []
+                        valid_indices = []
+                        
+                        for idx, (m_type, heuristic_prob, label) in enumerate(outcomes):
+                            # Create a dummy pick structure required by Feature Extractor
+                            # For Away win, we usually denote it distinctively, but FeatureExtractor 
+                            # relies mostly on probability and match stats.
+                            # IMPORTANT: FeatureExtractor doesn't explicitly distinguish Home/Away in checking 
+                            # unless we check the label or if it handles '1', '2', 'X'.
+                            # Let's construct a minimal valid pick.
+                            
+                            p = SuggestedPick(
+                                market_type=m_type,
+                                market_label=label,
+                                probability=heuristic_prob,
+                                expected_value=0.0, 
+                                risk_level=5,
+                                confidence_level=ConfidenceLevel.MEDIUM,
+                                reasoning="ML Eval"
+                            )
+                            
+                            # Note: FeatureExtractor uses home_stats and away_stats. 
+                            # If we are evaluating AWAY win, the "probability" passed is the Away Prob.
+                            # But FeatureExtractor logic for "Shot Dominance" (Home - Away) is static.
+                            # The model likely learned that "High Home Dominance + High Home Prob = Win".
+                            # If we pass "High Home Dominance + Low Away Prob", it might be confused 
+                            # if we just label it "WINNER".
+                            # However, checking ml_feature_extractor.py, it specifically hashes the market_type string.
+                            # "Victoria Local", "Empate", "Victoria Visitante".
+                            
+                            # Let's be precise with labels to match training data likely format
+                            if idx == 0: p.market_label = "Victoria Local"  # Home
+                            elif idx == 1: p.market_label = "Empate" 
+                            elif idx == 2: p.market_label = "Victoria Visitante" # Away
+                            elif idx == 3: p.market_label = "Más de 2.5 Goles"
+                            elif idx == 4: p.market_label = "Menos de 2.5 Goles"
+                            
+                            feats = MLFeatureExtractor.extract_features(p, match, home_stats, away_stats)
+                            features_batch.append(feats)
+                            valid_indices.append(idx)
+
+                        if features_batch:
+                            # Batch Predict
+                            # Returns array of [prob_0, prob_1] for each sample
+                            probs = self.ml_model.predict_proba(features_batch)
+                            
+                            # Extract Prob(Class 1 = Win)
+                            ml_probs = [p[1] for p in probs]
+                            
+                            # 1. Update Match Winner (Normalize to sum 1.0)
+                            raw_h, raw_d, raw_a = ml_probs[0], ml_probs[1], ml_probs[2]
+                            total_1x2 = raw_h + raw_d + raw_a
+                            
+                            if total_1x2 > 0:
+                                prediction.home_win_probability = round(raw_h / total_1x2, 4)
+                                prediction.draw_probability = round(raw_d / total_1x2, 4)
+                                prediction.away_win_probability = round(raw_a / total_1x2, 4)
+                            
+                            # 2. Update Over/Under (Normalize)
+                            raw_o, raw_u = ml_probs[3], ml_probs[4]
+                            total_ou = raw_o + raw_u
+                            
+                            if total_ou > 0:
+                                prediction.over_25_probability = round(raw_o / total_ou, 4)
+                                prediction.under_25_probability = round(raw_u / total_ou, 4)
+                                
+                            # 3. SET CONFIDENCE = Max(Raw Probabilities)
+                            # We use the raw values (un-normalized) to capture true model certainty?
+                            # Or normalized? 
+                            # User said: "If model says 36% for Home, confidence is 36%".
+                            # So we typically use the probability of the most likely outcome.
+                            # Let's use the MAX of the normalized probabilities we just set.
+                            prediction.confidence = max(
+                                prediction.home_win_probability, 
+                                prediction.draw_probability, 
+                                prediction.away_win_probability,
+                                prediction.over_25_probability,
+                                prediction.under_25_probability
+                            )
+                            
+                            # Tag as ML-derived
+                            if "ML_Rigorous" not in prediction.data_sources:
+                                prediction.data_sources.append("Rigorous ML")
+                            
+
+                    except Exception as ml_err:
+                        logger.warning(f"ML Probability Override failed for match {match.id}: {ml_err}")
+                        
             except InsufficientDataException:
                 logger.warning(f"Insufficient data for match {match.id}. Skipping match-level prediction.")
                 # Create a "Null" prediction to hold team-specific picks if any
@@ -547,6 +673,7 @@ class GetPredictionsUseCase:
                 match_dto.away_red_cards = int(round(a_red))
             
             prediction_dto = self._prediction_to_dto(prediction, suggested_picks.suggested_picks)
+            
             
             predictions.append(MatchPredictionDTO(
                 match=match_dto,
