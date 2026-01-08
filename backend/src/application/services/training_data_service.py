@@ -103,8 +103,22 @@ class TrainingDataService:
         for res in results:
             csv_matches.extend(res)
 
+        # 3. Football-Data.org API (Rich recent data with corners/cards)
+        try:
+            if self.data_sources.football_data_org.is_configured:
+                start_dt = get_current_time() - timedelta(days=days_back or 550)
+                api_fb_matches = await self.data_sources.football_data_org.get_finished_matches(
+                    date_from=start_dt.strftime("%Y-%m-%d"),
+                    date_to=get_current_time().strftime("%Y-%m-%d"),
+                    league_codes=leagues
+                )
+                if api_fb_matches:
+                    logger.info(f"Football-Data.org: loaded {len(api_fb_matches)} matches")
+        except Exception as e:
+            logger.warning(f"Football-Data.org fetch failed: {e}")
 
         # 4. ESPN (Detailed recent stats)
+
         try:
             from src.infrastructure.data_sources.espn import ESPNSource
             espn = ESPNSource()
@@ -112,12 +126,27 @@ class TrainingDataService:
         except Exception as e:
             logger.warning(f"ESPN fetch failed for training data: {e}")
 
+        # 5. OpenFootball (Open source historical data)
+        open_football_matches = []
+        try:
+            from src.infrastructure.data_sources.openfootball import OpenFootballSource
+            open_fb = OpenFootballSource()
+            for league_code in leagues:
+                league_entity = League(id=league_code, name=league_code, country="Europe")
+                of_matches = await open_fb.get_matches(league_entity)
+                open_football_matches.extend(of_matches)
+            if open_football_matches:
+                logger.info(f"OpenFootball: loaded {len(open_football_matches)} matches")
+        except Exception as e:
+            logger.warning(f"OpenFootball fetch failed for training data: {e}")
 
         # --- UNIFY & ENRICH ---
         all_matches = gh_matches
         all_matches = self.enrichment_service.merge_matches(all_matches, csv_matches)
         all_matches = self.enrichment_service.merge_matches(all_matches, api_fb_matches)
         all_matches = self.enrichment_service.merge_matches(all_matches, espn_matches)
+        all_matches = self.enrichment_service.merge_matches(all_matches, open_football_matches)
+
 
         # Sort by date (standardized)
         def get_sortable_date(m):
