@@ -493,7 +493,12 @@ class PicksService:
         # but we track data quality to adjust confidence
         has_home_stats = home_stats is not None and home_stats.matches_played > 0
         has_away_stats = away_stats is not None and away_stats.matches_played > 0
-        has_prediction_data = predicted_home_goals > 0 or predicted_away_goals > 0
+        has_prediction_data = (
+            predicted_home_goals > 0 or predicted_away_goals > 0 or
+            predicted_home_corners > 0 or predicted_away_corners > 0 or
+            predicted_home_yellow_cards > 0 or predicted_away_yellow_cards > 0
+        )
+
         
         # --- REFACTORING: Refine Expectations using League Avgs & Weighted Strength ---
         if league_averages and has_home_stats and has_away_stats:

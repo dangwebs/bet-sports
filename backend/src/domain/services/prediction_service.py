@@ -631,8 +631,11 @@ class PredictionService:
         Calculate prob for Over/Under 9.5 corners AND expected values.
         Returns: (over_prob, under_prob, home_expected, away_expected)
         """
-        if not home_stats or not away_stats:
-             return (0.0, 0.0, 0.0, 0.0)
+        # Removed early return to allow league-average fallback when stats are missing
+        if not home_stats:
+            home_stats = None  # Explicitly handle None for downstream logic
+        if not away_stats:
+            away_stats = None
              
         # ML REGRESSION INTEGRATION
         total_expected = 0.0
@@ -747,8 +750,11 @@ class PredictionService:
         Calculate prob for Over/Under 4.5 yellow cards AND expected values.
         Returns: (over_prob, under_prob, home_expected, away_expected)
         """
-        if not home_stats or not away_stats:
-             return (0.0, 0.0, 0.0, 0.0)
+        # Removed early return to allow league-average fallback when stats are missing
+        if not home_stats:
+            home_stats = None  # Explicitly handle None for downstream logic
+        if not away_stats:
+            away_stats = None
 
         # ML REGRESSION INTEGRATION
         total_expected = 0.0
