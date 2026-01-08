@@ -370,6 +370,8 @@ class StatisticsService:
             "1. fc heidenheim 1846": "heidenheim",
             "1. fc köln": "fc koln",
             "1. fc koln": "fc koln",
+            "fc cologne": "fc koln",
+            "cologne": "fc koln",
             "vfb stuttgart": "stuttgart",
             "vfl wolfsburg": "wolfsburg",
             "vfl bochum": "bochum",
@@ -378,7 +380,13 @@ class StatisticsService:
             "fc augsburg": "augsburg",
             "rb leipzig": "leipzig",
             "hamburger sv": "hamburg", # If relevant
+            "hamburg sv": "hamburg",
+            "hamburg": "hamburg",
+            "tsg hoffenheim": "hoffenheim",
+            "m'gladbach": "borussia monchengladbach",
             "fc st. pauli 1910": "st pauli",
+            "st. pauli": "st pauli",
+            "holstein kiel": "holstein kiel",
         }
         
         # Normalize: Lower, Strip, Remove Accents
