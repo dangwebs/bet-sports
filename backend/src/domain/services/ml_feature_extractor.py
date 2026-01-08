@@ -125,9 +125,53 @@ class MLFeatureExtractor:
             features.append(a_yellows)
             features.append(h_yellows + a_yellows)  # Total expected cards
             
+            # ============================================================
+            # VARIANCE & FORM FEATURES (New for Mode Collapse Fix)
+            # ============================================================
+            import statistics
+            
+            def calculate_variance_features(recent_list: list[float], season_avg: float) -> list[float]:
+                if not recent_list or len(recent_list) < 2:
+                    return [0.0, 0.0, 0.0] # Trend, Volatility, Momentum
+                
+                # 1. Trend (Recent Avg vs Season Avg)
+                recent_avg = sum(recent_list) / len(recent_list)
+                trend = recent_avg - season_avg
+                
+                # 2. Volatility (Standard Deviation)
+                try:
+                    volatility = statistics.stdev(recent_list)
+                except:
+                    volatility = 0.0
+                    
+                # 3. Momentum (Weighted Average)
+                # Weights: [0.1, 0.15, 0.2, 0.25, 0.3] (Most recent gets most weight)
+                weights = [0.1, 0.15, 0.2, 0.25, 0.3]
+                # Adjust weights if list is shorter than 5
+                if len(recent_list) < 5:
+                    weights = [1/len(recent_list)] * len(recent_list)
+                else:
+                    weights = weights[-len(recent_list):]
+                
+                momentum = sum(v * w for v, w in zip(recent_list, weights))
+                
+                return [round(trend, 3), round(volatility, 3), round(momentum, 3)]
+
+            # Extract Corner Variance
+            h_corn_var = calculate_variance_features(home_stats.recent_corners, h_corners)
+            a_corn_var = calculate_variance_features(away_stats.recent_corners, a_corners)
+            features.extend(h_corn_var) # [Trend, Vol, Mom]
+            features.extend(a_corn_var)
+            
+            # Extract Card Variance
+            h_card_var = calculate_variance_features(home_stats.recent_yellow_cards, h_yellows)
+            a_card_var = calculate_variance_features(away_stats.recent_yellow_cards, a_yellows)
+            features.extend(h_card_var)
+            features.extend(a_card_var)
+
         else:
-            # Padding if no stats provided (22 zeros: 16 original + 6 corners/cards)
-            features.extend([0.0] * 22)
+            # Padding if no stats provided (34 zeros: 16 original + 6 corners/cards + 12 variance)
+            features.extend([0.0] * 34)
             
         return features
 

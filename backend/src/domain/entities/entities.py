@@ -326,6 +326,11 @@ class TeamStatistics:
     total_interceptions: int = 0
     matches_with_advanced_stats: int = 0
     
+    # Rolling Stats for Variance/Trend Analysis (New)
+    recent_corners: list[int] = field(default_factory=list) # Last 5 matches corners
+    recent_yellow_cards: list[int] = field(default_factory=list) # Last 5 matches yellow cards
+    recent_shots: list[int] = field(default_factory=list) # Last 5 matches shots
+    
     recent_form: str = ""  # e.g., "WWDLW"
     data_updated_at: Optional[datetime] = None
     

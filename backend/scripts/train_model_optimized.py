@@ -4,9 +4,10 @@ import sys
 import gc
 import logging
 import time
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict
 from datetime import datetime
 import joblib
+import numpy as np
 
 # Add backend to path
 sys.path.append(os.path.join(os.getcwd(), 'src'))
@@ -14,7 +15,7 @@ sys.path.append(os.getcwd())
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("TrainOptimized")
+logger = logging.getLogger("TrainPerLeague")
 
 # Import Services
 from src.infrastructure.database.database_service import get_database_service
@@ -29,22 +30,20 @@ from src.domain.services.pick_resolution_service import PickResolutionService
 from src.core.constants import DEFAULT_LEAGUES
 
 # Global Service Instances (for worker processes)
-# We initialize them globally so they are available to forked processes (Linux/Mac)
-# effectively acting as singletons in the worker.
 _prediction_service = None
 _picks_service = None
 _statistics_service = None
 _feature_extractor = None
 _resolution_service = None
-_learning_weights = None
 
 def init_worker(weights):
     """Initialize services in the worker process"""
-    global _prediction_service, _picks_service, _statistics_service, _feature_extractor, _resolution_service, _learning_weights
+    global _prediction_service, _picks_service, _statistics_service, _feature_extractor, _resolution_service
     
-    _learning_weights = weights
     _statistics_service = StatisticsService()
-    _prediction_service = PredictionService(statistics_service=_statistics_service, learning_service=LearningService())
+    _prediction_service = PredictionService() # learning_service not needed for pure prediction generation?
+    # Actually PredictionService might need simple init.
+    
     _picks_service = PicksService(learning_weights=weights)
     _feature_extractor = MLFeatureExtractor()
     _resolution_service = PickResolutionService()
@@ -56,7 +55,7 @@ def process_match_task(task_data):
         task_data: tuple(match, home_stats_dict, away_stats_dict, league_avgs, global_avgs, learning_weights)
     
     Returns:
-        List of (features, target) tuples
+        tuple: (features, targets_dict)
     """
     global _prediction_service, _picks_service, _statistics_service, _feature_extractor, _resolution_service
     
@@ -64,75 +63,67 @@ def process_match_task(task_data):
     
     # Lazy Init in Worker Process
     if _statistics_service is None:
-        _statistics_service = StatisticsService()
-        _learning_service = LearningService() # Only needed for constructor
-        _prediction_service = PredictionService()
-        _picks_service = PicksService(learning_weights=weights)
-        _feature_extractor = MLFeatureExtractor()
-        _resolution_service = PickResolutionService()
+        init_worker(weights)
     
     # 1. Convert to Domain Stats (Fast)
     home_stats = _statistics_service.convert_to_domain_stats(match.home_team.name, raw_home)
     away_stats = _statistics_service.convert_to_domain_stats(match.away_team.name, raw_away)
     
-    # 2. Generate Prediction (Heuristic)
-    prediction = _prediction_service.generate_prediction(
-        match=match,
-        home_stats=home_stats,
-        away_stats=away_stats,
-        league_averages=league_avgs,
-        global_averages=global_avgs,
-        min_matches=0
+    # 2. Extract Features (Now includes Variance/Rolling stats)
+    # We create a dummy pick to satisfy the signature or adjust the extractor.
+    # The extractor takes a 'pick', but really only needs market type for hash.
+    # Let's create a generic feature vector.
+    from src.domain.entities.suggested_pick import SuggestedPick
+    
+    # We need a base 'pick' object to extract features. 
+    # Since we are training for GENERAL match stats (Corners, Cards), 
+    # we can use a dummy pick or modify extract_features. 
+    # For now, let's assume we are training the Match Outcome mostly, 
+    # but for Regressors (Corners), the "pick" features (prob, ev) don't matter as much 
+    # as the team stats features.
+    
+    dummy_pick = SuggestedPick(
+        match_id=match.id,
+        market_type="MATCH_WINNER", # Generic
+        selection="HOME",
+        probability=0.5,
+        odds=2.0,
+        stake=1.0,
+        expected_value=0.0,
+        risk_level=1.0,
+        reason="Training"
     )
     
-    # 3. Generate Picks (Candidates)
-    # Note: We generate ALL suggested picks to train on everything
-    # We DO NOT filter by "is_recommended" here because we want the ML to learn what works and what doesn't.
-    picks_container = _picks_service.generate_suggested_picks(
-        match=match,
-        home_stats=home_stats,
-        away_stats=away_stats,
-        league_averages=league_avgs,
-        predicted_home_goals=prediction.predicted_home_goals,
-        predicted_away_goals=prediction.predicted_away_goals,
-        home_win_prob=prediction.home_win_probability,
-        draw_prob=prediction.draw_probability,
-        away_win_prob=prediction.away_win_probability
-    )
+    features = _feature_extractor.extract_features(dummy_pick, match, home_stats, away_stats)
     
-    if not picks_container or not picks_container.suggested_picks:
-        return []
-
-    results = []
+    # 3. Define Targets for Regression & Classification
+    targets = {
+        "home_win": 1 if match.home_goals > match.away_goals else 0,
+        "away_win": 1 if match.away_goals > match.home_goals else 0,
+        "draw": 1 if match.home_goals == match.away_goals else 0,
+        "total_corners": (match.home_corners or 0) + (match.away_corners or 0),
+        "total_cards": (match.home_yellow_cards or 0) + (match.away_yellow_cards or 0),
+        "home_goals": match.home_goals,
+        "away_goals": match.away_goals
+    }
     
-    # 4. Resolve & Extract Features
-    for pick in picks_container.suggested_picks:
-        # Resolve 'Truth' (Did it win?)
-        result_str, _ = _resolution_service.resolve_pick(pick, match)
-        target = 1 if result_str == "WIN" else 0
-        
-        # Extract Features
-        features = _feature_extractor.extract_features(pick, match, home_stats, away_stats)
-        
-        results.append((features, target))
-        
-    return results
+    return features, targets
 
 async def main():
-    logger.info("🚀 Starting Optimized ML Training Pipeline...")
+    logger.info("🚀 Starting Per-League ML Training Pipeline...")
     start_time = time.time()
     
-    # --- 1. SETUP & DATA FETCHING ---
-    cache_service = get_cache_service()
-    
-    # Initialize services using Dependency Injection
+    # --- 1. SETUP ---
     from src.api.dependencies import get_training_data_service, get_statistics_service
     training_service = get_training_data_service()
     stats_service = get_statistics_service()
     learning_service = LearningService()
     
+    # Ensure models directory exists
+    os.makedirs("ml_models", exist_ok=True)
+    
     # Fetch Data
-    logger.info("📥 Fetching Training Data (1.5 Years)...")
+    logger.info("📥 Fetching Training Data (550 days)...")
     matches = await training_service.fetch_comprehensive_training_data(
         leagues=DEFAULT_LEAGUES,
         days_back=550,
@@ -140,257 +131,135 @@ async def main():
     )
     logger.info(f"✅ Loaded {len(matches)} matches.")
     
-    # Sort Chronologically (CRITICAL)
+    # Sort Chronologically
     matches.sort(key=lambda x: x.match_date.replace(tzinfo=None))
     
-    # --- 2. PRE-CALCULATE AVERAGES ---
-    logger.info("📊 Calculating Global/League Averages...")
-    league_avgs_map = {}
+    # Group by League
     matches_by_league = {}
     for m in matches:
         matches_by_league.setdefault(m.league.id, []).append(m)
         
-    for lid, m_list in matches_by_league.items():
-        league_avgs_map[lid] = stats_service.calculate_league_averages(m_list)
-        
-    global_avgs = stats_service.calculate_league_averages(matches)
+    # --- 2. TRAIN PER LEAGUE ---
     
-    # --- 3. SEQUENTIAL STATE ROLL (The "State Machine") ---
-    # We walk through time, updating stats, and creating "Tasks" 
-    # that contain the state of the world at that moment.
-    
-    logger.info("🔄 Rolling stats and preparing tasks...")
-    
-    training_tasks = [] # Tuple(Match, HomeStatsDict, AwayStatsDict, ...)
-    team_stats_cache = {} # Mutable running state
-    empty_stats = stats_service.create_empty_stats_dict()
-    
-    # Get weights ONCE
-    weights = learning_service.get_learning_weights()
-    
-    for match in matches:
-        if match.home_goals is None or match.away_goals is None:
+    for league_id, league_matches in matches_by_league.items():
+        if len(league_matches) < 50:
+            logger.warning(f"⚠️ Skipping league {league_id}: Not enough data ({len(league_matches)} matches)")
             continue
             
-        h_name = match.home_team.name
-        a_name = match.away_team.name
+        logger.info(f"🏟️ Processing League: {league_id} ({len(league_matches)} matches)")
         
-        # Get State BEFORE match (Snapshot)
-        # We perform a shallow copy of the dict to ensure isolation in parallel workers
-        # creating a new dict is faster than deepcopy for simple types
-        raw_home = team_stats_cache.get(h_name, empty_stats).copy()
-        raw_away = team_stats_cache.get(a_name, empty_stats).copy()
+        # Calculate League Avgs (Specific to this league)
+        league_avgs = stats_service.calculate_league_averages(league_matches)
         
-        # Init legacy if first time
-        if h_name not in team_stats_cache: team_stats_cache[h_name] = raw_home
-        if a_name not in team_stats_cache: team_stats_cache[a_name] = raw_away
+        # Prepare Rolling Stats
+        team_stats_cache = {}
+        empty_stats = stats_service.create_empty_stats_dict()
+        training_tasks = []
+        weights = learning_service.get_learning_weights()
         
-        # Check minimum samples (Data Warmup)
-        # We need teams to have played at least ~5 games to have meaningful stats
-        if raw_home['matches_played'] >= 3 and raw_away['matches_played'] >= 3:
-            training_tasks.append((
-                match,
-                raw_home,
-                raw_away,
-                league_avgs_map.get(match.league.id),
-                global_avgs,
-                weights
-            ))
+        for match in league_matches:
+            if match.home_goals is None or match.away_goals is None: continue
             
-        # Update State (Running Total for NEXT match)
-        stats_service.update_team_stats_dict(team_stats_cache[h_name], match, is_home=True)
-        stats_service.update_team_stats_dict(team_stats_cache[a_name], match, is_home=False)
-
-    logger.info(f"⚡ Prepared {len(training_tasks)} tasks for parallel processing.")
-    
-    # Clean up memory
-    del matches
-    del team_stats_cache
-    gc.collect()
-    
-    # --- 4. PARALLEL FEATURE EXTRACTION ---
-    logger.info("🧠 Extracting Features in Parallel (ProcessPool)...")
-    
-    ml_features = []
-    ml_targets = []
-    
-    # Use joblib with 'loky' backend (robust for serialization)
-    # n_jobs=-1 uses all cores. 
-    # batch_size='auto' usually good, but larger batch size might help reduce IPC overhead
-    weights = learning_service.get_learning_weights()
-    
-    try:
-        results_batches = joblib.Parallel(n_jobs=-1, verbose=5, batch_size=50)(
-            joblib.delayed(process_match_task)(task) 
-            for task in training_tasks
-        )
-        
-        # Flatten results
-        for batch in results_batches:
-            if not batch: continue
-            for feats, targ in batch:
-                ml_features.append(feats)
-                ml_targets.append(targ)
+            h_name = match.home_team.name
+            a_name = match.away_team.name
+            
+            # Snapshot state BEFORE match
+            raw_home = team_stats_cache.get(h_name, empty_stats).copy()
+            raw_away = team_stats_cache.get(a_name, empty_stats).copy()
+            
+            # Init if new
+            if h_name not in team_stats_cache: team_stats_cache[h_name] = raw_home
+            if a_name not in team_stats_cache: team_stats_cache[a_name] = raw_away
+            
+            # Warmup check (> 3 matches)
+            if raw_home['matches_played'] >= 3 and raw_away['matches_played'] >= 3:
+                training_tasks.append((match, raw_home, raw_away, league_avgs, None, weights))
                 
-    except Exception as e:
-        logger.error(f"Parallel processing failed: {e}")
-        return
-
-    logger.info(f"✅ Extracted {len(ml_features)} training samples.")
-    
-    # --- 5. TRAIN MODEL ---
-    from sklearn.ensemble import RandomForestClassifier
-    
-    if len(ml_features) < 100:
-        logger.error("Not enough data to train!")
-        return
-
-    logger.info("🏋️ Training Random Forest Model...")
-    
-    clf = RandomForestClassifier(
-        n_estimators=1000,
-        max_depth=22, # Slightly adjusted from 25
-        min_samples_split=5,
-        min_samples_leaf=2,
-        random_state=42,
-        n_jobs=-1, 
-        class_weight="balanced_subsample"
-    )
-    
-    # Offload fit to avoid blocking (though we are in main script so blocking is fine)
-    clf.fit(ml_features, ml_targets)
-    
-    # --- 6. SAVE MODEL ---
-    model_path = os.path.join(os.getcwd(), "ml_picks_classifier.joblib")
-    joblib.dump(clf, model_path)
-# --- 7. EVALUATION & PERSISTENCE ---
-    logger.info("📊 Evaluating Model Performance on Historical Data...")
-    
-    # 7.1 Predictions on Training Set (Simulated Backtest)
-    # Note: Ideally we would use a hold-out validation set or TimeSeriesSplit
-    # For now, we evaluate on the full history to generate the "Training Performance Review"
-    all_predictions = clf.predict_proba(ml_features)
-    
-    # Check classes
-    classes = clf.classes_
-    home_idx = -1
-    draw_idx = -1
-    away_idx = -1
-    
-    # Map classes (-1: Away, 0: Draw, 1: Home) or whatever encoding was used
-    # Wait, we used: 0=Draw, 1=Home, 2=Away (from feature extractor logic usually)
-    # Let's verify standard encoding from sklearn LabelEncoder if we used one
-    # In pure RF classifier it infers from y values. 
-    # y comes from match_tasks -> target
-    # Target is: 1 (Home Win), 0 (Draw), 2 (Away Win)
-    # So classes should be [0, 1, 2] sorted
-    
-    try:
-        if len(classes) == 3:
-            draw_idx = list(classes).index(0)
-            home_idx = list(classes).index(1)
-            away_idx = list(classes).index(2)
+            # Update State
+            stats_service.update_team_stats_dict(team_stats_cache[h_name], match, is_home=True)
+            stats_service.update_team_stats_dict(team_stats_cache[a_name], match, is_home=False)
+            
+        # Extract Features Parallel
+        if not training_tasks:
+            continue
+            
+        X = []
+        y_corners = []
+        y_cards = []
+        y_outcome = [] # 0=Draw, 1=Home, 2=Away
+        
+        try:
+            results = joblib.Parallel(n_jobs=-1, batch_size=50)(
+                joblib.delayed(process_match_task)(task) for task in training_tasks
+            )
+            
+            for feats, targets in results:
+                X.append(feats)
+                y_corners.append(targets['total_corners'])
+                y_cards.append(targets['total_cards'])
+                
+                outcome = 0 # Draw
+                if targets['home_win']: outcome = 1
+                elif targets['away_win']: outcome = 2
+                y_outcome.append(outcome)
+                
+        except Exception as e:
+            logger.error(f"Feature extraction failed for {league_id}: {e}")
+            continue
+            
+        # --- TRAIN MODELS ---
+        from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+        from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+        
+        # 1. Corners Regressor
+        logger.info(f"   📐 Training Corners Regressor ({league_id})...")
+        reg_corners = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=-1, random_state=42)
+        
+        # Train
+        reg_corners.fit(X, y_corners)
+        
+        # SANITY CHECK: Mode Collapse Detection
+        preds = reg_corners.predict(X)
+        std_dev = np.std(preds)
+        unique, counts = np.unique(np.round(preds), return_counts=True)
+        max_dominance = np.max(counts) / len(preds) if len(preds) > 0 else 0
+        
+        logger.info(f"      - Distribution: StdDev={std_dev:.3f}, MaxDominance={max_dominance:.2%}")
+        
+        if max_dominance > 0.90:
+            logger.error(f"      ❌ MODE COLLAPSE DETECTED in Corners Model for {league_id}! (90% same value). Skipping save.")
+        elif std_dev < 0.5:
+            logger.warning(f"      ⚠️ Low Variance in Corners Model for {league_id} (StdDev < 0.5). Model might be too conservative.")
+            joblib.dump(reg_corners, f"ml_models/{league_id}_corners.joblib")
         else:
-             logger.warning(f"Unexpected classes found: {classes}")
-    except ValueError:
-        pass
+            joblib.dump(reg_corners, f"ml_models/{league_id}_corners.joblib")
+            
+        # 2. Cards Regressor
+        logger.info(f"   cards Training Cards Regressor ({league_id})...")
+        reg_cards = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=-1, random_state=42)
+        reg_cards.fit(X, y_cards)
+        
+        # SANITY CHECK (Cards)
+        preds_c = reg_cards.predict(X)
+        max_dom_c = (np.unique(np.round(preds_c), return_counts=True)[1].max() / len(preds_c)) if len(preds_c) > 0 else 0
+        
+        if max_dom_c > 0.90:
+             logger.error(f"      ❌ MODE COLLAPSE DETECTED in Cards Model for {league_id}! Skipping save.")
+        else:
+             joblib.dump(reg_cards, f"ml_models/{league_id}_cards.joblib")
 
-    total_stake = 0
-    total_return = 0
-    correct_picks = 0
-    total_picks = 0
-    
-    match_history = []
-    
-    # Iterate to calculate metrics
-    for i, (features, target) in enumerate(zip(ml_features, ml_targets)):
-        # Reconstruct context is hard here without mapping back to tasks
-        # Simplified metrics based on raw probabilities
         
-        probs = all_predictions[i]
+        # 3. Match Winner Classifier
+        logger.info(f"   🏆 Training Outcome Classifier ({league_id})...")
+        clf_outcome = RandomForestClassifier(n_estimators=200, max_depth=15, class_weight='balanced', n_jobs=-1, random_state=42)
+        scores_acc = cross_val_score(clf_outcome, X, y_outcome, cv=tscv, scoring='accuracy')
+        logger.info(f"      - Accuracy: {np.mean(scores_acc):.2%}")
         
-        # Simple Strategy: Bet on highest prob if > 0.45
-        max_prob_idx = probs.argmax()
-        max_prob = probs[max_prob_idx]
-        predicted_class = classes[max_prob_idx]
+        clf_outcome.fit(X, y_outcome)
+        joblib.dump(clf_outcome, f"ml_models/{league_id}_winner.joblib")
         
-        is_correct = (predicted_class == target)
-        
-        # Simulate basic bet
-        if max_prob > 0.50:
-            total_picks += 1
-            if is_correct:
-                correct_picks += 1
-                # Simplified odds simulation (approx 2.00)
-                # In real backtest we need odds, but here we just want a "Score"
-                
-    accuracy = correct_picks / total_picks if total_picks > 0 else 0.0
-    
-    logger.info(f"📈 Model Accuracy (High Confidence > 50%): {accuracy:.2%} ({correct_picks}/{total_picks})")
-    
-    # 7.2 Prepare Result Object
-    result_data = {
-        "generated_at": datetime.utcnow().isoformat(),
-        "model_version": "v2_optimized_random_forest",
-        "metrics": {
-            "accuracy": accuracy,
-            "total_samples": len(ml_targets),
-            "feature_importance": [] # Could extract from model.feature_importances_
-        },
-        "matches": [] # We don't save 3000 matches in the summary blob to avoid DB saturation
-    }
-    
-    # Extract Feature Importance
-    try:
-        importances = clf.feature_importances_
-        # We don't have feature names easily available unless we map them manually
-        # result_data["metrics"]["feature_importance"] = importances.tolist()
-    except: pass
-    
-    # 8. ROBUST SAVING (HYBRID STRATEGY)
-    persistence_repo = get_persistence_repository()
-    
-    # A. Save to Local JSON (Backup Safety Net)
-    try:
-        local_path = "training_result_backup.json"
-        with open(local_path, "w") as f:
-            # Helper to handle numpy types for local dump
-            import numpy as np
-            class NpEncoder(json.JSONEncoder):
-                def default(self, obj):
-                    if isinstance(obj, np.integer): return int(obj)
-                    if isinstance(obj, np.floating): return float(obj)
-                    if isinstance(obj, np.ndarray): return obj.tolist()
-                    return super(NpEncoder, self).default(obj)
-            json.dump(result_data, f, cls=NpEncoder)
-        logger.info(f"✅ Backup saved to {local_path}")
-    except Exception as e:
-        logger.error(f"Failed to save local backup: {e}")
-
-    # B. Save to Database (Reliable Retry)
-    logger.info("💾 Persisting Results to Database (Render)...")
-    success = persistence_repo.save_training_result("latest_daily", result_data)
-    
-    if success:
-        logger.info("✅ Training Results successfully saved to Database!")
-    else:
-        logger.error("❌ Failed to save results to Database after retries.")
-
-    logger.info("🎉 Optimized Training Pipeline Completed Successfully.")
-    
     elapsed = time.time() - start_time
-    logger.info(f"🎉 Model Trained & Saved to {model_path}")
-    logger.info(f"⏱️ Total Time: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
-
+    logger.info(f"🎉 Training Completed in {elapsed:.2f} seconds.")
+    
 if __name__ == "__main__":
-    # Initialize global state for the MAIN process (needed? No, only for workers)
-    # But for joblib 'loky', we typically pass init params via partials or globals.
-    # Joblib 'loky' doesn't easily support 'initializer' like multiprocessing.Pool.
-    # However, since we defined the function in the module, and use joblib, 
-    # we need to ensure the worker can access the services.
-    
-    # Trick: We call init_worker inside process_match_task if services are None?
-    # Or better, use a localized function that inits if needed.
-    
-    # Re-defining process_match_task to handle lazy init inside the worker:
     asyncio.run(main())

@@ -645,6 +645,7 @@ class StatisticsService:
             "matches_with_cards": 0,
             "shots": 0, "shots_on_target": 0, "fouls": 0,
             "matches_with_shots": 0, "matches_with_fouls": 0,
+            "recent_corners": [], "recent_yellow_cards": [], "recent_shots": [],
         }
 
     @staticmethod
@@ -673,10 +674,14 @@ class StatisticsService:
             stats["corners_for"] += match.home_corners if is_home else match.away_corners
             stats["corners_against"] += match.away_corners if is_home else match.home_corners
             stats["matches_with_corners"] += 1
+            # Rolling Corners
+            stats["recent_corners"].append(match.home_corners if is_home else match.away_corners)
             
         if match.home_yellow_cards is not None:
             stats["yellow_cards"] += match.home_yellow_cards if is_home else match.away_yellow_cards
             stats["matches_with_cards"] += 1
+            # Rolling Cards
+            stats["recent_yellow_cards"].append(match.home_yellow_cards if is_home else match.away_yellow_cards)
             
         if match.home_red_cards is not None:
             stats["red_cards"] += match.home_red_cards if is_home else match.away_red_cards
@@ -689,6 +694,8 @@ class StatisticsService:
         if shots is not None:
             stats["shots"] += shots
             stats["matches_with_shots"] += 1
+            # Rolling Shots
+            stats["recent_shots"].append(shots)
         if sot is not None:
             stats["shots_on_target"] += sot
             
@@ -720,6 +727,9 @@ class StatisticsService:
             total_fouls=raw_stats.get("fouls", 0),
             matches_with_shots=raw_stats.get("matches_with_shots", 0),
             matches_with_fouls=raw_stats.get("matches_with_fouls", 0),
+            recent_corners=raw_stats.get("recent_corners", [])[-5:],
+            recent_yellow_cards=raw_stats.get("recent_yellow_cards", [])[-5:],
+            recent_shots=raw_stats.get("recent_shots", [])[-5:],
             recent_form="" # Form is calculated from full history if needed
         )
 
