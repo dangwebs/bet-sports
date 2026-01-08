@@ -119,11 +119,12 @@ class PicksService:
         
         # Load ML Model if available (Robust Path Resolution)
         try:
-             # Resolve absolute path to backend root
+            from src.core.constants import ML_MODEL_FILENAME
+            # Resolve absolute path to backend root
             _service_dir = os.path.dirname(os.path.abspath(__file__))
             # Go up: domain/services -> domain -> src -> backend
             _backend_dir = os.path.join(_service_dir, "..", "..", "..")
-            model_path = os.path.join(_backend_dir, "ml_picks_classifier.joblib")
+            model_path = os.path.join(_backend_dir, ML_MODEL_FILENAME)
             
             self.ml_model = self._load_ml_model_safely(model_path)
         except Exception as e:
@@ -169,9 +170,10 @@ class PicksService:
         """Force reload of the ML model from disk."""
         # Resolve absolute path (same logic as __init__)
         try:
+            from src.core.constants import ML_MODEL_FILENAME
             _service_dir = os.path.dirname(os.path.abspath(__file__))
             _backend_dir = os.path.join(_service_dir, "..", "..", "..")
-            model_path = os.path.join(_backend_dir, "ml_picks_classifier.joblib")
+            model_path = os.path.join(_backend_dir, ML_MODEL_FILENAME)
             
             self.ml_model = self._load_ml_model_safely(model_path)
             logger.info("ML Model reloaded successfully.")
