@@ -121,7 +121,7 @@ const PickChip = ({
     | "secondary"
     | "info"
     | "warning";
-  sx?: any;
+  sx?: import("@mui/system").SxProps<import("@mui/material").Theme>;
 }) => (
   <Chip
     icon={icon}

@@ -17,8 +17,8 @@ interface CountrySelectProps {
   selectedCountryName: string;
   onCountryChange: (event: SelectChangeEvent<string>) => void;
   countryData: Record<string, { flag: string; name: string }>;
-  selectStyles: any;
-  menuProps: any;
+  selectStyles: import("@mui/system").SxProps<import("@mui/material").Theme>;
+  menuProps: Partial<import("@mui/material").MenuProps>;
 }
 
 const CountrySelect: React.FC<CountrySelectProps> = ({

@@ -46,7 +46,10 @@ export interface TrainingStatus {
   total_bets: number;
   roi: number;
   profit_units: number;
-  market_stats: any;
+  market_stats: Record<
+    string,
+    { total: number; correct: number; accuracy: number; roi: number }
+  >;
   match_history: MatchPredictionHistory[];
   roi_evolution: { date: string; roi: number; profit: number }[];
   pick_efficiency: {
@@ -57,7 +60,10 @@ export interface TrainingStatus {
     total: number;
     efficiency: number;
   }[];
-  team_stats: any;
+  team_stats: Record<
+    string,
+    { total: number; correct: number; accuracy: number }
+  >;
 }
 
 export type TrainingProcessStatus =

@@ -85,8 +85,8 @@ interface NormalizedMatch {
   awayTeamName: string;
   homeScore: number;
   awayScore: number;
-  homeTeam?: any;
-  awayTeam?: any;
+  homeTeam?: import("../../../types").Team | string;
+  awayTeam?: import("../../../types").Team | string;
 }
 
 // Normalize match data from either Match or LiveMatch

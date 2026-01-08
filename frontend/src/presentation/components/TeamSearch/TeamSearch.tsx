@@ -5,7 +5,7 @@ import { Search } from "@mui/icons-material";
 interface TeamSearchProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  sx?: any;
+  sx?: import("@mui/system").SxProps<import("@mui/material").Theme>;
 }
 
 const TeamSearch: React.FC<TeamSearchProps> = ({

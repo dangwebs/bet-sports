@@ -17,8 +17,8 @@ interface LeagueSelectProps {
   selectedLeagueId: string;
   selectedCountry: Country | null;
   onLeagueChange: (event: SelectChangeEvent<string>) => void;
-  selectStyles: any;
-  menuProps: any;
+  selectStyles: import("@mui/system").SxProps<import("@mui/material").Theme>;
+  menuProps: Partial<import("@mui/material").MenuProps>;
 }
 
 const LeagueSelect: React.FC<LeagueSelectProps> = ({

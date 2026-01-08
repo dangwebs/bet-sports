@@ -76,7 +76,9 @@ export const predictionsApi = {
   /**
    * Generic Post used for Training
    */
-  async train(data: any): Promise<any> {
+  async train(
+    data: Record<string, unknown>
+  ): Promise<{ status: string; message: string }> {
     const response = await apiClient.post(API_ENDPOINTS.TRAIN, data, {
       timeout: APP_CONFIG.TRAINING_TIMEOUT,
     });
