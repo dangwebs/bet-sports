@@ -68,6 +68,14 @@ class PickDetail(BaseModel):
     clv_beat: bool = False
     opening_odds: float = 0.0
     closing_odds: float = 0.0
+    
+    # Frontend Alignment Fields (Fase 3 Remediation)
+    confidence_level: str = "medium"  # "high" | "medium" | "low"
+    risk_level: float = 0.5
+    is_recommended: bool = False
+    priority_score: float = 0.0
+    pick_code: Optional[str] = None  # Short code like '1', 'X', '2', 'O2.5'
+    ml_confidence: float = 0.0
 
 class MatchPredictionHistory(BaseModel):
     """Individual match prediction result for verification."""
