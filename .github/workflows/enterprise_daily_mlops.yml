@@ -93,68 +93,11 @@ jobs:
           compression-level: 6 # Balance óptimo entre velocidad de CPU y tamaño
 
   # ------------------------------------------------------------------
-  # JOB 2: PREDICTION MATRIX (Horizontal Scaling - 17 jobs en paralelo)
-  # ------------------------------------------------------------------
-  predict-leagues:
-    name: 🔮 Predict ${{ matrix.group }}
-    needs: train-model
-    runs-on: ubuntu-latest
-    timeout-minutes: 360 # 6 Hours (No limits for deep training)
-    continue-on-error: true # Una falla no detiene las demás
-    strategy:
-      max-parallel: 20 # GitHub permite hasta 20 jobs concurrentes en tier gratuito
-      fail-fast: false # No detener otros jobs si uno falla
-      matrix:
-        include:
-          # Total: 6 jobs (Top Tier Only - §15.B compliant, B1 removed)
-          - group: "England_Premier"
-            leagues: "E0"
-          - group: "Germany_Bundesliga"
-            leagues: "D1"
-          - group: "Spain_LaLiga"
-            leagues: "SP1"
-          - group: "Portugal"
-            leagues: "P1"
-          - group: "Italy_SerieA"
-            leagues: "I1"
-          - group: "France_Ligue1"
-            leagues: "F1"
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          # No necesitamos cache pip aquí, usamos el venv completo restaurado
-
-      - name: ♻️ Restore Virtual Environment
-        uses: actions/cache@v4
-        with:
-          path: backend/.venv
-          key: ${{ needs.train-model.outputs.cache-key }}
-          fail-on-cache-miss: true
-
-      - name: 📥 Download Model
-        uses: actions/download-artifact@v4
-        with:
-          name: ml-model
-          path: backend/
-
-      - name: 🚀 Run Predictions (Parallelized)
-        run: |
-          cd backend
-          source .venv/bin/activate
-          python scripts/orchestrator_cli.py predict --leagues "${{ matrix.leagues }}" --parallel
-
-  # ------------------------------------------------------------------
-  # JOB 3: AGGREGATION & REPORTING
+  # JOB 2: AGGREGATION & REPORTING
   # ------------------------------------------------------------------
   finalize-process:
     name: 🏁 Finalize & Report
-    needs: [train-model, predict-leagues]
+    needs: [train-model]
     runs-on: ubuntu-latest
     if: always() # Run even if some matrix jobs failed
 
