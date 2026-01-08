@@ -76,6 +76,7 @@ class PickDetail(BaseModel):
     priority_score: float = 0.0
     pick_code: Optional[str] = None  # Short code like '1', 'X', '2', 'O2.5'
     ml_confidence: float = 0.0
+    color_code: str = "#f59e0b"  # Hex color from backend (§4 Single Source of Truth)
 
 class MatchPredictionHistory(BaseModel):
     """Individual match prediction result for verification."""

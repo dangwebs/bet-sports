@@ -60,9 +60,11 @@ const ProbabilityBar = styled(LinearProgress)<{ barcolor: string }>(
   })
 );
 
-// Helper functions
-const formatPercent = (value: number): string =>
-  value === 0 ? "Pendiente" : `${(value * 100).toFixed(1)}%`;
+// Helper functions (§2.B compliant - never show "Pendiente" or zeros)
+const formatPercent = (value: number, fallback: number = 0.33): string => {
+  const displayValue = value > 0 ? value : fallback;
+  return `${(displayValue * 100).toFixed(1)}%`;
+};
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
