@@ -625,7 +625,8 @@ class PredictionService:
         home_stats: Optional[TeamStatistics],
         away_stats: Optional[TeamStatistics],
         league_averages: Optional[LeagueAverages] = None,
-        match: Optional[Match] = None
+        match: Optional[Match] = None,
+        active_models: Optional[dict] = None
     ) -> tuple[float, float, float, float]:
         """
         Calculate prob for Over/Under 9.5 corners AND expected values.
@@ -641,50 +642,55 @@ class PredictionService:
         total_expected = 0.0
         ml_success = False
         
-        target_league_id = None
-        if match:
-             if hasattr(match, 'league_id'): target_league_id = match.league_id
-             elif match.league: target_league_id = match.league.id
+        # 1. Try Injected Model (Priority)
+        model = active_models.get('corners') if active_models else None
 
-        if target_league_id:
-            model = self._get_model(target_league_id, 'corners')
-            if model:
-                try:
-                    from src.domain.services.ml_feature_extractor import MLFeatureExtractor
-                    from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
-                    
-                    # Create dummy pick for context (needed by extractor signature)
-                    dummy_pick = SuggestedPick(
-                        market_type=MarketType.CORNERS_OVER, 
-                        market_label="Generic", 
-                        probability=0.5, 
-                        confidence_level=ConfidenceLevel.LOW,
-                        reasoning="",
-                        risk_level=1, 
-                        odds=1.9, 
-                        expected_value=0.0
-                    )
-                    
-                    extractor = MLFeatureExtractor()
-                    # Extract features
-                    features = extractor.extract_features(
-                        pick=dummy_pick,
-                        match=match,
-                        home_stats=home_stats,
-                        away_stats=away_stats
-                    )
-                    
-                    # Predict
-                    # Reshape for single sample
-                    prediction = model.predict([features])[0]
-                    total_expected = float(prediction)
-                    ml_success = True
-                    # logger.info(f"ML Prediction (Corners) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
-                    
-                except Exception as e:
-                    # Fallback silently to heuristic if ML fails
-                    # print(f"ML Prediction failed: {e}")
-                    pass
+        # 2. Fallback to Disk Model
+        if not model and match:
+            target_league_id = None
+            if hasattr(match, 'league_id'): target_league_id = match.league_id
+            elif match.league: target_league_id = match.league.id
+
+            if target_league_id:
+                model = self._get_model(target_league_id, 'corners')
+
+        if model:
+            try:
+                from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+                from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
+
+                # Create dummy pick for context (needed by extractor signature)
+                dummy_pick = SuggestedPick(
+                    market_type=MarketType.CORNERS_OVER,
+                    market_label="Generic",
+                    probability=0.5,
+                    confidence_level=ConfidenceLevel.LOW,
+                    reasoning="",
+                    risk_level=1,
+                    odds=1.9,
+                    expected_value=0.0
+                )
+
+                extractor = MLFeatureExtractor()
+                # Extract features
+                features = extractor.extract_features(
+                    pick=dummy_pick,
+                    match=match,
+                    home_stats=home_stats,
+                    away_stats=away_stats
+                )
+
+                # Predict
+                # Reshape for single sample
+                prediction = model.predict([features])[0]
+                total_expected = float(prediction)
+                ml_success = True
+                # logger.info(f"ML Prediction (Corners) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
+
+            except Exception as e:
+                # Fallback silently to heuristic if ML fails
+                # print(f"ML Prediction failed: {e}")
+                pass
 
         # HEURISTIC FALLBACK
         if not ml_success:
@@ -744,7 +750,8 @@ class PredictionService:
         home_stats: Optional[TeamStatistics],
         away_stats: Optional[TeamStatistics],
         league_averages: Optional[LeagueAverages] = None,
-        match: Optional[Match] = None
+        match: Optional[Match] = None,
+        active_models: Optional[dict] = None
     ) -> tuple[float, float, float, float]:
         """
         Calculate prob for Over/Under 4.5 yellow cards AND expected values.
@@ -760,47 +767,52 @@ class PredictionService:
         total_expected = 0.0
         ml_success = False
 
-        target_league_id = None
-        if match:
-             if hasattr(match, 'league_id'): target_league_id = match.league_id
-             elif match.league: target_league_id = match.league.id
+        # 1. Try Injected Model (Priority)
+        model = active_models.get('cards') if active_models else None
 
-        if target_league_id:
-            model = self._get_model(target_league_id, 'cards')
-            if model:
-                try:
-                    from src.domain.services.ml_feature_extractor import MLFeatureExtractor
-                    from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
-                    
-                    dummy_pick = SuggestedPick(
-                        market_type=MarketType.CARDS_OVER, 
-                        market_label="Generic", 
-                        probability=0.5, 
-                        confidence_level=ConfidenceLevel.LOW,
-                        reasoning="",
-                        risk_level=1, 
-                        odds=1.9, 
-                        expected_value=0.0
-                    )
-                    
-                    extractor = MLFeatureExtractor()
-                    features = extractor.extract_features(
-                        pick=dummy_pick,
-                        match=match,
-                        home_stats=home_stats,
-                        away_stats=away_stats
-                    )
-                    
-                    # Predict
-                    prediction = model.predict([features])[0]
-                    total_expected = float(prediction)
-                    ml_success = True
-                    # logger.info(f"ML Prediction (Cards) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
-                    
-                except Exception as e:
-                    # Fallback silently to heuristic if ML fails
-                    # print(f"ML Prediction failed: {e}")
-                    pass
+        # 2. Fallback to Disk Model
+        if not model and match:
+            target_league_id = None
+            if hasattr(match, 'league_id'): target_league_id = match.league_id
+            elif match.league: target_league_id = match.league.id
+
+            if target_league_id:
+                model = self._get_model(target_league_id, 'cards')
+
+        if model:
+            try:
+                from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+                from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
+
+                dummy_pick = SuggestedPick(
+                    market_type=MarketType.CARDS_OVER,
+                    market_label="Generic",
+                    probability=0.5,
+                    confidence_level=ConfidenceLevel.LOW,
+                    reasoning="",
+                    risk_level=1,
+                    odds=1.9,
+                    expected_value=0.0
+                )
+
+                extractor = MLFeatureExtractor()
+                features = extractor.extract_features(
+                    pick=dummy_pick,
+                    match=match,
+                    home_stats=home_stats,
+                    away_stats=away_stats
+                )
+
+                # Predict
+                prediction = model.predict([features])[0]
+                total_expected = float(prediction)
+                ml_success = True
+                # logger.info(f"ML Prediction (Cards) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
+
+            except Exception as e:
+                # Fallback silently to heuristic if ML fails
+                # print(f"ML Prediction failed: {e}")
+                pass
 
         # HEURISTIC FALLBACK
         if not ml_success:
@@ -998,6 +1010,7 @@ class PredictionService:
         real_time_odds: Optional[dict[str, float]] = None,
         home_elo: Optional[float] = None,
         away_elo: Optional[float] = None,
+        active_models: Optional[dict] = None,
     ) -> Prediction:
         """
         Generate a prediction for a match using ONLY real data.
@@ -1014,6 +1027,7 @@ class PredictionService:
             home_missing_players: Count of key players missing (Injuries/Suspensions)
             away_missing_players: Count of key players missing
             opening_odds: Odds when market opened (to detect dropping odds)
+            active_models: Dict of trained ML models (winner, corners, cards)
             
         Returns:
             Prediction object (with zeros if no data available)
@@ -1117,10 +1131,63 @@ class PredictionService:
             
             if "ClubElo" not in data_sources: data_sources.append("ClubElo")
         
-        # Calculate outcome probabilities
+        # Calculate outcome probabilities (Poisson Base)
         home_win, draw, away_win = self.calculate_outcome_probabilities(
             home_expected, away_expected
         )
+
+        # --- 4. ML ENSEMBLE REFINEMENT (IN-MEMORY) ---
+        if active_models and 'winner' in active_models:
+            try:
+                from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+                from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
+
+                # Create dummy pick for context
+                dummy_pick = SuggestedPick(
+                    market_type=MarketType.RESULT_1X2,
+                    market_label="Generic",
+                    probability=0.5,
+                    confidence_level=ConfidenceLevel.LOW,
+                    reasoning="",
+                    risk_level=1,
+                    odds=1.9,
+                    expected_value=0.0
+                )
+
+                # Extract Features safely
+                extractor = MLFeatureExtractor()
+                features = extractor.extract_features(
+                    pick=dummy_pick,
+                    match=match,
+                    home_stats=home_stats,
+                    away_stats=away_stats
+                )
+
+                # Predict Probabilities [Draw(0), Home(1), Away(2)]
+                ml_probs = active_models['winner'].predict_proba([features])[0]
+
+                ml_draw = ml_probs[0]
+                ml_home = ml_probs[1]
+                ml_away = ml_probs[2]
+
+                # Ensemble: 60% ML (Real Patterns) + 40% Poisson (Statistical Baseline)
+                # This makes the prediction much smarter than pure stats.
+                home_win = (home_win * 0.4) + (ml_home * 0.6)
+                draw = (draw * 0.4) + (ml_draw * 0.6)
+                away_win = (away_win * 0.4) + (ml_away * 0.6)
+
+                # Re-normalize
+                total_p = home_win + draw + away_win
+                if total_p > 0:
+                    home_win /= total_p
+                    draw /= total_p
+                    away_win /= total_p
+
+                if "RandomForest" not in data_sources: data_sources.append("RandomForest")
+
+            except Exception as e:
+                # logger.warning(f"ML Ensemble failed: {e}")
+                pass
         
         # Calculate over/under
         over_25, under_25 = self.calculate_over_under_probability(
@@ -1134,12 +1201,12 @@ class PredictionService:
         
         # Calculate Over/Under Corners (9.5) and Expected Values
         over_95_corners, under_95_corners, exp_home_corners, exp_away_corners = self.calculate_corner_probabilities(
-            home_stats, away_stats, league_averages, match=match
+            home_stats, away_stats, league_averages, match=match, active_models=active_models
         )
         
         # Calculate Over/Under Cards (4.5) and Expected Values
         over_45_cards, under_45_cards, exp_home_cards, exp_away_cards = self.calculate_card_probabilities(
-            home_stats, away_stats, league_averages, match=match
+            home_stats, away_stats, league_averages, match=match, active_models=active_models
         )
         
         # Calculate Handicap
