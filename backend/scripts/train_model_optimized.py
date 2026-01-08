@@ -70,28 +70,18 @@ def process_match_task(task_data):
     away_stats = _statistics_service.convert_to_domain_stats(match.away_team.name, raw_away)
     
     # 2. Extract Features (Now includes Variance/Rolling stats)
-    # We create a dummy pick to satisfy the signature or adjust the extractor.
-    # The extractor takes a 'pick', but really only needs market type for hash.
-    # Let's create a generic feature vector.
-    from src.domain.entities.suggested_pick import SuggestedPick
-    
-    # We need a base 'pick' object to extract features. 
-    # Since we are training for GENERAL match stats (Corners, Cards), 
-    # we can use a dummy pick or modify extract_features. 
-    # For now, let's assume we are training the Match Outcome mostly, 
-    # but for Regressors (Corners), the "pick" features (prob, ev) don't matter as much 
-    # as the team stats features.
+    # We create a generic pick object since we are training general models.
+    from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
     
     dummy_pick = SuggestedPick(
-        match_id=match.id,
-        market_type="MATCH_WINNER", # Generic
-        selection="HOME",
+        market_type=MarketType.WINNER, 
+        market_label="Training Generic",
         probability=0.5,
+        confidence_level=ConfidenceLevel.LOW,
+        reasoning="Training",
+        risk_level=1,
         odds=2.0,
-        stake=1.0,
-        expected_value=0.0,
-        risk_level=1.0,
-        reason="Training"
+        expected_value=0.0
     )
     
     features = _feature_extractor.extract_features(dummy_pick, match, home_stats, away_stats)

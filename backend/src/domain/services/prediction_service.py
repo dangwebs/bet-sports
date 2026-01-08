@@ -623,10 +623,16 @@ class PredictionService:
         extractor = MLFeatureExtractor()
         
         # Need a dummy pick for feature extraction signature
-        from src.domain.entities.suggested_pick import SuggestedPick
+        from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
         dummy_pick = SuggestedPick(
-             match_id="temp", market_type="CORNERS", selection="OVER", 
-             probability=0.5, odds=1.9, stake=1.0, expected_value=0.0, risk_level=0.0, reason=""
+             market_type=MarketType.CORNERS_OVER, 
+             market_label="Generic", 
+             probability=0.5, 
+             confidence_level=ConfidenceLevel.LOW,
+             reasoning="",
+             risk_level=1, 
+             odds=1.9, 
+             expected_value=0.0
         )
         
         # We need the match object to get league_id, but here we only have stats/league_avgs passed.
