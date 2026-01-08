@@ -660,8 +660,9 @@ class PredictionService:
                 from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
 
                 # Create dummy pick for context (needed by extractor signature)
+                # MUST use MarketType.WINNER to match feature hash used in training (reg_corners)
                 dummy_pick = SuggestedPick(
-                    market_type=MarketType.CORNERS_OVER,
+                    market_type=MarketType.WINNER,
                     market_label="Generic",
                     probability=0.5,
                     confidence_level=ConfidenceLevel.LOW,
@@ -784,8 +785,10 @@ class PredictionService:
                 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
                 from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
 
+                # Create dummy pick for context (needed by extractor signature)
+                # MUST use MarketType.WINNER to match feature hash used in training (reg_cards)
                 dummy_pick = SuggestedPick(
-                    market_type=MarketType.CARDS_OVER,
+                    market_type=MarketType.WINNER,
                     market_label="Generic",
                     probability=0.5,
                     confidence_level=ConfidenceLevel.LOW,
@@ -1143,8 +1146,9 @@ class PredictionService:
                 from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
 
                 # Create dummy pick for context
+                # MUST use MarketType.WINNER to match feature hash used in training (clf_outcome)
                 dummy_pick = SuggestedPick(
-                    market_type=MarketType.RESULT_1X2,
+                    market_type=MarketType.WINNER,
                     market_label="Generic",
                     probability=0.5,
                     confidence_level=ConfidenceLevel.LOW,
@@ -1164,9 +1168,6 @@ class PredictionService:
                 )
 
                 # Predict Probabilities [Draw(0), Home(1), Away(2)]
-                # Note: Check class order. train_model_optimized: 0=Draw, 1=Home, 2=Away
-                # Verify order from classes_ attribute if possible, but standard sklearn order is sorted classes.
-                # Sorted: 0, 1, 2.
                 ml_probs = active_models['winner'].predict_proba([features])[0]
 
                 ml_draw = ml_probs[0]
