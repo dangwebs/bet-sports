@@ -64,14 +64,57 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
           >
             {pick.market_label}
           </Typography>
+
+          {/* INLINE IA CONFIRMED BADGE */}
+          {pick.is_ia_confirmed && (
+            <Chip
+              label="IA CONFIRMED"
+              size="small"
+              sx={{
+                ml: 1,
+                background: "linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)",
+                color: "#ffffff",
+                borderColor: "#60a5fa",
+                borderWidth: "1px",
+                fontWeight: 800,
+                fontSize: "0.65rem",
+                height: 20,
+                boxShadow: "0 0 8px rgba(59, 130, 246, 0.4)",
+                "& .MuiChip-label": { px: 1 },
+              }}
+            />
+          )}
+
+          {/* INLINE ML Alta Confianza BADGE */}
+          {!pick.is_ia_confirmed &&
+            (pick.is_ml_confirmed ||
+              (pick.ml_confidence !== undefined && pick.ml_confidence > 0.7) ||
+              (pick.reasoning && pick.reasoning.includes("ML"))) && (
+              <Chip
+                label="ML Alta Confianza"
+                size="small"
+                sx={{
+                  ml: 1,
+                  bgcolor: "rgba(56, 189, 248, 0.15)",
+                  color: "#38bdf8",
+                  borderColor: "#38bdf8",
+                  borderWidth: "1px",
+                  borderStyle: "solid",
+                  fontWeight: 700,
+                  fontSize: "0.65rem",
+                  height: 20,
+                  "& .MuiChip-label": { px: 1 },
+                }}
+              />
+            )}
         </Box>
         {pick.expected_value !== undefined && pick.expected_value > 0 && (
           <Chip
             label={`EV: +${pick.expected_value.toFixed(1)}%`}
             size="small"
             sx={{
-              mr: 1, // Changed ml: 1 to mr: 1 for spacing before probability
-              bgcolor: "rgba(245, 158, 11, 0.5)", // Amber 500 @ 50%
+              mr: 1,
+              bgcolor: "rgba(245, 158, 11, 0.5)",
               color: "#ffffff",
               fontWeight: 700,
               fontSize: "0.70rem",
@@ -86,8 +129,8 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
             label={`Stake: ${pick.suggested_stake.toFixed(2)}u`}
             size="small"
             sx={{
-              mr: 1, // Changed ml: 1 to mr: 1
-              bgcolor: "rgba(14, 165, 233, 0.5)", // Sky 500 @ 50%
+              mr: 1,
+              bgcolor: "rgba(14, 165, 233, 0.5)",
               color: "#ffffff",
               fontWeight: 700,
               fontSize: "0.70rem",
@@ -111,7 +154,9 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
           }}
         />
       </Box>
-      {pick.reasoning && (
+
+      {/* 3. Reasoning Text */}
+      {(pick.formatted_reasoning || pick.reasoning) && (
         <Typography
           variant="caption"
           sx={{
@@ -122,47 +167,18 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
             mb: 1.5,
             pl: 1,
             fontStyle: "italic",
+            lineHeight: 1.4,
           }}
         >
           {(() => {
-            const text = pick.reasoning || "";
-            const keywords = [
-              "IA CONFIRMED",
-              "ML Confianza Alta",
-              "Sugerido por IA",
-              "IA",
-              "ML",
-            ];
-
-            // Find first matching keyword to highlight
-            const keyword = keywords.find((k) => text.includes(k));
-
-            if (keyword) {
-              const parts = text.split(keyword);
-              return (
-                <span>
-                  {parts[0]}
-                  <Chip
-                    label={keyword}
-                    size="small"
-                    variant="outlined"
-                    sx={{
-                      bgcolor: "rgba(56, 189, 248, 0.5)", // Sky 400 at 50% opacity
-                      color: "#ffffff",
-                      borderColor: "#38bdf8", // Sky 400
-                      borderWidth: "1px",
-                      height: 20,
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      mr: 0.5,
-                      verticalAlign: "middle",
-                      "& .MuiChip-label": { px: 0.5 },
-                    }}
-                  />
-                  {parts.slice(1).join(keyword)}
-                </span>
-              );
-            }
+            // Clean the reasoning text
+            let text = pick.formatted_reasoning || pick.reasoning || "";
+            // Remove redundant tags if present
+            text = text.replace("[🎯 TOP ML]", "").trim();
+            text = text.replace("[ML Confianza Alta]", "").trim();
+            text = text.replace("[IA CONFIRMED]", "").trim();
+            // Remove leading/trailing punctuation/whitespace left over
+            text = text.replace(/^[,.\s]+|[,.\s]+$/g, "");
             return text;
           })()}
         </Typography>
@@ -250,7 +266,13 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
     }
 
     picks = getUniquePicks(picks);
-    return picks.sort((a, b) => b.probability - a.probability);
+    return picks.sort((a, b) => {
+      // 1. IA CONFIRMED
+      if (a.is_ia_confirmed && !b.is_ia_confirmed) return -1;
+      if (!a.is_ia_confirmed && b.is_ia_confirmed) return 1;
+      // 2. Probability
+      return b.probability - a.probability;
+    });
   }, [apiPicks, matchPrediction]);
 
   // Report count
@@ -275,15 +297,18 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
     };
 
     sortedPicks.forEach((p) => {
-      // Check Top ML condition: MUST have is_ml_confirmed flag OR high ml_confidence
-      // This ensures strictly ML recommended picks
-      if (
+      // Check Top ML condition
+      const isTopML =
         p.is_ml_confirmed ||
-        (p.ml_confidence !== undefined && p.ml_confidence > 0.7) ||
+        (p.ml_confidence !== undefined && p.ml_confidence >= 0.85) ||
         (p.reasoning && p.reasoning.includes("ML Confianza Alta")) ||
-        (p.reasoning && p.reasoning.includes("IA CONFIRMED"))
-      ) {
+        (p.reasoning && p.reasoning.includes("IA CONFIRMED"));
+
+      if (isTopML) {
         counts.TOP_ML++;
+        // If it's a Top ML pick, specifically EXCLUDE it from standard categories
+        // per user request "Cuando un pick esta en el top ml, ya no debe aprecer en los demas tabs"
+        return;
       }
 
       const cat = getPickCategory(p.market_type);
@@ -324,19 +349,21 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
 
   // Filtered picks based on tab
   const filteredPicks = useMemo(() => {
+    // Helper to check if a pick is considered "Top ML"
+    const isTopML = (p: SuggestedPick) =>
+      p.is_ml_confirmed ||
+      (p.ml_confidence !== undefined && p.ml_confidence >= 0.85) ||
+      (p.reasoning && p.reasoning.includes("ML Confianza Alta")) ||
+      (p.reasoning && p.reasoning.includes("IA CONFIRMED"));
+
     if (currentTab === "TOP_ML") {
       // Filter strictly for ML High Confidence picks
-      return sortedPicks.filter(
-        (p) =>
-          p.is_ml_confirmed ||
-          (p.ml_confidence !== undefined && p.ml_confidence > 0.7) ||
-          (p.reasoning && p.reasoning.includes("ML Confianza Alta")) ||
-          (p.reasoning && p.reasoning.includes("IA CONFIRMED"))
-      );
+      return sortedPicks.filter(isTopML);
     }
 
+    // For other tabs, EXCLUDE Top ML picks
     return sortedPicks.filter(
-      (p) => getPickCategory(p.market_type) === currentTab
+      (p) => getPickCategory(p.market_type) === currentTab && !isTopML(p)
     );
   }, [sortedPicks, currentTab]);
 

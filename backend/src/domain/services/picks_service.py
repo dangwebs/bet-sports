@@ -625,14 +625,57 @@ class PicksService:
         # 7. Apply ML Refinement (if model exists)
         if self.ml_model:
             self._apply_ml_refinement(picks)
+        
+        # 8. [NEW] IA CONFIRMED: Select Single Best Pick & Format Reasoning
+        # Sort logic: Priority Score (DESC) -> Probability (DESC) -> EV (DESC)
+        # Filter: Must be recommended and satisfy minimum probability
+        all_candidates = [p for p in picks.suggested_picks if p.is_recommended and p.probability >= 0.50]
+        
+        if all_candidates:
+            # Primary Sort: ML Confirmed > Priority Score > Probability
+            # We want the absolute best one.
+            all_candidates.sort(key=lambda p: (
+                p.is_ml_confirmed, # True(1) > False(0)
+                p.priority_score, 
+                p.probability
+            ), reverse=True)
+            
+            best_pick = all_candidates[0]
+            best_pick.is_ia_confirmed = True
+            
+            # Formatear el reasoning para TODOS los picks (Estandarización)
+            for pick in picks.suggested_picks:
+                self._format_pick_reasoning(pick)
 
         # Finally, sort all generated picks by probability in descending order
-        picks.suggested_picks.sort(key=lambda p: p.probability, reverse=True)
+        # Ensure IA CONFIRMED is always first
+        picks.suggested_picks.sort(key=lambda p: (p.is_ia_confirmed, p.probability), reverse=True)
 
         # Evaluate picks if match is finished (for History/Backtesting)
         self._assign_match_results(match, picks.suggested_picks)
 
         return picks
+
+    def _format_pick_reasoning(self, pick: SuggestedPick) -> None:
+        """
+        Standardizes the reasoning string format for Frontend display.
+        Format: [ML] {Action}, {Reasoning} {Probability}%
+        """
+        prob_pct = round(pick.probability * 100)
+        
+        if pick.probability >= 0.85:
+            prefix = "[ML] Apostar"
+            desc = "el modelo muestra una alta probabilidad"
+        elif pick.probability >= 0.50:
+            prefix = "[ML] Precaución"
+            desc = "probabilidad moderada, evaluar con cuidado"
+        else:
+            prefix = "[ML] No apostar"
+            desc = "probabilidad baja, riesgo alto"
+            
+        # New Strict Format per User Request
+        pick.formatted_reasoning = f"{prefix}, {desc} {prob_pct}%"
+
     
     def _apply_ml_refinement(self, picks_container: MatchSuggestedPicks):
         """

@@ -172,6 +172,25 @@ const PickCard = ({ pick }: { pick: SuggestedPick }) => {
               {getMarketIcon(pick.market_type)}
             </span>{" "}
             {pick.market_label || getMarketLabel(pick.market_type)}
+            {
+              /* Show Formatted Reasoning if available */
+              pick.formatted_reasoning && (
+                <Box
+                  component="span"
+                  sx={{
+                    display: "block",
+                    width: "100%",
+                    fontSize: "0.75rem",
+                    color: "#94a3b8",
+                    mt: 0.5,
+                    fontWeight: 400,
+                    textTransform: "none",
+                  }}
+                >
+                  {pick.formatted_reasoning}
+                </Box>
+              )
+            }
             {pick.is_contrarian && (
               <PickChip
                 label="VALOR"
@@ -193,6 +212,32 @@ const PickCard = ({ pick }: { pick: SuggestedPick }) => {
           {
             /* Check for AI/ML status via flag OR reasoning text OR ml_confidence */
             (() => {
+              // 1. IA CONFIRMED (Maximum Priority)
+              if (pick.is_ia_confirmed) {
+                return (
+                  <Box component="span">
+                    <PickChip
+                      label="IA CONFIRMED"
+                      icon={
+                        <SmartToy
+                          sx={{ fontSize: "14px !important", color: "#ffffff" }}
+                        />
+                      }
+                      sx={{
+                        background:
+                          "linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)", // Blue gradient
+                        color: "#ffffff",
+                        borderColor: "#60a5fa",
+                        borderWidth: "1px",
+                        fontWeight: 800,
+                        boxShadow: "0 0 10px rgba(59, 130, 246, 0.5)", // Glow effect
+                      }}
+                    />
+                  </Box>
+                );
+              }
+
+              // 2. Standard ML (Legacy)
               const isAi =
                 pick.is_ml_confirmed ||
                 (pick.ml_confidence !== undefined && pick.ml_confidence > 0) ||
@@ -205,15 +250,15 @@ const PickCard = ({ pick }: { pick: SuggestedPick }) => {
                 return (
                   <Box component="span">
                     <PickChip
-                      label={isCorrect ? "IA ✅" : "IA ❌"}
+                      label={isCorrect ? "ML ✅" : "ML ❌"}
                       icon={
                         <SmartToy
                           sx={{ fontSize: "14px !important", color: "#38bdf8" }}
                         />
                       }
                       sx={{
-                        bgcolor: "rgba(56, 189, 248, 0.5)", // Sky 400 @ 50%
-                        color: "#ffffff",
+                        bgcolor: "rgba(56, 189, 248, 0.15)", // Sky 400 @ 15%
+                        color: "#38bdf8",
                         borderColor: "#38bdf8", // Sky 400
                         borderWidth: "1px",
                         fontWeight: 700,
@@ -374,11 +419,16 @@ const ExpandedMatchDetails = ({ match }: { match: MatchPredictionHistory }) => {
       </Box>
       <Grid container spacing={2}>
         {uniquePicks
-          .sort(
-            (a, b) =>
+          .sort((a, b) => {
+            // 1. IA CONFIRMED First
+            if (a.is_ia_confirmed && !b.is_ia_confirmed) return -1;
+            if (!a.is_ia_confirmed && b.is_ia_confirmed) return 1;
+            // 2. Probability Descending
+            return (
               (b.probability || b.confidence || 0) -
               (a.probability || a.confidence || 0)
-          )
+            );
+          })
           .map((pick, index) => (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
               <PickCard pick={pick} />

@@ -733,13 +733,23 @@ class GetTopMLPicksUseCase:
                          base_reasoning = p.get("reasoning", "")
                          p["reasoning"] = f"[{match_label}] {base_reasoning}"
                          
+                         # Ensure formatting flags are passed if present in dict
+                         # (They should be, as we are reading what we just saved)
+                         
                          dto = SuggestedPickDTO(**p)
                          all_picks.append(dto)
             
             # 3. Sort picks
-            # Primary: Priority Score (Expected Value + ML Confidence)
-            # Secondary: Probability
-            all_picks.sort(key=lambda x: (x.priority_score, x.probability), reverse=True)
+            # Primary: IA Confirmed (Absolute Best)
+            # Secondary: ML Confirmed (High Confidence)
+            # Tertiary: Priority Score (Expected Value + ML Confidence)
+            # Quaternary: Probability
+            all_picks.sort(key=lambda x: (
+                getattr(x, 'is_ia_confirmed', False), # True (1) > False (0)
+                getattr(x, 'is_ml_confirmed', False),
+                x.priority_score, 
+                x.probability
+            ), reverse=True)
             
             # 4. Limit
             top_picks = all_picks[:limit]

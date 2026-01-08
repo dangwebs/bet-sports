@@ -48,11 +48,14 @@ class TrainingDataService:
             from src.infrastructure.data_sources.github_dataset import LocalGithubDataSource
             gh_data = LocalGithubDataSource()
             gh_start_dt = None
-            if days_back:
-                gh_start_dt = get_current_time() - timedelta(days=days_back)
-                try: gh_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            if start_date:
+                try: 
+                    gh_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
                 except ValueError as e:
                     logger.debug(f"GitHub date parsing skipped (invalid format): {e}")
+            elif days_back:
+                gh_start_dt = get_current_time() - timedelta(days=days_back)
+            
             gh_matches = await gh_data.get_finished_matches(league_codes=leagues, date_from=gh_start_dt)
         except Exception as e:
             logger.warning(f"GitHub Dataset fetch failed: {e}")

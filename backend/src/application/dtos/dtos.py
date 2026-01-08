@@ -226,6 +226,10 @@ class SuggestedPickDTO(BaseModel):
     opening_odds: float = 0.0
     closing_odds: float = 0.0
     
+    # New AI Fields
+    is_ia_confirmed: bool = False
+    formatted_reasoning: Optional[str] = None
+    
     model_config = ConfigDict(from_attributes=True)
 
 

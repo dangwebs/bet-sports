@@ -165,6 +165,8 @@ export interface SuggestedPick {
   closing_odds?: number;
   clv_beat?: boolean;
   is_ml_confirmed?: boolean;
+  is_ia_confirmed?: boolean; // [NEW] Unique flag for the absolute best pick
+  formatted_reasoning?: string; // [NEW] Structured reasoning for UI
   ml_confidence?: number;
 
   // SSOT fields from Backend (Auditoría v4)

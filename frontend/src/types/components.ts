@@ -17,6 +17,8 @@ export interface PickDetail {
   was_correct: boolean;
   expected_value: number;
   confidence: number;
+  is_ia_confirmed?: boolean;
+  formatted_reasoning?: string;
 }
 
 // BotDashboard related types

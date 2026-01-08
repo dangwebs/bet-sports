@@ -343,7 +343,7 @@ class PersistenceRepository:
         Retrieve a cached API response if it exists and hasn't expired.
         """
         params_key = json.dumps(params or {}, sort_keys=True)
-        session = self.db_service.Session()
+        session = self.db_service.get_session()
         try:
             record = session.query(ApiCacheModel).filter(
                 ApiCacheModel.endpoint == endpoint,

@@ -61,6 +61,8 @@ class PickDetail(BaseModel):
     reasoning: Optional[str] = None
     result: Optional[str] = None
     is_ml_confirmed: bool = False
+    is_ia_confirmed: bool = False  # [NEW]
+    formatted_reasoning: Optional[str] = None  # [NEW]
     
     # Advanced Metrics (Added for Dashboard visibility)
     suggested_stake: float = 0.0

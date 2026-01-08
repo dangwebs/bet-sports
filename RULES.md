@@ -55,6 +55,10 @@ Estas reglas deben ser seguidas **A TODA COSTA** por el asistente de IA y el equ
 
 - **No "Swallowing" Exceptions**: Está prohibido atrapar excepciones con un simple `pass`. Loguear con `logger.error` y traza completa.
 - **Fail Fast**: Si falta una configuración crítica, el servicio debe fallar inmediatamente.
+- **Resiliencia (Graceful Degradation)**: El sistema DEBE continuar operando con funcionalidad reducida si fallan componentes no críticos (ej. Modelo ML, APIs de terceros). Implementar _fallbacks_ a lógica estadística base.
+- **Timeouts Explícitos**: Todas las llamadas a servicios externos (HTTP, DB) deben tener un timeout configurado para evitar bloqueos indefinidos.
+- **Frontend Error Boundaries**: En React, envolver módulos principales en `ErrorBoundaries` para prevenir que errores de renderizado rompan toda la aplicación (White Screen of Death).
+- **Estados de Carga y Error**: La UI debe gestionar explícitamente los estados de `loading` (Skeletons/Spinners) y `error` (Toasts/Alerts) para dar feedback inmediato al usuario.
 
 ## 8. Rendimiento (Performance)
 

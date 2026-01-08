@@ -47,13 +47,13 @@ class TrainingResult(BaseModel):
     profit_units: float
     market_stats: Dict[str, Any]  # Market -> stats mapping
     match_history: List[Dict[str, Any]] = []  # List of match prediction records
-    roi_evolution: List[Dict[str, float]] = []  # {date, roi, profit} records
-    pick_efficiency: List[Dict[str, float]] = []  # Per-market efficiency stats
+    roi_evolution: List[Dict[str, Any]] = []  # {date, roi, profit} records
+    pick_efficiency: List[Dict[str, Any]] = []  # Per-market efficiency stats
     team_stats: Dict[str, Dict[str, float]] = {}  # Team -> stat values
     global_averages: Dict[str, float] = {}  # Calculated from the entire dataset
     last_match_date: Optional[str] = None  # ISO date of last processed match
     # ML Traceability (§12 Compliance)
-    model_metadata: Optional[Dict[str, Any]] = None  # {model_version, training_date, accuracy}
+    ml_metadata: Optional[Dict[str, Any]] = None  # {model_version, training_date, accuracy}
 
 class MLTrainingOrchestrator:
     """
@@ -518,7 +518,7 @@ class MLTrainingOrchestrator:
                 global_averages=global_averages,
                 last_match_date=last_match_iso,
                 # ML Traceability (§12 Compliance)
-                model_metadata={
+                ml_metadata={
                     "model_version": "1.0.0",
                     "training_date": get_current_time().isoformat(),
                     "accuracy": round(accuracy, 4),
