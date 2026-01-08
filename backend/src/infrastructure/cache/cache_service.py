@@ -49,7 +49,8 @@ class DiskCacheProvider(CacheProvider):
     def get(self, key: str) -> Optional[Any]:
         try:
             return self.cache.get(key)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"DiskCache get failed for {key}: {e}")
             return None
             
     def set(self, key: str, value: Any, ttl: int) -> bool:
@@ -62,21 +63,23 @@ class DiskCacheProvider(CacheProvider):
     def delete(self, key: str) -> bool:
         try:
             return self.cache.delete(key)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"DiskCache delete failed for {key}: {e}")
             return False
 
     def clear(self) -> bool:
         try:
             return self.cache.clear()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"DiskCache clear failed: {e}")
             return False
 
     def close(self):
         try:
             self.cache.close()
             logger.info("DiskCache closed")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"DiskCache close failed: {e}")
 
 class CacheService:
     """

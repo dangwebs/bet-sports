@@ -175,8 +175,8 @@ class AIPicksService(PicksService):
                     features = [MLFeatureExtractor.extract_features(pick)]
                     ml_confidence = self.ml_model.predict_proba(features)[0][1]
                     pick.ml_confidence = float(ml_confidence)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"ML prediction failed for pick: {e}")
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
             # Criteria: Prob > 65%, Weight >= 1.0, ML > 75%

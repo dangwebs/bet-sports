@@ -160,5 +160,6 @@ class RiskManager:
                 return False
                 
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            logger.error(f"Financial integrity validation failed: {e}", exc_info=True)
+            return False  # Fail-safe: reject bet on error

@@ -666,7 +666,8 @@ class PicksService:
                     pick.priority_score *= 0.5
                     pick.reasoning += f" ML Escéptico ({ml_confidence:.0%})."
                     
-            except Exception:
+            except Exception as e:
+                logger.debug(f"ML refinement failed for pick: {e}")
                 continue
     
     def _is_low_scoring_context(

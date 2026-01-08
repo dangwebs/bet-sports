@@ -170,8 +170,8 @@ class MatchAggregatorService:
             matches = await self.thesportsdb.get_upcoming_fixtures(league_id, next_n=limit)
             if matches:
                  return self._sort_and_limit(matches, limit)
-        except Exception:
-             pass
+        except Exception as e:
+             logger.debug(f"TheSportsDB upstream fetch error: {e}")
              
         # 4. Try OpenFootball
         try:
@@ -183,8 +183,8 @@ class MatchAggregatorService:
                  upcoming = [m for m in matches if m.status == "NS"]
                  if upcoming:
                      return self._sort_and_limit(upcoming, limit)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"OpenFootball upstream fetch error: {e}")
             
         return []
 

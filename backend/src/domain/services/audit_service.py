@@ -65,7 +65,8 @@ class AuditService:
                     m_date = datetime.fromisoformat(match['match_date'].replace('Z', '+00:00')).replace(tzinfo=None)
                     if m_date >= cutoff_30d:
                         league_stats[league_id]['recent'] += 1
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Error processing match in audit: {e}")
                 continue
 
         # 3. Detect Missing/Stale Leagues
