@@ -104,6 +104,11 @@ async def main():
     start_time = time.time()
     
     # --- 1. SETUP ---
+    import argparse
+    parser = argparse.ArgumentParser(description="Train ML models per league")
+    parser.add_argument("--days", type=int, default=550, help="Days back to fetch data for")
+    args = parser.parse_args()
+    
     from src.api.dependencies import get_training_data_service, get_statistics_service
     training_service = get_training_data_service()
     stats_service = get_statistics_service()
@@ -113,10 +118,10 @@ async def main():
     os.makedirs("ml_models", exist_ok=True)
     
     # Fetch Data
-    logger.info("📥 Fetching Training Data (550 days)...")
+    logger.info(f"📥 Fetching Training Data ({args.days} days)...")
     matches = await training_service.fetch_comprehensive_training_data(
         leagues=DEFAULT_LEAGUES,
-        days_back=550,
+        days_back=args.days,
         force_refresh=False
     )
     logger.info(f"✅ Loaded {len(matches)} matches.")
