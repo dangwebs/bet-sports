@@ -31,7 +31,6 @@ from src.infrastructure.data_sources.football_data_org import FootballDataOrgSou
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
 from src.infrastructure.data_sources.club_elo import ClubEloSource
-from src.infrastructure.data_sources.understat_source import UnderstatSource
 from src.application.dtos.dtos import (
     TeamDTO,
     LeagueDTO,
@@ -65,7 +64,6 @@ class DataSources:
     openfootball: OpenFootballSource
     thesportsdb: TheSportsDBClient
     club_elo: Optional[ClubEloSource] = None
-    understat: Optional[UnderstatSource] = None
 
 
 class GetLeaguesUseCase:

@@ -20,7 +20,6 @@ from src.domain.services.ai_picks_service import AIPicksService
 from src.domain.services.learning_service import LearningService
 
 from src.infrastructure.data_sources.club_elo import ClubEloSource
-from src.infrastructure.data_sources.understat_source import UnderstatSource
 from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
 from src.domain.exceptions import InsufficientDataException
@@ -57,7 +56,6 @@ class GetSuggestedPicksUseCase:
         self.odds_api = None # TheOddsAPISource removed
         # Initialize new sources if not passed in data_sources (fallback)
         self.club_elo = getattr(data_sources, "club_elo", None) or ClubEloSource()
-        self.understat = getattr(data_sources, "understat", None) or UnderstatSource()
         
         # Upgrade to AI Picks Service
         self.picks_service = AIPicksService(
