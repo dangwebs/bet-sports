@@ -19,7 +19,6 @@ from src.domain.services.picks_service import PicksService
 from src.domain.services.ai_picks_service import AIPicksService
 from src.domain.services.learning_service import LearningService
 
-from src.infrastructure.data_sources.fotmob_source import FotMobSource
 from src.infrastructure.data_sources.club_elo import ClubEloSource
 from src.infrastructure.data_sources.understat_source import UnderstatSource
 from src.domain.services.prediction_service import PredictionService
@@ -59,7 +58,6 @@ class GetSuggestedPicksUseCase:
         # Initialize new sources if not passed in data_sources (fallback)
         self.club_elo = getattr(data_sources, "club_elo", None) or ClubEloSource()
         self.understat = getattr(data_sources, "understat", None) or UnderstatSource()
-        self.fotmob = getattr(data_sources, "fotmob", None) or FotMobSource()
         
         # Upgrade to AI Picks Service
         self.picks_service = AIPicksService(
@@ -151,10 +149,6 @@ class GetSuggestedPicksUseCase:
                 prediction_sources.append("The Odds API")
             if home_elo:
                 prediction_sources.append("ClubElo")
-            # Check if stats imply FotMob usage (corners available)
-            if home_stats and home_stats.matches_with_corners > 0:
-                prediction_sources.append("FotMob")
-
             # 5. Generate prediction
             prediction = self.prediction_service.generate_prediction(
                 match=match,
@@ -485,15 +479,6 @@ class GetSuggestedPicksUseCase:
             except Exception as e:
                 logger.warning(f"Football-Data.org history fetch failed: {e}")
                 
-        # Strategy C: FotMob (Best for Corners/Cards in minor leagues)
-        if self.fotmob and self.fotmob.is_configured:
-            try:
-                h_hist = await self.fotmob.get_team_history(match.home_team.name, limit=5)
-                a_hist = await self.fotmob.get_team_history(match.away_team.name, limit=5)
-                team_matches.extend(h_hist + a_hist)
-            except Exception as e:
-                logger.warning(f"FotMob history fetch failed: {e}")
-
         return team_matches
 
     def _deduplicate_and_merge(self, matches: list[Match]) -> list[Match]:

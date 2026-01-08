@@ -25,7 +25,6 @@ from src.infrastructure.data_sources.football_data_org import (
     FootballDataOrgSource,
     COMPETITION_CODE_MAPPING,
 )
-from src.infrastructure.data_sources.fotmob_source import FotMobSource
 from src.infrastructure.repositories.persistence_repository import PersistenceRepository
 from src.application.dtos.dtos import (
     TeamDTO,
@@ -76,7 +75,6 @@ class GetLivePredictionsUseCase:
         self.cache_service = cache_service
         self.picks_service = picks_service
         self.persistence_repository = persistence_repository
-        self.fotmob = data_sources.fotmob or FotMobSource()
     
     async def execute(
         self,
@@ -103,15 +101,6 @@ class GetLivePredictionsUseCase:
         # Get live matches
         matches = []
         source_used = "None"
-
-        # Priority 1: FotMob (Rich Stats: Corners, Cards, etc.)
-        if self.fotmob:
-             try:
-                 matches = await self.fotmob.get_live_matches()
-                 if matches:
-                     source_used = "FotMob"
-             except Exception as e:
-                 logger.error(f"FotMob live fetch failed: {e}")
 
         # Priority 2: Football-Data.org (Official Fallback, but fewer stats)
         if not matches and self.data_sources.football_data_org.is_configured:
@@ -336,9 +325,6 @@ class GetLivePredictionsUseCase:
              league_averages = self.statistics_service.calculate_league_averages(historical_matches) if historical_matches else None
              if historical_matches:
                  data_sources_used.append("Aggregated History")
-                 # Check if we have rich stats (likely from FotMob in minor leagues)
-                 if any(m.home_corners is not None for m in historical_matches):
-                     data_sources_used.append("FotMob")
         else:
              # We used deep stats, but maybe we still want league averages from recent data?
              historical_matches = await self._get_aggregated_history(match, bulk_history)
@@ -461,15 +447,6 @@ class GetLivePredictionsUseCase:
         # Aumentamos el límite para mejorar la significancia estadística (Ley de los Grandes Números)
         HISTORY_LIMIT = 25
         
-        # Strategy C: FotMob
-        if self.fotmob and self.fotmob.is_configured:
-            try:
-                h_hist = await self.fotmob.get_team_history(match.home_team.name, limit=10)
-                a_hist = await self.fotmob.get_team_history(match.away_team.name, limit=10)
-                team_matches.extend(h_hist + a_hist)
-            except Exception:
-                pass
-
         # Strategy B: Football-Data.org
         if self.data_sources.football_data_org.is_configured:
             try:
