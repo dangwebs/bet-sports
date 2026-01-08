@@ -114,6 +114,9 @@ async def main():
     parser = argparse.ArgumentParser(description="Train ML models per league")
     parser.add_argument("--days", type=int, default=550, help="Days back to fetch data for")
     parser.add_argument("--league", type=str, help="Specific league ID to train (optional)")
+    parser.add_argument("--n-jobs", type=int, default=-1, help="Number of parallel jobs")
+    parser.add_argument("--force-retrain-per-league", action="store_true", help="Force retraining per league")
+    parser.add_argument("--no-timeout", action="store_true", help="Disable timeout")
     args = parser.parse_args()
     
     from src.api.dependencies import (
@@ -351,7 +354,7 @@ async def main():
         y_outcome = [] # 0=Draw, 1=Home, 2=Away
         
         try:
-            results = joblib.Parallel(n_jobs=-1, batch_size=50)(
+            results = joblib.Parallel(n_jobs=args.n_jobs, batch_size=50)(
                 joblib.delayed(process_match_task)(task) for task in training_tasks
             )
             
@@ -375,7 +378,7 @@ async def main():
         
         # 1. Corners Regressor
         logger.info(f"   📐 Training Corners Regressor ({league_id})...")
-        reg_corners = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=-1, random_state=42)
+        reg_corners = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=args.n_jobs, random_state=42)
         
         # Define TimeSeriesSplit for CV
         tscv = TimeSeriesSplit(n_splits=3)
@@ -401,7 +404,7 @@ async def main():
             
         # 2. Cards Regressor
         logger.info(f"   cards Training Cards Regressor ({league_id})...")
-        reg_cards = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=-1, random_state=42)
+        reg_cards = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=args.n_jobs, random_state=42)
         reg_cards.fit(X, y_cards)
         
         # SANITY CHECK (Cards)
@@ -416,7 +419,7 @@ async def main():
         
         # 3. Match Winner Classifier
         logger.info(f"   🏆 Training Outcome Classifier ({league_id})...")
-        clf_outcome = RandomForestClassifier(n_estimators=200, max_depth=15, class_weight='balanced', n_jobs=-1, random_state=42)
+        clf_outcome = RandomForestClassifier(n_estimators=200, max_depth=15, class_weight='balanced', n_jobs=args.n_jobs, random_state=42)
         scores_acc = cross_val_score(clf_outcome, X, y_outcome, cv=tscv, scoring='accuracy')
         logger.info(f"      - Accuracy: {np.mean(scores_acc):.2%}")
         
