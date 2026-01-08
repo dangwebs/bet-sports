@@ -299,6 +299,7 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
     sortedPicks.forEach((p) => {
       // Check Top ML condition
       const isTopML =
+        p.is_ia_confirmed ||
         p.is_ml_confirmed ||
         (p.ml_confidence !== undefined && p.ml_confidence >= 0.85) ||
         (p.reasoning && p.reasoning.includes("ML Confianza Alta")) ||
@@ -351,6 +352,7 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
   const filteredPicks = useMemo(() => {
     // Helper to check if a pick is considered "Top ML"
     const isTopML = (p: SuggestedPick) =>
+      p.is_ia_confirmed ||
       p.is_ml_confirmed ||
       (p.ml_confidence !== undefined && p.ml_confidence >= 0.85) ||
       (p.reasoning && p.reasoning.includes("ML Confianza Alta")) ||
