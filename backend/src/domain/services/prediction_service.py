@@ -40,9 +40,30 @@ class PredictionService:
     - Prohibited to use placeholders or simulated data for probabilities.
     """
     
+
     def __init__(self):
         """Initialize the prediction service."""
         pass
+
+    @functools.lru_cache(maxsize=32)
+    def _get_model(self, league_id: str, model_type: str):
+        """
+        Load ML model for a specific league and type (cached).
+        Args:
+            league_id: League identifier (e.g., 'E0')
+            model_type: 'corners' or 'cards'
+        """
+        import joblib
+        import os
+        # Try specific league model first
+        model_path = f"ml_models/{league_id}_{model_type}.joblib"
+        if os.path.exists(model_path):
+            try:
+                return joblib.load(model_path)
+            except Exception as e:
+                print(f"Error loading model {model_path}: {e}")
+                return None
+        return None
     
     def adjust_with_odds(
         self,
@@ -603,7 +624,8 @@ class PredictionService:
         self,
         home_stats: Optional[TeamStatistics],
         away_stats: Optional[TeamStatistics],
-        league_averages: Optional[LeagueAverages] = None
+        league_averages: Optional[LeagueAverages] = None,
+        match: Optional[Match] = None
     ) -> tuple[float, float, float, float]:
         """
         Calculate prob for Over/Under 9.5 corners AND expected values.
@@ -613,99 +635,95 @@ class PredictionService:
              return (0.0, 0.0, 0.0, 0.0)
              
         # ML REGRESSION INTEGRATION
-        # Try to use Per-League ML Model first
-        import joblib
-        import os
-        from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+        total_expected = 0.0
+        ml_success = False
+
+        if match and match.league_id:
+            model = self._get_model(match.league_id, 'corners')
+            if model:
+                try:
+                    from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+                    from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
+                    
+                    # Create dummy pick for context (needed by extractor signature)
+                    dummy_pick = SuggestedPick(
+                        market_type=MarketType.CORNERS_OVER, 
+                        market_label="Generic", 
+                        probability=0.5, 
+                        confidence_level=ConfidenceLevel.LOW,
+                        reasoning="",
+                        risk_level=1, 
+                        odds=1.9, 
+                        expected_value=0.0
+                    )
+                    
+                    extractor = MLFeatureExtractor()
+                    # Extract features
+                    features = extractor.extract_features(
+                        pick=dummy_pick,
+                        match=match,
+                        home_stats=home_stats,
+                        away_stats=away_stats
+                    )
+                    
+                    # Predict
+                    # Reshape for single sample
+                    prediction = model.predict([features])[0]
+                    total_expected = float(prediction)
+                    ml_success = True
+                    # logger.info(f"ML Prediction (Corners) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
+                    
+                except Exception as e:
+                    # Fallback silently to heuristic if ML fails
+                    # print(f"ML Prediction failed: {e}")
+                    pass
+
+        # HEURISTIC FALLBACK
+        if not ml_success:
+            home_n = home_stats.matches_played if home_stats else 0
+            away_n = away_stats.matches_played if away_stats else 0
+    
+            use_league_avg_fallback = home_n < 4 or away_n < 4
+    
+            home_avg = home_stats.avg_corners_per_match if home_stats and home_n >= 4 else 0.0
+            away_avg = away_stats.avg_corners_per_match if away_stats and away_n >= 4 else 0.0
+            
+            # VARIANCE INJECTION: Use weighted recent form if available
+            if home_stats and home_stats.recent_corners:
+                # Last 5 avg
+                rec_h = sum(home_stats.recent_corners) / len(home_stats.recent_corners)
+                # Blend 70% Season / 30% Recent
+                home_avg = (home_avg * 0.7) + (rec_h * 0.3)
+                
+            if away_stats and away_stats.recent_corners:
+                rec_a = sum(away_stats.recent_corners) / len(away_stats.recent_corners)
+                away_avg = (away_avg * 0.7) + (rec_a * 0.3)
+                
+            # Estimate expected corners (Heuristic: Home Avg + Away Avg)
+            if not use_league_avg_fallback and (home_avg + away_avg) > 0:
+                 total_expected = home_avg + away_avg
+            else:
+                 # Fallback to League Average
+                 total_expected = league_averages.avg_corners if league_averages else 9.5
         
-        # TODO: Inject feature extractor properly or instantiate
-        # For now, rapid instantiation (stateless)
-        extractor = MLFeatureExtractor()
-        
-        # Need a dummy pick for feature extraction signature
-        from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
-        dummy_pick = SuggestedPick(
-             market_type=MarketType.CORNERS_OVER, 
-             market_label="Generic", 
-             probability=0.5, 
-             confidence_level=ConfidenceLevel.LOW,
-             reasoning="",
-             risk_level=1, 
-             odds=1.9, 
-             expected_value=0.0
-        )
-        
-        # We need the match object to get league_id, but here we only have stats/league_avgs passed.
-        # This is a limitation of the current signature.
-        # However, we can heuristically check if we have enough info or pass league_id context.
-        # But wait, PredictionService.generate_prediction calls this.
-        # We should probably pass the League ID or Match object to this method.
-        # For this refactor, let's stick to the heuristic first if we can't easily access the model without refactoring signatures.
-        # WAIT: The User Requirement is to use the model. I must refactor the signature or logic.
-        
-        # But `calculate_corner_probabilities` is called by `generate_prediction`, which HAS the match.
-        # I will update the signature in a separate step or assume I can't easily change it here without breaking others.
-        # Actually, let's look at `generate_prediction`. It calls `self.calculate_corner_probabilities`.
-        # I can pass `match` or `league_id` to this function ideally.
-        
-        # Let's assume for now we fallback to heuristic because changing signature requires updating call sites.
-        # The prompt authorized refactoring "training logic". `PredictionService` is "Immutable API" usually referring to External API, but internal service signatures can change if safe.
-        # However, to be safe and quick, I will implement a "Smart Heuristic" or try to infer.
-        
-        # BETTER PLAN: Since I cannot easily change the signature in this single block without context of call sites,
-        # I will use the Heuristic fallback BUT improved with the new variance stats if model is not easily accessible.
-        # BUT the plan explicitly said "Update PredictionService to use these ML models".
-        # So I SHOULD try to load the model.
-        # The issue is I don't know the League ID here.
-        
-        # Let's see if I can change the signature safely.
-        # `generate_prediction` calls it.
-        # `calculate_corner_probabilities(home_stats, away_stats, league_averages)`
-        
-        # If I can't use the model, I will use the Rolling Stats to add variance!
-        # `home_stats.recent_corners` exists now.
-        
-        # Dynamic Expectation using Rolling Stats (Proxy for Model)
-        
+        # Calculate Home/Away Split (Proportional)
         home_n = home_stats.matches_played if home_stats else 0
         away_n = away_stats.matches_played if away_stats else 0
-
-        use_league_avg_fallback = home_n < 4 or away_n < 4
-
-        home_avg = home_stats.avg_corners_per_match if home_stats and home_n >= 4 else 0.0
-        away_avg = away_stats.avg_corners_per_match if away_stats and away_n >= 4 else 0.0
+        home_basic_avg = home_stats.avg_corners_per_match if home_stats else 4.5
+        away_basic_avg = away_stats.avg_corners_per_match if away_stats else 4.5
         
-        # VARIANCE INJECTION: Use weighted recent form if available
-        if home_stats and home_stats.recent_corners:
-            # Last 5 avg
-            rec_h = sum(home_stats.recent_corners) / len(home_stats.recent_corners)
-            # Blend 70% Season / 30% Recent
-            home_avg = (home_avg * 0.7) + (rec_h * 0.3)
-            
-        if away_stats and away_stats.recent_corners:
-            rec_a = sum(away_stats.recent_corners) / len(away_stats.recent_corners)
-            away_avg = (away_avg * 0.7) + (rec_a * 0.3)
-            
-        # Estimate expected corners (Heuristic: Home Avg + Away Avg)
-        # Global approx average is ~10.
-        total_expected = 0.0
-        
-        if not use_league_avg_fallback and (home_avg + away_avg) > 0:
-             total_expected = home_avg + away_avg
-        else:
-             # Fallback to League Average
-             total_expected = league_averages.avg_corners if league_averages else 9.5
-        
-        # Simple proportional split
-        if (home_avg + away_avg) > 0:
-            home_expected = total_expected * (home_avg / (home_avg + away_avg))
-            away_expected = total_expected * (away_avg / (home_avg + away_avg))
+        if (home_basic_avg + away_basic_avg) > 0:
+            home_expected = total_expected * (home_basic_avg / (home_basic_avg + away_basic_avg))
+            away_expected = total_expected * (away_basic_avg / (home_basic_avg + away_basic_avg))
         else:
             home_expected = total_expected / 2
             away_expected = total_expected / 2
         
         # Use Poisson for > 9.5
         under = 0.0
+        # Sanity check for massive predictions (e.g. outlier)
+        total_expected = min(max(total_expected, 3.0), 20.0)
+        
         probs = self._get_poisson_distribution(total_expected, 20)
         for k in range(10): # 0 to 9
             under += probs[k]
@@ -717,7 +735,8 @@ class PredictionService:
         self,
         home_stats: Optional[TeamStatistics],
         away_stats: Optional[TeamStatistics],
-        league_averages: Optional[LeagueAverages] = None
+        league_averages: Optional[LeagueAverages] = None,
+        match: Optional[Match] = None
     ) -> tuple[float, float, float, float]:
         """
         Calculate prob for Over/Under 4.5 yellow cards AND expected values.
@@ -726,43 +745,88 @@ class PredictionService:
         if not home_stats or not away_stats:
              return (0.0, 0.0, 0.0, 0.0)
 
-        # STRICT RULE RELAXED: Use League Averages if data is insufficient (< 4 matches)
-        
-        home_n = home_stats.matches_played if home_stats else 0
-        away_n = away_stats.matches_played if away_stats else 0
-        
-        use_league_avg_fallback = home_n < 4 or away_n < 4
-
-        home_avg = home_stats.avg_yellow_cards_per_match if home_stats and home_n >= 4 else 0.0
-        away_avg = away_stats.avg_yellow_cards_per_match if away_stats and away_n >= 4 else 0.0
-        
-        # VARIANCE INJECTION: Use weighted recent form if available
-        if home_stats and home_stats.recent_yellow_cards:
-            rec_h = sum(home_stats.recent_yellow_cards) / len(home_stats.recent_yellow_cards)
-            home_avg = (home_avg * 0.7) + (rec_h * 0.3)
-            
-        if away_stats and away_stats.recent_yellow_cards:
-            rec_a = sum(away_stats.recent_yellow_cards) / len(away_stats.recent_yellow_cards)
-            away_avg = (away_avg * 0.7) + (rec_a * 0.3)
-            
-        # Estimate expected cards
+        # ML REGRESSION INTEGRATION
         total_expected = 0.0
-        
-        if not use_league_avg_fallback and (home_avg + away_avg) > 0:
-             total_expected = home_avg + away_avg
-        else:
-             total_expected = league_averages.avg_cards if league_averages else 4.5
+        ml_success = False
+
+        if match and match.league_id:
+            model = self._get_model(match.league_id, 'cards')
+            if model:
+                try:
+                    from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+                    from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
+                    
+                    dummy_pick = SuggestedPick(
+                        market_type=MarketType.CARDS_OVER, 
+                        market_label="Generic", 
+                        probability=0.5, 
+                        confidence_level=ConfidenceLevel.LOW,
+                        reasoning="",
+                        risk_level=1, 
+                        odds=1.9, 
+                        expected_value=0.0
+                    )
+                    
+                    extractor = MLFeatureExtractor()
+                    features = extractor.extract_features(
+                        pick=dummy_pick,
+                        match=match,
+                        home_stats=home_stats,
+                        away_stats=away_stats
+                    )
+                    
+                    # Predict
+                    prediction = model.predict([features])[0]
+                    total_expected = float(prediction)
+                    ml_success = True
+                    # logger.info(f"ML Prediction (Cards) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
+                    
+                except Exception as e:
+                    # Fallback silently to heuristic if ML fails
+                    # print(f"ML Prediction failed: {e}")
+                    pass
+
+        # HEURISTIC FALLBACK
+        if not ml_success:
+            home_n = home_stats.matches_played if home_stats else 0
+            away_n = away_stats.matches_played if away_stats else 0
+            
+            use_league_avg_fallback = home_n < 4 or away_n < 4
+    
+            home_avg = home_stats.avg_yellow_cards_per_match if home_stats and home_n >= 4 else 0.0
+            away_avg = away_stats.avg_yellow_cards_per_match if away_stats and away_n >= 4 else 0.0
+            
+            # VARIANCE INJECTION: Use weighted recent form if available
+            if home_stats and home_stats.recent_yellow_cards:
+                rec_h = sum(home_stats.recent_yellow_cards) / len(home_stats.recent_yellow_cards)
+                home_avg = (home_avg * 0.7) + (rec_h * 0.3)
+                
+            if away_stats and away_stats.recent_yellow_cards:
+                rec_a = sum(away_stats.recent_yellow_cards) / len(away_stats.recent_yellow_cards)
+                away_avg = (away_avg * 0.7) + (rec_a * 0.3)
+                
+            # Estimate expected cards
+            if not use_league_avg_fallback and (home_avg + away_avg) > 0:
+                 total_expected = home_avg + away_avg
+            else:
+                 total_expected = league_averages.avg_cards if league_averages else 4.5
         
         # Simple proportional split
-        if (home_avg + away_avg) > 0:
-            home_expected = total_expected * (home_avg / (home_avg + away_avg))
-            away_expected = total_expected * (away_avg / (home_avg + away_avg))
+        home_basic_avg = home_stats.avg_yellow_cards_per_match if home_stats else 2.2
+        away_basic_avg = away_stats.avg_yellow_cards_per_match if away_stats else 2.2
+        
+        if (home_basic_avg + away_basic_avg) > 0:
+            home_expected = total_expected * (home_basic_avg / (home_basic_avg + away_basic_avg))
+            away_expected = total_expected * (away_basic_avg / (home_basic_avg + away_basic_avg))
         else:
             home_expected = total_expected / 2
             away_expected = total_expected / 2
         
         # Use Poisson for > 4.5
         under = 0.0
+        # Sanity check
+        total_expected = min(max(total_expected, 1.0), 12.0)
+        
         probs = self._get_poisson_distribution(total_expected, 15)
         for k in range(5): # 0 to 4
             under += probs[k]
@@ -1053,10 +1117,14 @@ class PredictionService:
             odds_obj = Odds(home=match.home_odds, draw=match.draw_odds, away=match.away_odds)
         
         # Calculate Over/Under Corners (9.5) and Expected Values
-        over_95_corners, under_95_corners, exp_home_corners, exp_away_corners = self.calculate_corner_probabilities(home_stats, away_stats, league_averages)
+        over_95_corners, under_95_corners, exp_home_corners, exp_away_corners = self.calculate_corner_probabilities(
+            home_stats, away_stats, league_averages, match=match
+        )
         
         # Calculate Over/Under Cards (4.5) and Expected Values
-        over_45_cards, under_45_cards, exp_home_cards, exp_away_cards = self.calculate_card_probabilities(home_stats, away_stats, league_averages)
+        over_45_cards, under_45_cards, exp_home_cards, exp_away_cards = self.calculate_card_probabilities(
+            home_stats, away_stats, league_averages, match=match
+        )
         
         # Calculate Handicap
         handicap_line, handicap_home, handicap_away = self.calculate_handicap_probabilities(home_expected, away_expected)

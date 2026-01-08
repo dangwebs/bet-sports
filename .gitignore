@@ -53,3 +53,6 @@ backend/app_persistence.db-journal
 *.bak
 *.tmp
 .cache_data/
+
+# ML Models
+ml_models/
