@@ -37,6 +37,10 @@ export interface MatchPredictionHistory {
   suggested_pick?: string | null; // Legacy
   pick_was_correct?: boolean | null;
   expected_value?: number | null;
+  // Probability fields for UI Charts (Auditoría v5)
+  home_win_probability?: number;
+  draw_probability?: number;
+  away_win_probability?: number;
 }
 
 export interface TrainingStatus {

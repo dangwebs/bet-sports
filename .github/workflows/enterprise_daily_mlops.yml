@@ -219,7 +219,7 @@ jobs:
           echo "- ✅ Training: Completed" >> $GITHUB_STEP_SUMMARY
           echo "- 🔮 Predictions: Processed" >> $GITHUB_STEP_SUMMARY
           echo "- 🏆 Top Picks: Generated" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 Parallelism: 17 concurrent jobs" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Parallelism: 6 concurrent jobs (Top Tier)" >> $GITHUB_STEP_SUMMARY
 
       - name: 📧 Notify on Failure
         if: contains(needs.*.result, 'failure')
