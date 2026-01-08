@@ -168,14 +168,14 @@ async def main():
     weights = learning_service.get_learning_weights()
     picks_service = AIPicksService(learning_weights=weights)
 
-    async def generate_league_predictions(league_id, league_matches, team_stats_cache, league_avgs):
+    async def generate_league_predictions(league_id, league_matches, team_stats_cache, league_avgs, models_bundle=None):
         try:
             # fetch upcoming
             upcoming = await aggregator.get_upcoming_matches(league_id, limit=50)
             if not upcoming:
                  return []
             
-            logger.info(f"   🔮 Generating predictions for {len(upcoming)} upcoming matches...")
+            logger.info(f"   🔮 Generating predictions for {len(upcoming)} upcoming matches using TRAINED MODELS...")
             
             batch_data = []
             
@@ -195,16 +195,20 @@ async def main():
                 h2h_stats = stats_service.calculate_h2h_statistics(h_name, a_name, league_matches)
                 
                 try:
-                    # Generate Prediction
+                    # Generate Prediction with IN-MEMORY MODELS
                     prediction = pred_service.generate_prediction(
                         match=match,
                         home_stats=home_stats,
                         away_stats=away_stats,
-                        league_averages=league_avgs
+                        league_averages=league_avgs,
+                        active_models=models_bundle # <--- CRITICAL INJECTION
                     )
                     
                     # Generate Picks Integration
                     # Pass all predicted metrics to the picks engine
+                    # And pass the WINNER MODEL for refinement
+                    winner_model = models_bundle.get("winner") if models_bundle else None
+
                     picks_container = picks_service.generate_suggested_picks(
                         match=match,
                         home_stats=home_stats,
@@ -219,7 +223,8 @@ async def main():
                         predicted_home_corners=prediction.predicted_home_corners,
                         predicted_away_corners=prediction.predicted_away_corners,
                         predicted_home_yellow_cards=prediction.predicted_home_yellow_cards,
-                        predicted_away_yellow_cards=prediction.predicted_away_yellow_cards
+                        predicted_away_yellow_cards=prediction.predicted_away_yellow_cards,
+                        ml_model=winner_model # <--- CRITICAL INJECTION FOR PICKS
                     )
                     
                     # Map Domain Picks to DTOs
@@ -427,7 +432,14 @@ async def main():
         joblib.dump(clf_outcome, f"ml_models/{league_id}_winner.joblib")
         
         # --- 4. PREDICT UPCOMING FIXTURES ---
-        predicted_batch = await generate_league_predictions(league_id, league_matches, team_stats_cache, league_avgs)
+        # BUNDLE MODELS FOR INJECTION
+        models_bundle = {
+            "winner": clf_outcome,
+            "corners": reg_corners,
+            "cards": reg_cards
+        }
+
+        predicted_batch = await generate_league_predictions(league_id, league_matches, team_stats_cache, league_avgs, models_bundle)
         if predicted_batch:
              repo.bulk_save_predictions(predicted_batch)
         

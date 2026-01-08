@@ -461,6 +461,7 @@ class PicksService:
         predicted_home_yellow_cards: float = 0.0,
         predicted_away_yellow_cards: float = 0.0,
         market_odds: Optional[dict[str, float]] = None,
+        ml_model: Optional[object] = None, # <--- NEW DYNAMIC MODEL INJECTION
     ) -> MatchSuggestedPicks:
         """
         Generate suggested picks for a match using ONLY REAL DATA.
@@ -627,9 +628,12 @@ class PicksService:
             away_cards_list = self._generate_single_team_cards(away_stats, match, False)
             for p in away_cards_list: picks.add_pick(p)
 
-        # 7. Apply ML Refinement (if model exists)
-        if self.ml_model:
-            self._apply_ml_refinement(picks)
+        # 7. Apply ML Refinement (Dynamic or Global)
+        # Use the injected model (league-specific) if available, otherwise global fallback
+        target_model = ml_model if ml_model else self.ml_model
+
+        if target_model:
+            self._apply_ml_refinement(picks, target_model, match, home_stats, away_stats)
         
         # 8. [NEW] IA CONFIRMED: Select Single Best Pick & Format Reasoning
         # Sort logic: Priority Score (DESC) -> Probability (DESC) -> EV (DESC)
@@ -682,23 +686,74 @@ class PicksService:
         pick.formatted_reasoning = f"{prefix}, {desc} {prob_pct}%"
 
     
-    def _apply_ml_refinement(self, picks_container: MatchSuggestedPicks):
+    def _apply_ml_refinement(
+        self,
+        picks_container: MatchSuggestedPicks,
+        model_instance,
+        match: Match,
+        home_stats: Optional[TeamStatistics],
+        away_stats: Optional[TeamStatistics]
+    ):
         """
         Uses the trained ML model to adjust confidence/priority of picks.
         
         Top ML picks require minimum 80% model confidence.
         """
         for pick in picks_container.suggested_picks:
-            if not self.ml_model:
+            if not model_instance:
                 continue
                 
             try:
                 # Use centralized feature extraction to ensure parity with training
-                features = [MLFeatureExtractor.extract_features(pick)]
+                # Import implicitly handled
+                # Must match PredictionService/Training logic (4 args)
+                features = [MLFeatureExtractor.extract_features(pick, match, home_stats, away_stats)]
                 
                 # Predict probability of this pick being correct (Class 1)
-                ml_confidence = self.ml_model.predict_proba(features)[0][1]
+                # Assumes Binary Classifier (0=Incorrect, 1=Correct) or similar logic
+                # For Outcome Classifier (0=Draw, 1=Home, 2=Away), this logic needs adjustment if we are refining non-outcome picks.
+                # BUT: The current ML model trained in 'train_model_optimized' is 'clf_outcome' (Home/Draw/Away).
+                # Wait: 'MLFeatureExtractor.extract_features(pick)' implies we are predicting per-PICK success?
+                # Let's check 'process_match_task' in train script.
+                # NO. 'process_match_task' trains:
+                # 1. Corners Regressor
+                # 2. Cards Regressor
+                # 3. Outcome Classifier (Home/Draw/Away)
+
+                # The 'pick' feature extraction usually expects a generic pick and returns features relevant to THAT pick?
+                # OR it returns match features?
+                # Looking at 'train_model_optimized.py':
+                # features = _feature_extractor.extract_features(dummy_pick, match, home_stats, away_stats)
+                # It sends a DUMMY pick. The features are Match-Centric (Recent Form, Goals, etc).
+
+                # So the Outcome Classifier predicts Match Result.
+                # If 'pick' is "Home Win", we check index 1.
+                # If 'pick' is "Away Win", we check index 2.
+                # If 'pick' is "Draw", check index 0.
                 
+                # IF the model passed here is indeed the Outcome Classifier:
+                ml_probs = model_instance.predict_proba(features)[0]
+
+                # Map pick type to probability index
+                ml_confidence = 0.0
+
+                if pick.market_type == MarketType.RESULT_1X2:
+                    if "Home" in pick.market_label or "(1)" in pick.market_label or match.home_team.name in pick.market_label:
+                        ml_confidence = ml_probs[1] # Home
+                    elif "Away" in pick.market_label or "(2)" in pick.market_label or match.away_team.name in pick.market_label:
+                        ml_confidence = ml_probs[2] # Away
+                    elif "Draw" in pick.market_label or "Empate" in pick.market_label:
+                        ml_confidence = ml_probs[0] # Draw
+
+                # If it's NOT a result pick (e.g. Over 2.5), the Outcome Classifier isn't directly applicable for "Correct/Incorrect".
+                # It acts as a context signal.
+                # HOWEVER, legacy logic seemed to assume a "Pick Classifier" (Correct/Incorrect).
+                # Since we are now injecting 'clf_outcome', we should only refine Result picks OR accept that
+                # we don't have a "Pick Classifier" anymore, just an "Outcome Classifier".
+
+                if ml_confidence == 0.0:
+                    continue
+
                 # REFACTOR: Universal ML Evaluation
                 # 1. Top ML Pick - High Confidence (>= 80%)
                 if ml_confidence >= 0.80:
