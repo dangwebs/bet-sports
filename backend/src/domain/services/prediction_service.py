@@ -1164,6 +1164,9 @@ class PredictionService:
                 )
 
                 # Predict Probabilities [Draw(0), Home(1), Away(2)]
+                # Note: Check class order. train_model_optimized: 0=Draw, 1=Home, 2=Away
+                # Verify order from classes_ attribute if possible, but standard sklearn order is sorted classes.
+                # Sorted: 0, 1, 2.
                 ml_probs = active_models['winner'].predict_proba([features])[0]
 
                 ml_draw = ml_probs[0]

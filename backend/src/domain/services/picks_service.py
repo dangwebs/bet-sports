@@ -707,8 +707,7 @@ class PicksService:
                 # Use centralized feature extraction to ensure parity with training
                 # Import implicitly handled
                 # Must match PredictionService/Training logic (4 args)
-                extractor = MLFeatureExtractor()
-                features = [extractor.extract_features(pick, match, home_stats, away_stats)]
+                features = [MLFeatureExtractor.extract_features(pick, match, home_stats, away_stats)]
                 
                 # Predict probability of this pick being correct (Class 1)
                 # Assumes Binary Classifier (0=Incorrect, 1=Correct) or similar logic

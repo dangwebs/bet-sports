@@ -110,6 +110,13 @@ jobs:
           name: ml-model
           path: backend/
 
+      - name: 📥 Download Model Artifacts
+        if: needs.train-model.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: ml-model
+          path: backend/
+
       - name: 🏆 Generate Top Picks
         if: needs.train-model.result == 'success'
         run: |
