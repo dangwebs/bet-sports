@@ -95,9 +95,11 @@ export const usePredictionStore = create<PredictionState>()(
             "Turkey",
             "Greece",
             "Scotland",
+            "Belgium",
             "Turquía",
             "Grecia",
             "Escocia",
+            "Bélgica",
           ];
           const filteredCountries = data.countries.filter(
             (c) => !excludedCountries.includes(c.name)
