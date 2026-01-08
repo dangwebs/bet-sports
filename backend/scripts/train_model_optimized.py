@@ -205,6 +205,9 @@ async def main():
         logger.info(f"   📐 Training Corners Regressor ({league_id})...")
         reg_corners = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=-1, random_state=42)
         
+        # Define TimeSeriesSplit for CV
+        tscv = TimeSeriesSplit(n_splits=3)
+        
         # Train
         reg_corners.fit(X, y_corners)
         
