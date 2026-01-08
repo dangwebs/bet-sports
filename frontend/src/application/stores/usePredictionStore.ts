@@ -101,9 +101,9 @@ export const usePredictionStore = create<PredictionState>()(
             "Escocia",
             "Bélgica",
           ];
-          const filteredCountries = data.countries.filter(
-            (c) => !excludedCountries.includes(c.name)
-          );
+          const filteredCountries = data.countries
+            .filter((c) => !excludedCountries.includes(c.name))
+            .sort((a, b) => a.name.localeCompare(b.name));
 
           set({
             leaguesData: {
