@@ -9,8 +9,8 @@ from datetime import datetime
 import joblib
 import numpy as np
 
-# Add backend to path
-sys.path.append(os.path.join(os.getcwd(), 'src'))
+# Add backend to path (assuming run from project root)
+sys.path.append(os.path.join(os.getcwd(), 'backend')) # To find 'src' as a module
 sys.path.append(os.getcwd())
 
 # Setup logging
