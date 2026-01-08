@@ -52,22 +52,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "backend/requirements-worker.txt"
 
-      - name: 🔑 Generate Cache Key
-        id: set-cache-key
-        run: echo "key=venv-${{ runner.os }}-${{ hashFiles('backend/requirements-worker.txt') }}" >> $GITHUB_OUTPUT
-
-      - name: ♻️ Restore Virtual Environment
-        id: cache-venv
-        uses: actions/cache@v4
-        with:
-          path: backend/.venv
-          key: ${{ steps.set-cache-key.outputs.key }}
-
-      - name: 📦 Install Dependencies (If Cache Miss)
-        if: steps.cache-venv.outputs.cache-hit != 'true'
+      - name: 📦 Install Dependencies
         run: |
           cd backend
           python -m venv .venv
@@ -110,12 +96,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: ♻️ Restore Virtual Environment
-        uses: actions/cache@v4
-        with:
-          path: backend/.venv
-          key: ${{ needs.train-model.outputs.cache-key }}
-          fail-on-cache-miss: true
+      - name: 📦 Install Dependencies
+        run: |
+          cd backend
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements-worker.txt
 
       - name: 📥 Download Model Artifacts
         if: needs.train-model.result == 'success'
