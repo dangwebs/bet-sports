@@ -271,6 +271,25 @@ class PersistenceRepository:
         finally:
             session.close()
 
+    def clear_all_predictions(self) -> bool:
+        """
+        Clear all stored match predictions.
+        Useful when retraining models to ensure fresh predictions are generated.
+        """
+        session = self.db_service.get_session()
+        try:
+            # Delete all rows in the match_predictions table
+            session.query(MatchPredictionModel).delete()
+            session.commit()
+            logger.info("🗑️ Cleared all match predictions from database.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to clear predictions: {e}")
+            session.rollback()
+            return False
+        finally:
+            session.close()
+
     def bulk_save_predictions(self, predictions_batch: list[dict], chunk_size: int = 50) -> bool:
         """
         Save multiple predictions in chunks with retry.

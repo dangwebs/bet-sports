@@ -169,9 +169,17 @@ class MLFeatureExtractor:
             features.extend(h_card_var)
             features.extend(a_card_var)
 
+            # ============================================================
+            # REFEREE FEATURES (New)
+            # ============================================================
+            # Placeholder: In the future, fetch actual referee stats from StatisticsService
+            # For now, default to 4.5 (Average strictness)
+            ref_strictness = 4.5
+            features.append(ref_strictness)
+
         else:
-            # Padding if no stats provided (34 zeros: 16 original + 6 corners/cards + 12 variance)
-            features.extend([0.0] * 34)
+            # Padding if no stats provided (35 zeros: 16 original + 6 corners/cards + 12 variance + 1 referee)
+            features.extend([0.0] * 35)
             
         return features
 

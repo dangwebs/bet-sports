@@ -637,9 +637,14 @@ class PredictionService:
         # ML REGRESSION INTEGRATION
         total_expected = 0.0
         ml_success = False
+        
+        target_league_id = None
+        if match:
+             if hasattr(match, 'league_id'): target_league_id = match.league_id
+             elif match.league: target_league_id = match.league.id
 
-        if match and match.league_id:
-            model = self._get_model(match.league_id, 'corners')
+        if target_league_id:
+            model = self._get_model(target_league_id, 'corners')
             if model:
                 try:
                     from src.domain.services.ml_feature_extractor import MLFeatureExtractor
@@ -749,8 +754,13 @@ class PredictionService:
         total_expected = 0.0
         ml_success = False
 
-        if match and match.league_id:
-            model = self._get_model(match.league_id, 'cards')
+        target_league_id = None
+        if match:
+             if hasattr(match, 'league_id'): target_league_id = match.league_id
+             elif match.league: target_league_id = match.league.id
+
+        if target_league_id:
+            model = self._get_model(target_league_id, 'cards')
             if model:
                 try:
                     from src.domain.services.ml_feature_extractor import MLFeatureExtractor

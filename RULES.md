@@ -112,4 +112,11 @@ El proyecto se limita EXCLUSIVAMENTE a las siguientes ligas Top-Tier:
 - 🇩🇪 **Alemania**: Bundesliga (`D1`)
 - 🇮🇹 **Italia**: Serie A (`I1`)
 - 🇫🇷 **Francia**: Ligue 1 (`F1`)
+- 🇧🇪 **Bélgica**: Jupiler Pro League (`B1`)
 - 🇵🇹 **Portugal**: Liga Portugal (`P1`)
+
+## 16. Cobertura Obligatoria de Mercados (CRÍTICO)
+
+- **Regla**: Es OBLIGATORIO generar picks para **TODOS** los mercados principales: **Ganador, Goles, Corners y Tarjetas**.
+- **Prohibido Omitir**: Bajo ninguna circunstancia se debe devolver una lista de picks vacía para corners o tarjetas alegando "falta de datos".
+- **Implementación**: Si falta data histórica cruda, se DEBE usar modelos de inferencia o promedios de liga asociados a la volatilidad reciente (Regla Zero Stats). El sistema debe esforzarse por proyectar una línea.

@@ -197,11 +197,14 @@ class StatisticsService:
             "psg": "paris sg",
             "paris saint germain": "paris sg",
             "paris saint-germain": "paris sg",
+            "paris saint-germain fc": "paris sg",
+            "paris saint german": "paris sg",
             "st brestois": "brest",
             "stade brestois 29": "brest",
             "stade de reims": "reims",
             "stade rennais fc": "rennes",
             "stade rennais": "rennes",
+            "stade rennais fc 1901": "rennes",
             "rennais": "rennes",
             "ogc nice": "nice",
             "olympique lyonnais": "lyon",
@@ -209,6 +212,7 @@ class StatisticsService:
             "olympique de marseille": "marseille",
             "om": "marseille",
             "as monaco": "monaco",
+            "as monaco fc": "monaco",
             "lille osc": "lille",
             "losc": "lille",
             "losc lille": "lille",
@@ -221,6 +225,11 @@ class StatisticsService:
             "fc metz": "metz",
             "fc lorient": "lorient",
             "rc strasbourg alsace": "strasbourg",
+            "angers sco": "angers",
+            "aj auxerre": "auxerre",
+            "paris fc": "paris fc", # Canonical if in db
+            "as saint-etienne": "st etienne",
+            "as saint-étienne": "st etienne",
 
             # Portugal (Primeira Liga)
             "sl benfica": "benfica",
@@ -389,6 +398,11 @@ class StatisticsService:
         return name
 
     _normalization_cache = {}
+
+    @staticmethod
+    def normalize_team_name(name: str) -> str:
+        """Public alias for normalization."""
+        return StatisticsService._normalize_name(name)
 
     @staticmethod
     def _normalize_name(name: str) -> str:

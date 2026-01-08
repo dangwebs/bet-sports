@@ -886,13 +886,16 @@ class PicksService:
              pred_away = (pred_away + a_avg) / 2 if pred_away > 0 else a_avg
              
         total_avg = pred_home + pred_away
-            
+
+        # [STRICT] No Fallback. If data is 0, we return 0 picks for the Total market.
+        # Partial team picks are handled by _generate_single_team_corners separately.
+
         return self._generate_total_stat_picks(
             stat_avg=total_avg,
             lines=[6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5],
             market_types=(MarketType.CORNERS_OVER, MarketType.CORNERS_UNDER),
             label_formats=("Más de {} córners en el partido", "Menos de {} córners en el partido"),
-            reasoning_fmts=("Promedio de córners: {avg:.2f}. Tendencia favorable.", "Promedio de córners: {avg:.2f}. Baja producción."),
+            reasoning_fmts=("Promedio proyectado: {avg:.2f} córners. Tendencia favorable.", "Promedio proyectado: {avg:.2f} córners. Baja media histórica."),
             prob_adjustments=(1.05, 1.02),
             rec_thresholds=(0.55, 0.55),
             odds_keys_fmt=("corners_over_{}", "corners_under_{}"),

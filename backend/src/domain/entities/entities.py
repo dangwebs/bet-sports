@@ -99,6 +99,7 @@ class Match:
     home_odds: Optional[float] = None
     draw_odds: Optional[float] = None
     away_odds: Optional[float] = None
+    referee: Optional[str] = None
     minute: Optional[str] = None
     # Extended Stats
     home_shots_on_target: Optional[int] = None

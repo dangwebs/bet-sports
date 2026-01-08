@@ -79,7 +79,8 @@ jobs:
           cd backend
           source .venv/bin/activate
           # $(nproc) detecta dinámicamente los cores disponibles para usar toda la potencia real
-          python scripts/orchestrator_cli.py train --days 550 --n-jobs $(nproc)
+          # Se elimina cualquier restricción de tiempo interna y se fuerza el re-entrenamiento completo por liga
+          python scripts/orchestrator_cli.py train --days 550 --n-jobs $(nproc) --force-retrain-per-league --no-timeout
 
       - name: 📤 Upload Model Artifact
         uses: actions/upload-artifact@v4
@@ -98,7 +99,7 @@ jobs:
     name: 🔮 Predict ${{ matrix.group }}
     needs: train-model
     runs-on: ubuntu-latest
-    timeout-minutes: 60 # Upgrade: Extended for safety
+    timeout-minutes: 360 # 6 Hours (No limits for deep training)
     continue-on-error: true # Una falla no detiene las demás
     strategy:
       max-parallel: 20 # GitHub permite hasta 20 jobs concurrentes en tier gratuito

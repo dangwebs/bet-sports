@@ -123,28 +123,73 @@ class MatchAggregatorService:
         return True
 
     def _merge_matches(self, uk: List[Match], org: List[Match], open_src: List[Match]) -> List[Match]:
-        """Merge strategy: UK > Org > Open."""
+        """
+        Merge strategy: UK > Org > Open.
+        CRITICAL REFACTOR: Performs Deep Merge (Enrichment) instead of simple deduplication.
+        If a match exists, we fill in missing fields (Corners, Cards, Referee) from secondary sources.
+        """
         merged = {}
+        from src.domain.services.statistics_service import StatisticsService
         
+        def get_merge_key(m: Match) -> str:
+            # Robust key generation using normalized names
+            date_str = m.match_date.strftime('%Y%m%d')
+            h_norm = StatisticsService.normalize_team_name(m.home_team.name)
+            a_norm = StatisticsService.normalize_team_name(m.away_team.name)
+            return f"{date_str}_{h_norm}_{a_norm}"
+
+        def enrich_match(target: Match, source: Match):
+            # Fill missing core stats
+            if target.home_corners is None and source.home_corners is not None:
+                target.home_corners = source.home_corners
+            if target.away_corners is None and source.away_corners is not None:
+                target.away_corners = source.away_corners
+                
+            if target.home_yellow_cards is None and source.home_yellow_cards is not None:
+                target.home_yellow_cards = source.home_yellow_cards
+            if target.away_yellow_cards is None and source.away_yellow_cards is not None:
+                target.away_yellow_cards = source.away_yellow_cards
+                
+            if target.home_red_cards is None and source.home_red_cards is not None:
+                target.home_red_cards = source.home_red_cards
+            if target.away_red_cards is None and source.away_red_cards is not None:
+                target.away_red_cards = source.away_red_cards
+
+            # Fill Extended Stats
+            if target.home_total_shots is None and source.home_total_shots is not None:
+                target.home_total_shots = source.home_total_shots
+            if target.away_total_shots is None and source.away_total_shots is not None:
+                target.away_total_shots = source.away_total_shots
+                
+            # Fill Referee if missing
+            if not target.referee and source.referee:
+                target.referee = source.referee
+
         def process_list(matches, source_tag):
             count = 0
             if not matches: return count
             for m in matches:
+                # Basic validation
                 if m.status not in ["FT", "AET", "PEN", "FINISHED"]: continue
                 if not m.match_date: continue
                 
-                key = f"{m.match_date.strftime('%Y%m%d')}_{m.home_team.name.lower()}_{m.away_team.name.lower()}"
+                key = get_merge_key(m)
                 
                 if key not in merged:
                     merged[key] = m
                     count += 1
+                else:
+                    # EXISTING MATCH FOUND -> ENRICH IT (Rule 2A)
+                    enrich_match(merged[key], m)
+                    
             return count
 
+        # Process in order of priority (Primary creates the base, Secondary fills gaps)
         c_uk = process_list(uk or [], "UK")
         c_org = process_list(org or [], "Org")
         c_open = process_list(open_src or [], "Open")
         
-        logger.info(f"Merged History: UK={c_uk}, Org={c_org}, Open={c_open}. Total={len(merged)}")
+        logger.info(f"Merged History: UK={c_uk}, Org={c_org}, Open={c_open}. Unique Total={len(merged)}")
         return list(merged.values())
 
     async def get_upcoming_matches(self, league_id: str, limit: int = 20) -> List[Match]:

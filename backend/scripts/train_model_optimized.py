@@ -28,6 +28,12 @@ from src.domain.services.learning_service import LearningService
 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 from src.domain.services.pick_resolution_service import PickResolutionService
 from src.core.constants import DEFAULT_LEAGUES
+from src.domain.services.match_aggregator_service import MatchAggregatorService
+from src.domain.services.team_service import TeamService
+from src.application.dtos.dtos import (
+    MatchPredictionDTO, MatchDTO, PredictionDTO, 
+    TeamDTO, LeagueDTO, SuggestedPickDTO
+)
 
 # Global Service Instances (for worker processes)
 _prediction_service = None
@@ -107,9 +113,14 @@ async def main():
     import argparse
     parser = argparse.ArgumentParser(description="Train ML models per league")
     parser.add_argument("--days", type=int, default=550, help="Days back to fetch data for")
+    parser.add_argument("--league", type=str, help="Specific league ID to train (optional)")
     args = parser.parse_args()
     
-    from src.api.dependencies import get_training_data_service, get_statistics_service
+    from src.api.dependencies import (
+        get_training_data_service, 
+        get_statistics_service, 
+        get_match_aggregator_service
+    )
     training_service = get_training_data_service()
     stats_service = get_statistics_service()
     learning_service = LearningService()
@@ -117,10 +128,22 @@ async def main():
     # Ensure models directory exists
     os.makedirs("ml_models", exist_ok=True)
     
+    # --- CLEAR STALE PREDICTIONS ---
+    from src.infrastructure.repositories.persistence_repository import get_persistence_repository
+    repo = get_persistence_repository()
+    success = repo.clear_all_predictions()
+    if success:
+        logger.info("🗑️  Cleared old match predictions from database to force regeneration.")
+    else:
+        logger.warning("⚠️  Failed to clear old predictions. Stale data might persist.")
+    
+    # Determine Leagues
+    leagues_to_fetch = [args.league] if args.league else DEFAULT_LEAGUES
+
     # Fetch Data
-    logger.info(f"📥 Fetching Training Data ({args.days} days)...")
+    logger.info(f"📥 Fetching Training Data ({args.days} days) for {leagues_to_fetch}...")
     matches = await training_service.fetch_comprehensive_training_data(
-        leagues=DEFAULT_LEAGUES,
+        leagues=leagues_to_fetch,
         days_back=args.days,
         force_refresh=False
     )
@@ -134,6 +157,150 @@ async def main():
     for m in matches:
         matches_by_league.setdefault(m.league.id, []).append(m)
         
+    # --- SETUP PREDICTION SERVICES ---
+    aggregator = get_match_aggregator_service()
+    pred_service = PredictionService()
+    # Initialize AI Picks Service with learning weights
+    from src.domain.services.ai_picks_service import AIPicksService
+    weights = learning_service.get_learning_weights()
+    picks_service = AIPicksService(learning_weights=weights)
+
+    async def generate_league_predictions(league_id, league_matches, team_stats_cache, league_avgs):
+        try:
+            # fetch upcoming
+            upcoming = await aggregator.get_upcoming_matches(league_id, limit=50)
+            if not upcoming:
+                 return []
+            
+            logger.info(f"   🔮 Generating predictions for {len(upcoming)} upcoming matches...")
+            
+            batch_data = []
+            
+            for match in upcoming:
+                # Get Stats from Cache
+                h_name = stats_service.normalize_team_name(match.home_team.name)
+                a_name = stats_service.normalize_team_name(match.away_team.name)
+                
+                # Use current state of stats (after all history processed)
+                raw_home = team_stats_cache.get(h_name, stats_service.create_empty_stats_dict())
+                raw_away = team_stats_cache.get(a_name, stats_service.create_empty_stats_dict())
+                
+                home_stats = stats_service.convert_to_domain_stats(h_name, raw_home)
+                away_stats = stats_service.convert_to_domain_stats(a_name, raw_away)
+                
+                # Calculate H2H
+                h2h_stats = stats_service.calculate_h2h_statistics(h_name, a_name, league_matches)
+                
+                try:
+                    # Generate Prediction
+                    prediction = pred_service.generate_prediction(
+                        match=match,
+                        home_stats=home_stats,
+                        away_stats=away_stats,
+                        league_averages=league_avgs
+                    )
+                    
+                    # Generate Picks Integration
+                    # Pass all predicted metrics to the picks engine
+                    picks_container = picks_service.generate_suggested_picks(
+                        match=match,
+                        home_stats=home_stats,
+                        away_stats=away_stats,
+                        league_averages=league_avgs,
+                        h2h_stats=h2h_stats,
+                        predicted_home_goals=prediction.predicted_home_goals,
+                        predicted_away_goals=prediction.predicted_away_goals,
+                        home_win_prob=prediction.home_win_probability,
+                        draw_prob=prediction.draw_probability,
+                        away_win_prob=prediction.away_win_probability,
+                        predicted_home_corners=prediction.predicted_home_corners,
+                        predicted_away_corners=prediction.predicted_away_corners,
+                        predicted_home_yellow_cards=prediction.predicted_home_yellow_cards,
+                        predicted_away_yellow_cards=prediction.predicted_away_yellow_cards
+                    )
+                    
+                    # Map Domain Picks to DTOs
+                    pick_dtos = []
+                    for p in picks_container.suggested_picks:
+                        pick_dtos.append(SuggestedPickDTO(
+                            market_type=p.market_type.value if hasattr(p.market_type, "value") else str(p.market_type),
+                            market_label=p.market_label,
+                            probability=p.probability,
+                            odds=p.odds,
+                            confidence_level=p.confidence_level.value if hasattr(p.confidence_level, "value") else str(p.confidence_level),
+                            reasoning=p.reasoning,
+                            priority_score=p.priority_score,
+                            is_recommended=p.is_recommended,
+                            expected_value=p.expected_value,
+                            risk_level=p.risk_level.value if hasattr(p.risk_level, "value") else str(p.risk_level)
+                        ))
+                    
+                    # Manual DTO mapping
+                    m_dto = MatchDTO(
+                        id=match.id,
+                        home_team=TeamDTO(
+                            id=match.home_team.id, name=match.home_team.name, country=match.home_team.country,
+                            logo_url=match.home_team.logo_url or TeamService.get_team_logo(match.home_team.name)
+                        ),
+                        away_team=TeamDTO(
+                            id=match.away_team.id, name=match.away_team.name, country=match.away_team.country,
+                            logo_url=match.away_team.logo_url or TeamService.get_team_logo(match.away_team.name)
+                        ),
+                        league=LeagueDTO(id=match.league.id, name=match.league.name, country=match.league.country, season=match.league.season),
+                        match_date=match.match_date,
+                        home_goals=match.home_goals, away_goals=match.away_goals, status=match.status,
+                        home_corners=match.home_corners, away_corners=match.away_corners,
+                        home_yellow_cards=match.home_yellow_cards, away_yellow_cards=match.away_yellow_cards,
+                        home_red_cards=match.home_red_cards, away_red_cards=match.away_red_cards,
+                        home_odds=match.home_odds, draw_odds=match.draw_odds, away_odds=match.away_odds
+                    )
+                    
+                    p_dto = PredictionDTO(
+                        match_id=prediction.match_id,
+                        home_win_probability=prediction.home_win_probability,
+                        draw_probability=prediction.draw_probability,
+                        away_win_probability=prediction.away_win_probability,
+                        over_25_probability=prediction.over_25_probability,
+                        under_25_probability=prediction.under_25_probability,
+                        predicted_home_goals=prediction.predicted_home_goals,
+                        predicted_away_goals=prediction.predicted_away_goals,
+                        predicted_home_corners=prediction.predicted_home_corners,
+                        predicted_away_corners=prediction.predicted_away_corners,
+                        predicted_home_yellow_cards=prediction.predicted_home_yellow_cards,
+                        predicted_away_yellow_cards=prediction.predicted_away_yellow_cards,
+                        confidence=prediction.confidence,
+                        display_confidence=prediction.confidence,
+                        is_value_bet=prediction.is_value_bet,
+                        expected_value=prediction.expected_value,
+                        data_updated_at=prediction.data_updated_at,
+                        data_sources=prediction.data_sources,
+                        created_at=prediction.created_at,
+                        recommended_bet=prediction.recommended_bet,
+                        over_under_recommendation=prediction.over_under_recommendation,
+                        suggested_picks=pick_dtos
+                    )
+                     # Inject projected stats
+                    m_dto.home_corners = int(round(prediction.predicted_home_corners))
+                    m_dto.away_corners = int(round(prediction.predicted_away_corners))
+                    m_dto.home_yellow_cards = int(round(prediction.predicted_home_yellow_cards))
+                    m_dto.away_yellow_cards = int(round(prediction.predicted_away_yellow_cards))
+
+                    full_dto = MatchPredictionDTO(match=m_dto, prediction=p_dto)
+                    
+                    batch_data.append({
+                        "match_id": match.id,
+                        "league_id": league_id,
+                        "data": full_dto.model_dump(),
+                        "ttl_seconds": 86400 * 7
+                    })
+                except Exception as e:
+                    logger.error(f"Prediction failed for match {match.id}: {e}")
+            
+            return batch_data
+        except Exception as e:
+             logger.error(f"Prediction generation failed for league {league_id}: {e}")
+             return []
+
     # --- 2. TRAIN PER LEAGUE ---
     
     for league_id, league_matches in matches_by_league.items():
@@ -155,8 +322,8 @@ async def main():
         for match in league_matches:
             if match.home_goals is None or match.away_goals is None: continue
             
-            h_name = match.home_team.name
-            a_name = match.away_team.name
+            h_name = stats_service.normalize_team_name(match.home_team.name)
+            a_name = stats_service.normalize_team_name(match.away_team.name)
             
             # Snapshot state BEFORE match
             raw_home = team_stats_cache.get(h_name, empty_stats).copy()
@@ -256,8 +423,14 @@ async def main():
         clf_outcome.fit(X, y_outcome)
         joblib.dump(clf_outcome, f"ml_models/{league_id}_winner.joblib")
         
+        # --- 4. PREDICT UPCOMING FIXTURES ---
+        predicted_batch = await generate_league_predictions(league_id, league_matches, team_stats_cache, league_avgs)
+        if predicted_batch:
+             repo.bulk_save_predictions(predicted_batch)
+        
     elapsed = time.time() - start_time
     logger.info(f"🎉 Training Completed in {elapsed:.2f} seconds.")
+
     
 if __name__ == "__main__":
     asyncio.run(main())
