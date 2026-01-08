@@ -47,6 +47,7 @@ class AIPicksService(PicksService):
         predicted_home_yellow_cards: float = 0.0,
         predicted_away_yellow_cards: float = 0.0,
         market_odds: Optional[dict[str, float]] = None,
+        ml_model: Optional[object] = None, # <--- NEW DYNAMIC MODEL INJECTION
     ) -> MatchSuggestedPicks:
         """
         Orchestrates the generation of AI-exclusive picks.
@@ -59,7 +60,8 @@ class AIPicksService(PicksService):
             home_win_prob, draw_prob, away_win_prob,
             predicted_home_corners, predicted_away_corners,
             predicted_home_yellow_cards, predicted_away_yellow_cards,
-            market_odds
+            market_odds,
+            ml_model=ml_model # Pass injected model to parent
         )
         
         # Extract the raw list for processing
@@ -76,7 +78,7 @@ class AIPicksService(PicksService):
         # 3. Apply "Model-First" Filtering & Logic
         # This is where the AI takes over: Filtering, Boosting, Locking.
         ai_refined_picks = self._process_ai_logic(
-            match, candidates, context_semantics
+            match, candidates, context_semantics, ml_model
         )
         
         # 4. Update the container
@@ -131,7 +133,8 @@ class AIPicksService(PicksService):
         self,
         match: Match,
         picks: List[SuggestedPick],
-        context: dict[str, bool]
+        context: dict[str, bool],
+        ml_model: Optional[object] = None
     ) -> List[SuggestedPick]:
         """
         The core "AI Brain" pipeline.
@@ -170,10 +173,12 @@ class AIPicksService(PicksService):
 
             # --- PHASE C: ML Confirmation (Predict Proba) ---
             ml_confidence = 0.0
-            if self.ml_model:
+            target_model = ml_model if ml_model else self.ml_model
+
+            if target_model:
                 try:
                     features = [MLFeatureExtractor.extract_features(pick)]
-                    ml_confidence = self.ml_model.predict_proba(features)[0][1]
+                    ml_confidence = target_model.predict_proba(features)[0][1]
                     pick.ml_confidence = float(ml_confidence)
                 except Exception as e:
                     logger.debug(f"ML prediction failed for pick: {e}")
@@ -181,7 +186,7 @@ class AIPicksService(PicksService):
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
             # Criteria: Prob > 65%, Weight >= 1.0, ML > 75%
             # If ML model is missing (during backtesting), use stricter statistical thresholds
-            if self.ml_model and ml_confidence > 0:
+            if target_model and ml_confidence > 0:
                 is_ai_lock = (
                     pick.probability > 0.65 and
                     weight >= 1.05 and
