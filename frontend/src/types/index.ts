@@ -166,6 +166,10 @@ export interface SuggestedPick {
   clv_beat?: boolean;
   is_ml_confirmed?: boolean;
   ml_confidence?: number;
+
+  // SSOT fields from Backend (Auditoría v4)
+  color_code?: string; // Hex color from backend
+  result?: string; // WIN, LOSS, VOID, PENDING
 }
 
 /**

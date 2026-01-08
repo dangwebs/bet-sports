@@ -103,14 +103,11 @@ jobs:
       fail-fast: false # No detener otros jobs si uno falla
       matrix:
         include:
-          # Dividir en grupos más pequeños para máximo paralelismo
-          # Total: 7 jobs corriendo simultáneamente (Top Tier Only)
+          # Total: 6 jobs (Top Tier Only - §15.B compliant, B1 removed)
           - group: "England_Premier"
             leagues: "E0"
           - group: "Germany_Bundesliga"
             leagues: "D1"
-          - group: "Belgium"
-            leagues: "B1"
           - group: "Spain_LaLiga"
             leagues: "SP1"
           - group: "Portugal"
