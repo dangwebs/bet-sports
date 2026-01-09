@@ -6,6 +6,7 @@ import os
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import multiprocessing
+from tqdm import tqdm
 
 # Load environment variables from .env file FIRST
 from dotenv import load_dotenv
@@ -36,7 +37,7 @@ logger = logging.getLogger("OrchestratorCLI")
 CPU_COUNT = int(os.getenv('N_JOBS', multiprocessing.cpu_count()))
 logger.info(f"🚀 Running with {CPU_COUNT} CPU cores")
 
-async def cmd_train(days_back: int = 550, n_jobs: int = None):
+async def cmd_train(days_back: int = 550, n_jobs: int = None, skip_cleanup: bool = False):
     """
     Step 1: Retrain the ML Model with parallel processing.
     """
@@ -52,6 +53,17 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
     # [FIX] Get Persistence Repo to save results to DB (source of truth for Dashboard)
     from src.api.dependencies import get_persistence_repository
     repo = get_persistence_repository()
+    
+    # [AUTO-CLEANUP] Limpiar DB y caché antes de entrenar para asegurar datos frescos
+    if not skip_cleanup:
+        logger.info("🧹 AUTO-CLEANUP: Limpiando datos anteriores...")
+        try:
+            db_results = repo.clear_all_data()
+            logger.info(f"📊 Database cleanup: {db_results}")
+            cache.clear()
+            logger.info("✅ Cache limpiado - Pipeline iniciará con datos frescos.")
+        except Exception as cleanup_err:
+            logger.warning(f"⚠️ Cleanup parcial (no fatal): {cleanup_err}")
     
     # Use DEFAULT_LEAGUES (Top Tier Only) instead of all metadata
     leagues = DEFAULT_LEAGUES
@@ -174,7 +186,16 @@ async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = Fal
         # Procesar múltiples ligas en paralelo usando asyncio.gather
         logger.info(f"🔥 Processing {len(leagues)} leagues in parallel")
         tasks = [process_league_async(league_id, use_case, repo, force=force) for league_id in leagues]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Barra de progreso para el procesamiento paralelo
+        with tqdm(total=len(leagues), desc="Leagues (parallel)", unit="league") as pbar:
+            results = []
+            for coro in asyncio.as_completed(tasks):
+                result = await coro
+                pbar.update(1)
+                if result:
+                    pbar.set_postfix_str(f"Completed {result[0]}")
+                results.append(result)
         
         # Analizar resultados
         failed = []
@@ -196,13 +217,15 @@ async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = Fal
                 logger.error("❌ All leagues failed!")
                 sys.exit(1)
     else:
-        # Procesamiento secuencial (fallback)
+        # Procesamiento secuencial con barra de progreso
         logger.info(f"🔄 Processing {len(leagues)} leagues sequentially")
         failed = []
-        for league_id in leagues:
-            result = await process_league_async(league_id, use_case, repo, force=force)
-            if result and not result[1]:
-                failed.append(result[0])
+        with tqdm(leagues, desc="Leagues", unit="league") as pbar:
+            for league_id in pbar:
+                pbar.set_postfix_str(f"Processing {league_id}")
+                result = await process_league_async(league_id, use_case, repo, force=force)
+                if result and not result[1]:
+                    failed.append(result[0])
         
         if failed and len(failed) == len(leagues):
             logger.error("❌ All leagues failed!")
@@ -273,6 +296,8 @@ def main():
                               help='Number of days back for training data (default: 550)')
     parser_train.add_argument('--n-jobs', type=int, default=None, 
                               help='Number of parallel jobs for ML training (default: auto-detect)')
+    parser_train.add_argument('--skip-cleanup', action='store_true',
+                              help='Skip automatic cleanup of DB/cache before training')
     
     # Predict
     parser_predict = subparsers.add_parser('predict', help='Run predictions for leagues')
@@ -295,7 +320,7 @@ def main():
     
     try:
         if args.command == 'train':
-            asyncio.run(cmd_train(args.days, args.n_jobs))
+            asyncio.run(cmd_train(args.days, args.n_jobs, args.skip_cleanup))
         elif args.command == 'predict':
             asyncio.run(cmd_predict(args.leagues, args.parallel, args.force))
         elif args.command == 'top-picks':
