@@ -383,7 +383,8 @@ async def main():
         
         # 1. Corners Regressor
         logger.info(f"   📐 Training Corners Regressor ({league_id})...")
-        reg_corners = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=args.n_jobs, random_state=42)
+        # TUNING UPDATE: Increased complexity (depth=25, leaf=2) to capture high-variance games
+        reg_corners = RandomForestRegressor(n_estimators=150, max_depth=25, min_samples_leaf=2, n_jobs=args.n_jobs, random_state=42)
         
         # Define TimeSeriesSplit for CV
         tscv = TimeSeriesSplit(n_splits=3)
@@ -402,6 +403,7 @@ async def main():
         if max_dominance > 0.90:
             logger.error(f"      ❌ MODE COLLAPSE DETECTED in Corners Model for {league_id}! (90% same value). Skipping save.")
         elif std_dev < 0.5:
+             # Just warning, allow save but log it
             logger.warning(f"      ⚠️ Low Variance in Corners Model for {league_id} (StdDev < 0.5). Model might be too conservative.")
             joblib.dump(reg_corners, f"ml_models/{league_id}_corners.joblib")
         else:
@@ -409,7 +411,8 @@ async def main():
             
         # 2. Cards Regressor
         logger.info(f"   cards Training Cards Regressor ({league_id})...")
-        reg_cards = RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, n_jobs=args.n_jobs, random_state=42)
+        # TUNING UPDATE: Increased complexity for cards too
+        reg_cards = RandomForestRegressor(n_estimators=150, max_depth=25, min_samples_leaf=2, n_jobs=args.n_jobs, random_state=42)
         reg_cards.fit(X, y_cards)
         
         # SANITY CHECK (Cards)
@@ -424,7 +427,8 @@ async def main():
         
         # 3. Match Winner Classifier
         logger.info(f"   🏆 Training Outcome Classifier ({league_id})...")
-        clf_outcome = RandomForestClassifier(n_estimators=200, max_depth=15, class_weight='balanced', n_jobs=args.n_jobs, random_state=42)
+        # TUNING UPDATE: Increased depth to 20
+        clf_outcome = RandomForestClassifier(n_estimators=200, max_depth=20, class_weight='balanced', n_jobs=args.n_jobs, random_state=42)
         scores_acc = cross_val_score(clf_outcome, X, y_outcome, cv=tscv, scoring='accuracy')
         logger.info(f"      - Accuracy: {np.mean(scores_acc):.2%}")
         
