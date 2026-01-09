@@ -158,7 +158,7 @@ jobs:
 
       - name: 🧹 Clear Render Cache
         env:
-          RENDER_APP_URL: "https://football-prediction-api-8sl4.onrender.com"
+          RENDER_APP_URL: "https://football-prediction-api-x4pm.onrender.com"
           ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
         run: |
           curl -X DELETE "${RENDER_APP_URL}/cache/clear" \
