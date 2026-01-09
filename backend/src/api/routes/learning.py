@@ -71,9 +71,8 @@ class PickDetail(BaseModel):
     opening_odds: float = 0.0
     closing_odds: float = 0.0
     
-    # Frontend Alignment Fields (Fase 3 Remediation)
     confidence_level: str = "medium"  # "high" | "medium" | "low"
-    risk_level: float = 0.5
+    risk_level: int = 3  # 1-5 (matches SuggestedPickDTO)
     is_recommended: bool = False
     priority_score: float = 0.0
     pick_code: Optional[str] = None  # Short code like '1', 'X', '2', 'O2.5'

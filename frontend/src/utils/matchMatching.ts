@@ -69,13 +69,13 @@ export const matchLiveWithPrediction = (
         id: "0",
         name: liveMatch.home_team,
         short_name: liveMatch.home_short_name,
-        logo: "",
+        logo_url: liveMatch.home_logo_url || "",
       },
       away_team: {
         id: "0",
         name: liveMatch.away_team,
         short_name: liveMatch.away_short_name,
-        logo: "",
+        logo_url: liveMatch.away_logo_url || "",
       },
       match_date: new Date().toISOString(),
       league: {

@@ -131,26 +131,6 @@ async def process_league_async(league_id: str, use_case, persistence_repository,
         # 1. Generate Predictions
         result = await use_case.execute(league_id, limit=50, force_refresh=True if 'force' in locals() and force else False)
         logger.info(f"✅ Saved {len(result.predictions)} predictions for {league_id}")
-        
-        # 2. [NEW] Generate Top ML Picks for THIS League immediately
-        from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
-        
-        # Re-use the existing persistence repo
-        top_picks_use_case = GetTopMLPicksUseCase(persistence_repository)
-        
-        # Get Top 10 for this specific league
-        top_picks = await top_picks_use_case.execute(limit=10, league_id=league_id)
-        
-        if top_picks and top_picks.picks:
-            key = f"top_ml_picks_{league_id}"
-            persistence_repository.save_training_result(key, top_picks.model_dump())
-            logger.info(f"🏆 Saved {len(top_picks.picks)} League Top Picks to DB (key: {key})")
-            
-            print(f"\n--- 📢 LOG: Picks Inserted for {league_id} ---")
-            for i, p in enumerate(top_picks.picks, 1):
-                # match_id is not available in SuggestedPickDTO
-                print(f"#{i} [{p.market_label}] Conf: {p.confidence_level} | Stake: {p.suggested_stake}")
-            print(f"--- End of Batch {league_id} ---\n")
             
         return league_id, True
     except Exception as e:
@@ -231,33 +211,6 @@ async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = Fal
             logger.error("❌ All leagues failed!")
             sys.exit(1)
 
-async def cmd_top_picks():
-    """
-    Step 3: Generate Daily Top Picks.
-    """
-    logger.info("CMD: TOP PICKS.")
-    from src.api.dependencies import get_persistence_repository
-    from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
-    
-    repo = get_persistence_repository()
-    
-    # We use the UseCase logic to generate the top picks based on what is in the DB
-    use_case = GetTopMLPicksUseCase(repo)
-    
-    try:
-        top_picks = await use_case.execute(limit=10)
-        if top_picks and top_picks.picks:
-            logger.info(f"✅ Generated {len(top_picks.picks)} Top ML Verified Picks.")
-            
-            # [FIX] Persist Top Picks to Database
-            logger.info("💾 Persisting Top Picks to Database...")
-            repo.save_training_result("top_ml_picks", top_picks.model_dump())
-            logger.info("✅ Top Picks successfully saved to DB (key: top_ml_picks)")
-        else:
-            logger.info("ℹ️ No Top Picks generated.")
-        
-    except Exception as e:
-        logger.error(f"❌ Top Picks Generation Failed: {e}")
         sys.exit(1)
 
 async def cmd_cleanup():
@@ -310,21 +263,28 @@ def main():
     parser_predict.add_argument('--force', action='store_true',
                                 help='Force regeneration of predictions (ignore cache)')
     
-    # Top Picks
-    parser_top = subparsers.add_parser('top-picks', help='Generate top ML picks')
-    
     # Cleanup
     parser_cleanup = subparsers.add_parser('cleanup', help='Clear ALL cached data before pipeline run')
     
     args = parser.parse_args()
+    
+    # =====================================================
+    # DATABASE INITIALIZATION (Tables auto-creation)
+    # This ensures tables exist before any DB operations.
+    # =====================================================
+    try:
+        from src.api.dependencies import get_persistence_repository
+        repo = get_persistence_repository()
+        repo.create_tables()
+        logger.info("✅ Database tables verified/created.")
+    except Exception as db_init_err:
+        logger.warning(f"⚠️ Could not initialize DB tables (may already exist): {db_init_err}")
     
     try:
         if args.command == 'train':
             asyncio.run(cmd_train(args.days, args.n_jobs, args.skip_cleanup))
         elif args.command == 'predict':
             asyncio.run(cmd_predict(args.leagues, args.parallel, args.force))
-        elif args.command == 'top-picks':
-            asyncio.run(cmd_top_picks())
         elif args.command == 'cleanup':
             asyncio.run(cmd_cleanup())
     except KeyboardInterrupt:

@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
     `/api/v1/suggested-picks/match/${matchId}`,
   SUGGESTED_PICKS_FEEDBACK: "/api/v1/suggested-picks/feedback",
   LEARNING_STATS: "/api/v1/suggested-picks/learning-stats",
+  TOP_ML_PICKS: "/api/v1/top-ml-picks",
 
   // Parleys
   PARLEYS: "/api/v1/parleys/",

@@ -41,6 +41,7 @@ export interface Prediction {
 export interface MatchPrediction {
   match: Match;
   prediction: Prediction;
+  top_ml_picks?: SuggestedPick[];
 }
 
 export interface PredictionsResponse {

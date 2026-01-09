@@ -4,7 +4,6 @@ export interface Team {
   short_name?: string;
   country?: string;
   logo_url?: string;
-  logo?: string; // Add logo property to match usage in App.tsx
 }
 
 export interface League {
