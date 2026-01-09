@@ -185,16 +185,40 @@ class AIPicksService(PicksService):
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
             # Criteria: Prob > 65%, Weight >= 1.0, ML > 75%
             # If ML model is missing (during backtesting), use stricter statistical thresholds
+            
+            # Context Compliance Check:
+            # A pick qualifies for "Lock" status ONLY if it aligns with the dominant context
+            context_aligned = True
+            if context["defensive_struggle"]:
+                # In defensive games, only defensive picks can be locks
+                if not ("UNDER" in market_type or "BTTS_NO" in market_type or "DRAW" in market_type):
+                    context_aligned = False
+            elif context["one_sided"]:
+                # In one-sided games, only favorites/goals can be locks
+                if not ("WIN" in market_type or "HANDICAP" in market_type or "TEAM_GOALS" in market_type):
+                    context_aligned = False
+            
+            # Baseline Thresholds
+            min_prob = 0.65
+            min_ml = 0.75
+            
+            # If context is NOT aligned, we demand much higher evidence (Extraordinary Evidence)
+            if not context_aligned:
+                min_prob = 0.80
+                min_ml = 0.85
+
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
-                    pick.probability > 0.65 and
+                    pick.probability > min_prob and
                     weight >= 1.05 and
-                    ml_confidence > 0.75
+                    ml_confidence > min_ml
                 )
             else:
                 # Fallback: Strong Statistical signal "Algo Lock" for history
                 # Stricter: 0.70 -> 0.75 to ensure only top tier picks
-                is_ai_lock = (pick.probability > 0.75 and weight >= 1.05)
+                # If context aligned, 75%. If not, 85%.
+                fallback_prob = 0.75 if context_aligned else 0.85
+                is_ai_lock = (pick.probability > fallback_prob and weight >= 1.05 and pick.priority_score > 12)
             
             if is_ai_lock:
                 pick.priority_score *= 2.0 # Massive boost for verified quality
@@ -235,4 +259,25 @@ class AIPicksService(PicksService):
 
             refined_picks.append(pick)
             
+        # --- PHASE F: Competition for "IA CONFIRMED" Badge ---
+        # Rule: Only ONE pick per match can have the label "is_ia_confirmed" (The absolute best).
+        # We sort by priority and only keep the flag on the top 1, removing it from others.
+        if refined_picks:
+            # Sort by Priority Descending
+            refined_picks.sort(key=lambda x: x.priority_score, reverse=True)
+            
+            # Find the first one that qualified as AI Lock
+            best_pick = refined_picks[0]
+            
+            # Reset the flag for everyone first to ensure exclusivity
+            for p in refined_picks:
+                p.is_ia_confirmed = False
+                
+            # If the best pick was indeed an AI Lock (is_ml_confirmed checks criteria), grant the Crown
+            if best_pick.is_ml_confirmed:
+                best_pick.is_ia_confirmed = True
+                # Enhance reasoning if not already present
+                if "IA CONFIRMED" not in best_pick.reasoning:
+                    best_pick.reasoning = f"[🎯 TOP ML] {best_pick.reasoning}"
+
         return refined_picks
