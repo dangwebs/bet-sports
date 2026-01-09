@@ -55,4 +55,5 @@ backend/app_persistence.db-journal
 .cache_data/
 
 # ML Models
-ml_models/
+
+
