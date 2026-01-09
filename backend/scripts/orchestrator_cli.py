@@ -62,12 +62,10 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
             logger.info("Training disabled via env var.")
             return
 
-        # Pasar n_jobs al orchestrator si lo soporta
-        # Si tu orchestrator no soporta n_jobs, necesitarás modificarlo
+        # Old orchestrator doesn't support n_jobs, removed for compatibility
         training_result = await orchestrator.run_training_pipeline(
             league_ids=leagues,
-            days_back=days_back,
-            n_jobs=n_jobs  # Añade este parámetro si tu orchestrator lo soporta
+            days_back=days_back
         )
         
         # Save validation metrics to Cache/DB if needed
