@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from src.domain.entities.entities import Match
+from src.domain.entities.entities import Match, League
 from src.domain.services.match_enrichment_service import MatchEnrichmentService
 from src.application.use_cases.use_cases import DataSources
 from src.utils.time_utils import get_current_time, COLOMBIA_TZ
