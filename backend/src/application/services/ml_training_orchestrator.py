@@ -4,6 +4,7 @@ import os
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
+from tqdm import tqdm
 
 # ML Imports
 try:
@@ -112,10 +113,12 @@ class MLTrainingOrchestrator:
             for lid, ms in league_matches_map.items()
         }
 
-        # 4. Process matches
+        # 4. Process matches with progress bar
         team_stats_cache = {}
+        total_matches = len(all_matches)
+        logger.info(f"Processing {total_matches} matches...")
 
-        for match in all_matches:
+        for match in tqdm(all_matches, desc="Training", unit="match"):
             if match.home_goals is None or match.away_goals is None:
                 continue
 
