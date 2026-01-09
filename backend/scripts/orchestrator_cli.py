@@ -81,10 +81,25 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
         cache.set("ml_training_result_data", training_data, ttl_seconds=86400)
         
         # [FIX] Persist to Database for Dashboard Visibility
-        # This allows the API to serve this data even after the GitHub Action runner dies
+        # IMPORTANT: Only save lightweight metrics - full model_dump() is ~69MB and causes SSL timeouts
         logger.info("💾 Persisting Training Result to Database...")
-        repo.save_training_result("latest_daily", training_result.model_dump())
-        logger.info("✅ Training Result successfully saved to DB (key: latest_daily)")
+        lightweight_result = {
+            "matches_processed": training_result.matches_processed,
+            "correct_predictions": training_result.correct_predictions,
+            "accuracy": training_result.accuracy,
+            "total_bets": training_result.total_bets,
+            "roi": training_result.roi,
+            "profit_units": training_result.profit_units,
+            "market_stats": training_result.market_stats,
+            "roi_evolution": training_result.roi_evolution,
+            "pick_efficiency": training_result.pick_efficiency,
+            # Exclude: match_history (~60MB), team_stats (~9MB)
+        }
+        try:
+            repo.save_training_result("latest_daily", lightweight_result)
+            logger.info("✅ Training Result successfully saved to DB (key: latest_daily)")
+        except Exception as db_err:
+            logger.error(f"⚠️ Failed to persist to DB (non-fatal): {db_err}")
         
     except Exception as e:
         logger.error(f"❌ Training Failed: {e}", exc_info=True)
