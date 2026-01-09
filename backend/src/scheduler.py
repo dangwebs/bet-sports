@@ -57,7 +57,7 @@ class BotScheduler:
                 get_persistence_repository, get_match_aggregator_service
             )
             from src.application.use_cases.use_cases import GetPredictionsUseCase
-            from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
+            from src.core.constants import DEFAULT_LEAGUES
             
             orchestrator = get_ml_training_orchestrator()
             cache = get_cache_service()
@@ -67,7 +67,7 @@ class BotScheduler:
             statistics_service = get_statistics_service()
             match_aggregator = get_match_aggregator_service()
             
-            leagues = list(LEAGUES_METADATA.keys())
+            leagues = DEFAULT_LEAGUES  # §15.B compliant - Only top-tier leagues
             
             # 1. RETRAINING
             import os
@@ -133,7 +133,7 @@ class BotScheduler:
             )
             
             leagues_processed = 0
-            for league_id in self._get_league_iterator(LEAGUES_METADATA):
+            for league_id in DEFAULT_LEAGUES:
                 try:
                     # Execute inference for league
                     predictions_dto = await use_case.execute(league_id, limit=50)
