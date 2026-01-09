@@ -8,6 +8,9 @@ import logging
 # This script is expected to be run from the 'backend' directory
 sys.path.append(os.getcwd())
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.api.dependencies import get_ml_training_orchestrator
 from src.infrastructure.cache.cache_service import get_cache_service
 

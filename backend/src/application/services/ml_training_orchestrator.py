@@ -11,14 +11,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*utcnow
 
 # ML Imports will be lazy-loaded in the methods that need them
 # to prevent memory spikes on startup (Render Free Tier Optimization)
-ML_AVAILABLE = False
-try:
-    from sklearn.ensemble import RandomForestClassifier
-    import joblib
-    ML_AVAILABLE = True
-except ImportError:
-    RandomForestClassifier = None
-    joblib = None
+ML_AVAILABLE = True # Assumed true, checked at runtime
 
 from src.domain.services.learning_service import LearningService
 from src.domain.services.prediction_service import PredictionService
@@ -28,13 +21,12 @@ from src.application.services.training_data_service import TrainingDataService
 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 from src.domain.services.picks_service import PicksService
 from src.domain.services.ai_picks_service import AIPicksService
-# from src.domain.services.risk_management.risk_manager import RiskManager
+from src.domain.services.risk_management.risk_manager import RiskManager
 from src.domain.entities.entities import Match
 from src.infrastructure.cache.cache_service import CacheService
 from src.utils.time_utils import get_current_time
 from src.core.constants import DEFAULT_LEAGUES
 from src.infrastructure.repositories.persistence_repository import PersistenceRepository
-from src.application.services.ml_training_orchestrator_helper import _process_single_match_task
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +37,12 @@ class TrainingResult(BaseModel):
     total_bets: int
     roi: float
     profit_units: float
-    market_stats: Dict[str, Any]  # Market -> stats mapping
-    match_history: List[Dict[str, Any]] = []  # List of match prediction records
-    roi_evolution: List[Dict[str, Any]] = []  # {date, roi, profit} records
-    pick_efficiency: List[Dict[str, Any]] = []  # Per-market efficiency stats
-    team_stats: Dict[str, Dict[str, Any]] = {}  # Team -> stat values
-    global_averages: Dict[str, float] = {}  # Calculated from the entire dataset
-    last_match_date: Optional[str] = None  # ISO date of last processed match
-    # ML Traceability (§12 Compliance)
-    ml_metadata: Optional[Dict[str, Any]] = None  # {model_version, training_date, accuracy}
+    market_stats: dict
+    match_history: List[Any] = []
+    roi_evolution: List[Any] = []
+    pick_efficiency: List[Any] = []
+    team_stats: dict = {}
+    global_averages: dict = {} # Calculated from the entire 10-year dataset
 
 class MLTrainingOrchestrator:
     """
@@ -85,7 +74,7 @@ class MLTrainingOrchestrator:
         self.cache_service = cache_service
         self.persistence_repository = persistence_repository
         self.feature_extractor = MLFeatureExtractor()
-        # self.risk_manager = RiskManager()
+        self.risk_manager = RiskManager()
         
         # Cache Keys
         self.CACHE_KEY_STATUS = "ml_training_status"
@@ -97,18 +86,21 @@ class MLTrainingOrchestrator:
         league_ids: Optional[List[str]] = None, 
         days_back: int = 550, # Standardized to 550 days (1.5 years)
         start_date: Optional[str] = None,
-        force_refresh: bool = False,
-        n_jobs: int = -1
+        force_refresh: bool = False
     ) -> TrainingResult:
         """
         Executes the full training pipeline and returns a TrainingResult.
         """
         logger.info(f"Starting ML Training Pipeline (leagues={league_ids}, days_back={days_back})")
         
+        # Lazy Load ML Libraries
         try:
-            from tqdm import tqdm
+            from sklearn.ensemble import RandomForestClassifier
+            import joblib
         except ImportError:
-            tqdm = None
+            RandomForestClassifier = None
+            joblib = None
+            logger.warning("ML libraries (sklearn, joblib) not found. Training will be skipped.")
         
         # 0. Set Status to IN_PROGRESS immediately
         # This tells the frontend to hide the Dashboard button but allow navigation
@@ -212,12 +204,7 @@ class MLTrainingOrchestrator:
         MIN_TRAIN_SAMPLES = 50 
         
         try:
-            # Console Progress Bar
-            iterator = matches_by_day
-            if tqdm:
-                iterator = tqdm(matches_by_day, desc="Processing Days", unit="day")
-                
-            for daily_matches in iterator:
+            for daily_matches in matches_by_day:
             
                 # A. Rolling Training DISABLED for performance on 512MB RAM / 0.1 CPU
                 # Retraining inside the loop is too heavy. We rely on Heuristics for the backtest,
@@ -246,170 +233,165 @@ class MLTrainingOrchestrator:
                 #              except Exception as e:
                 #                 logger.warning(f"Rolling Window Training Limit: {e}")
     
-                # B. Generate Candidates for TODAY (PARALLELIZED)
+                # B. Generate Candidates for TODAY
                 daily_candidates = [] # List of {'pick': SuggestedPick, 'match': Match}
                 daily_predictions_map = {} # match_id -> Prediction
-
-                # Prepare data for parallel execution to avoid pickling the whole service
-                # We explicitly pass only what's needed
-                parallel_inputs = []
+                
                 for match in daily_matches:
                     if match.home_goals is None or match.away_goals is None: continue
+    
+                    # Get/Create stats (Centralized)
+                    if match.home_team.name not in team_stats_cache: 
+                        team_stats_cache[match.home_team.name] = self.statistics_service.create_empty_stats_dict()
+                    if match.away_team.name not in team_stats_cache: 
+                        team_stats_cache[match.away_team.name] = self.statistics_service.create_empty_stats_dict()
+                        
+                    raw_home = team_stats_cache[match.home_team.name]
+                    raw_away = team_stats_cache[match.away_team.name]
                     
-                    # Get stats (fast dict lookup)
-                    raw_home = team_stats_cache.get(match.home_team.name, self.statistics_service.create_empty_stats_dict())
-                    raw_away = team_stats_cache.get(match.away_team.name, self.statistics_service.create_empty_stats_dict())
-                    
-                    # Init stats if missing
-                    if match.home_team.name not in team_stats_cache: team_stats_cache[match.home_team.name] = raw_home
-                    if match.away_team.name not in team_stats_cache: team_stats_cache[match.away_team.name] = raw_away
-
-                    league_averages = league_averages_map.get(match.league.id)
-                    
-                    parallel_inputs.append((
-                        match, 
-                        raw_home, 
-                        raw_away, 
-                        league_averages, 
-                        global_averages_obj, 
-                        self.prediction_service, 
-                        picks_service_instance,
-                        self.statistics_service,
-                        self.resolution_service,
-                        self.feature_extractor,
-                        # self.risk_manager
-                    ))
-                
-                # Execute in parallel using all available cores (n_jobs=-1)
-                # We use 'loky' backend which is robust for pickling
-                if parallel_inputs:
-                    from sklearn.utils.parallel import Parallel, delayed
-                    
-                    # Inner function defined here to be picklable? No, must be top-level or static.
-                    # But we can use 'delayed' on a standalone function.
-                    # Let's use a helper method defined outside the class or static.
-                    # For safety and context, we'll keep it simple:
-                    # We can't pickle 'self', so we pass services explicitly.
-                    
-                    # [OPTIMIZATION] Use 'processes' to bypass Python GIL and use all CPU cores.
-                    # 'threads' limits CPU-bound tasks to 1 core effectively.
-                    results = Parallel(n_jobs=n_jobs, prefer="processes")(
-                        delayed(_process_single_match_task)(*args) for args in parallel_inputs
-                    )
-                    
-                    # Process results
-                    for res in results:
-                        if not res: continue
-                        match_res, pred_res, picks_container_res = res
+                    home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home)
+                    away_stats = self.statistics_service.convert_to_domain_stats(match.away_team.name, raw_away)
+                    league_averages = league_averages_map.get(match.league.id) 
+    
+                    try:
+                        # PREDICT using current knowledge
+                        prediction = self.prediction_service.generate_prediction(
+                            match=match, 
+                            home_stats=home_stats, 
+                            away_stats=away_stats, 
+                            league_averages=league_averages,
+                            global_averages=global_averages_obj,
+                            min_matches=0
+                        )
+                        
+                        # Store prediction for later history logging (even if no picks generated)
+                        daily_predictions_map[match.id] = prediction
                         
                         matches_processed += 1
-                        daily_predictions_map[match_res.id] = pred_res
                         
-                        if picks_container_res and picks_container_res.suggested_picks:
-                            for p in picks_container_res.suggested_picks:
-                                daily_candidates.append({'pick': p, 'match': match_res, 'prediction': pred_res})
+                        # GENERATE PICKS
+                        suggested_picks_container = picks_service_instance.generate_suggested_picks(
+                            match=match, home_stats=home_stats, away_stats=away_stats, league_averages=league_averages,
+                            predicted_home_goals=prediction.predicted_home_goals, predicted_away_goals=prediction.predicted_away_goals,
+                            home_win_prob=prediction.home_win_probability, draw_prob=prediction.draw_probability, away_win_prob=prediction.away_win_probability
+                        )
+                        
+                        if suggested_picks_container and suggested_picks_container.suggested_picks:
+                            for p in suggested_picks_container.suggested_picks:
+                                daily_candidates.append({'pick': p, 'match': match, 'prediction': prediction})
                                 
-                # C. Apply Portfolio Constraints (Risk Manager)
-                # Bypassed: We approve ALL candidates directly
-                # approved_items = self.risk_manager.apply_portfolio_constraints(daily_candidates)
-                approved_items = daily_candidates
-            
-            # Mapping for Training (All Candidates) vs Simulation (Approved Only)
-            candidate_picks_map = {}
-            for item in daily_candidates:
-                mid = item['match'].id
-                if mid not in candidate_picks_map: candidate_picks_map[mid] = []
-                candidate_picks_map[mid].append(item['pick'])
-
-            approved_picks_map = {} 
-            for item in approved_items:
-                mid = item['match'].id
-                if mid not in approved_picks_map: approved_picks_map[mid] = []
-                approved_picks_map[mid].append(item['pick'])
+                    except Exception as e:
+                        logger.error(f"Error processing match {match.id}: {e}")
+                        continue
     
-            # D. Resolve & Record Results
-            for match in daily_matches:
-                 if match.home_goals is None: continue
-                 
-                 # PROCESS ALL CANDIDATES for ML Training
-                 candidates = candidate_picks_map.get(match.id, [])
-                 approved_list = approved_picks_map.get(match.id, [])
-                 
-                 # Track if *any* pick for this match was approved (for history/display)
-                 has_approved_pick = len(approved_list) > 0
-
-                 picks_list = []
-                 suggested_pick_label = False
-                 pick_was_correct = False
-                 max_ev_value = -100.0
-
-                 # We iterate CANDIDATES to ensure comprehensive training data
-                 for pick in candidates:
-                    result_str, payout = self.resolution_service.resolve_pick(pick, match)
-                    is_won = (result_str == "WIN")
-                    
-                    # Check if this specific pick was approved (for ROI calc)
-                    is_approved = any(p == pick for p in approved_list) # Identity check might fail if copies, but usually fine
-                    # Better: check pick ID if exists, or just use the approved_list content.
-                    # Optimization: Since 'pick' object is likely same instance from memory in 'daily_candidates'
-                    is_approved = pick in approved_list
-
-                    p_detail = {
-                        "market_type": pick.market_type.value if hasattr(pick.market_type, "value") else str(pick.market_type),
-                        "market_label": pick.market_label,
-                        "was_correct": is_won,
-                        "probability": float(pick.probability),
-                        "expected_value": float(pick.expected_value),
-                        "confidence": float(pick.priority_score or pick.probability),
-                        "reasoning": pick.reasoning,
-                        "result": result_str,
-                        "suggested_stake": getattr(pick, "suggested_stake", 0.0),
-                        "kelly_percentage": getattr(pick, "kelly_percentage", 0.0),
-                        "is_ml_confirmed": getattr(pick, "is_ml_confirmed", False),
-                        "is_contrarian": float(pick.expected_value) > 0.05
-                    }
-                    
-                    # ALWAYS Extract Features for Training (if pick is valid)
-                    # This ensures we train on ALL potential opportunities, not just the ones we took.
-                    raw_home_feat = team_stats_cache.get(match.home_team.name, {})
-                    raw_away_feat = team_stats_cache.get(match.away_team.name, {})
-                    feat_home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home_feat)
-                    feat_away_stats = self.statistics_service.convert_to_domain_stats(match.away_team.name, raw_away_feat)
-                    
-                    ml_features.append(self.feature_extractor.extract_features(pick, match, feat_home_stats, feat_away_stats))
-                    ml_targets.append(1 if is_won else 0)
-                    
-                    # ONLY Track ROI if Approved
-                    if is_approved:
+                # C. Apply Portfolio Constraints (Risk Manager)
+                # This filters the day's candidates to select the best portfolio respecting risk limits
+                approved_items = self.risk_manager.apply_portfolio_constraints(daily_candidates)
+                
+                # Mapping to easily find approved picks per match for history
+                approved_picks_map = {} # match_id -> list of picks
+                for item in approved_items:
+                    mid = item['match'].id
+                    if mid not in approved_picks_map: approved_picks_map[mid] = []
+                    approved_picks_map[mid].append(item['pick'])
+    
+                # D. Resolve & Record Results
+                for match in daily_matches:
+                     # Skip if no stats/prediction made (error case)
+                     if match.home_goals is None: continue
+                     
+                     # Retrieve approved picks for this match (if any)
+                     my_picks = approved_picks_map.get(match.id, [])
+                     
+                     picks_list = []
+                     suggested_pick_label = None
+                     pick_was_correct = False
+                     max_ev_value = -100.0
+    
+                     for pick in my_picks:
+                        result_str, payout = self.resolution_service.resolve_pick(pick, match)
+                        is_won = (result_str == "WIN")
+                        
+                        p_detail = {
+                            "market_type": pick.market_type.value if hasattr(pick.market_type, "value") else str(pick.market_type),
+                            "market_label": pick.market_label,
+                            "was_correct": is_won,
+                            "probability": float(pick.probability),
+                            "expected_value": float(pick.expected_value),
+                            "confidence": float(pick.priority_score or pick.probability),
+                            "reasoning": pick.reasoning,
+                            "result": result_str,
+                            "suggested_stake": getattr(pick, "suggested_stake", 0.0),
+                            "kelly_percentage": getattr(pick, "kelly_percentage", 0.0),
+                            "is_ml_confirmed": getattr(pick, "is_ml_confirmed", False),
+                            "is_contrarian": float(pick.expected_value) > 0.05 # Flag as Value Bet if EV > 5%
+                        }
+                        
+                        # Store Features for FUTURE training
+                        # Re-constitute stats for feature extraction
+                        raw_home_feat = team_stats_cache.get(match.home_team.name, {})
+                        raw_away_feat = team_stats_cache.get(match.away_team.name, {})
+                        feat_home_stats = self.statistics_service.convert_to_domain_stats(match.home_team.name, raw_home_feat)
+                        feat_away_stats = self.statistics_service.convert_to_domain_stats(match.away_team.name, raw_away_feat)
+                        
+                        ml_features.append(self.feature_extractor.extract_features(pick, match, feat_home_stats, feat_away_stats))
+                        ml_targets.append(1 if is_won else 0)
+                        
+                        # Track ROI
                         if p_detail["market_type"] in ["winner", "draw", "result_1x2"]:
                              total_bets += 1
-                             total_staked += p_detail["suggested_stake"] 
+                             total_staked += p_detail["suggested_stake"] # Use calculated unit stake
                              total_return += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
                              if float(pick.expected_value) > max_ev_value:
                                   suggested_pick_label = pick.market_label
                                   pick_was_correct = is_won
                                   max_ev_value = float(pick.expected_value)
-
-                        # Daily stats update (ROI)
+    
+                        # CLV
+                        closing_odds = 0.0
+                        if pick.market_type == "winner":
+                             if match.home_goals > match.away_goals: closing_odds = match.home_odds or 0.0
+                             elif match.away_goals > match.home_goals: closing_odds = match.away_odds or 0.0
+                             else: closing_odds = match.draw_odds or 0.0
+                        elif pick.market_type == "draw":
+                             closing_odds = match.draw_odds or 0.0
+                        
+                        p_detail["opening_odds"] = pick.odds
+                        p_detail["closing_odds"] = closing_odds
+                        p_detail["clv_beat"] = pick.odds > closing_odds if closing_odds > 1.0 else False
+                        
+                        picks_list.append(p_detail)
+                        
+                        # Daily stats update
                         date_key = match.match_date.strftime("%Y-%m-%d")
                         if date_key not in daily_stats: 
                             daily_stats[date_key] = {'staked': 0.0, 'return': 0.0, 'count': 0}
                         daily_stats[date_key]['staked'] += p_detail["suggested_stake"]
                         daily_stats[date_key]['return'] += (p_detail["suggested_stake"] * payout) if payout > 0 else 0
                         daily_stats[date_key]['count'] += 1
-                        
-                        # Add to display list
-                        picks_list.append(p_detail)
-
-                    # CLV Tracking (Keep for all or just approved? Let's keep for approved logic below)
-                    # Actually, p_detail is only used for display list if approved.
-                    
-                 # History Logging (Only if we had approved bets OR significant candidates?)
-                 # To limit noise, let's only log matches where we had ACTION.
-                 if has_approved_pick:
+    
+                     # Get prediction from candidates (hacky lookup)
+                     # Better: re-run prediction or store it. We stored it in 'daily_candidates'.
+                     # Let's just create a basic history entry even if no picks were approved
+                     # But we need the prediction object.
+                     # Let's find the prediction in daily_candidates or regenerate simple one.
+                     # Optimization: Store prediction in a temp map above.
+                     
+                     # Simple approach: Re-generate prediction just for logging? No, waste.
+                     # Let's map match_id -> prediction in the B loop.
+                     pass # We handle this by populating history ONLY if we processed it.
+                     
+                     # Actually, we want history for ALL matches to show "No Bet" ones too?
+                     # Yes, usually. But for now let's focus on Active Betting History.
+                     
+                     # Retrieve prediction from our map
                      pred_obj = daily_predictions_map.get(match.id)
+                     
                      if pred_obj:
-                         if len(match_history) > 5000: match_history.pop(0)
+                         # Limit match_history to prevent huge cache objects (OOM risk)
+                         if len(match_history) > 500:
+                             match_history.pop(0)
+                             
                          match_history.append({
                              "match_id": match.id,
                              "home_team": match.home_team.name,
@@ -423,24 +405,24 @@ class MLTrainingOrchestrator:
                              "actual_away_goals": match.away_goals,
                              "was_correct": self._get_predicted_winner(pred_obj) == self._get_actual_winner(match),
                              "confidence": round(pred_obj.confidence, 3),
-                             "picks": picks_list, # Only approved picks
+                             "picks": picks_list,
                              "suggested_pick": suggested_pick_label,
                              "pick_was_correct": pick_was_correct,
                              "expected_value": max_ev_value
                          })
-
-            # E. Update Stats (After Day is Done) - The "Nightly Update"
-            # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
-            # E. Update Stats (After Day is Done) - The "Nightly Update"
-            # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
-            for match in daily_matches:
-                if match.home_team.name in team_stats_cache:
-                    self.statistics_service.update_team_stats_dict(team_stats_cache[match.home_team.name], match, is_home=True)
-                if match.away_team.name in team_stats_cache:
-                    self.statistics_service.update_team_stats_dict(team_stats_cache[match.away_team.name], match, is_home=False)
-            
-            # Yield control to event loop to allow other requests (health checks, polling) to be processed
-            await asyncio.sleep(0)
+    
+                # E. Update Stats (After Day is Done) - The "Nightly Update"
+                # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
+                # E. Update Stats (After Day is Done) - The "Nightly Update"
+                # Crucial: We update stats using ALL matches of the day, even those we didn't bet on.
+                for match in daily_matches:
+                    if match.home_team.name in team_stats_cache:
+                        self.statistics_service.update_team_stats_dict(team_stats_cache[match.home_team.name], match, is_home=True)
+                    if match.away_team.name in team_stats_cache:
+                        self.statistics_service.update_team_stats_dict(team_stats_cache[match.away_team.name], match, is_home=False)
+                
+                # Yield control to event loop to allow other requests (health checks, polling) to be processed
+                await asyncio.sleep(0)
         
             # --- TRAIN ML MODEL ---
             self.cache_service.set(self.CACHE_KEY_MESSAGE, "Entrenando modelo de Machine Learning (Random Forest)...", ttl_seconds=3600)
@@ -449,9 +431,7 @@ class MLTrainingOrchestrator:
             import gc
             gc.collect()
 
-            logger.info(f"ML Debug: ML_AVAILABLE={ML_AVAILABLE}, Features={len(ml_features)}")
-
-            if ML_AVAILABLE and len(ml_features) > 100:
+            if ML_AVAILABLE and RandomForestClassifier and len(ml_features) > 100:
                 try:
                     logger.info(f"Training ML Model on {len(ml_features)} samples...")
                     
@@ -463,12 +443,12 @@ class MLTrainingOrchestrator:
                         # - max_depth=10 (reduced from 12) to prevent potential overfitting and save memory
                         # - n_jobs=1 (CRITICAL: Avoid multiprocessing overhead in container)
                         clf = RandomForestClassifier(
-                            n_estimators=150, # Adjusted for 512MB RAM stability
-                            max_depth=12,     # Prevent deep trees consuming memory
+                            n_estimators=1000,
+                            max_depth=25,
                             min_samples_split=5,
                             min_samples_leaf=2,
                             random_state=42,
-                            n_jobs=1,  # CRITICAL: Keep at 1 to avoid OOM in small containers
+                            n_jobs=-1,  # Use all available cores
                             class_weight="balanced_subsample"
                         )
                         clf.fit(ml_features, ml_targets)
@@ -484,24 +464,11 @@ class MLTrainingOrchestrator:
                 except Exception as e:
                     logger.error(f"Failed to train ML model: {e}")
             
-            else:
-                logger.error(f"Skipping ML Training. Data insufficient or libraries missing. Features: {len(ml_features)}")
-                if len(ml_features) <= 100:
-                    raise Exception(f"Insufficient training data: {len(ml_features)} samples (min 100)")
-            
             # --- PREPARE RESULTS ---
             self.cache_service.set(self.CACHE_KEY_MESSAGE, "Consolidando métricas y evolución de ROI...", ttl_seconds=3600)
             accuracy = self._calculate_accuracy(match_history)
             profit = total_return - total_staked
             roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
-            
-            # Get last match date for tracking
-            last_match_iso = None
-            if match_history:
-                try:
-                    last_match_iso = match_history[-1].get('match_date')
-                except (IndexError, AttributeError, TypeError):
-                    pass
             
             final_result = TrainingResult(
                 matches_processed=matches_processed,
@@ -515,16 +482,7 @@ class MLTrainingOrchestrator:
                 roi_evolution=self._calculate_roi_evolution(daily_stats),
                 pick_efficiency=self._calculate_pick_efficiency(match_history),
                 team_stats=team_stats_cache,
-                global_averages=global_averages,
-                last_match_date=last_match_iso,
-                # ML Traceability (§12 Compliance)
-                ml_metadata={
-                    "model_version": "1.0.0",
-                    "training_date": get_current_time().isoformat(),
-                    "accuracy": round(accuracy, 4),
-                    "total_samples": len(ml_features),
-                    "leagues_trained": leagues
-                }
+                global_averages=global_averages
             )
             
             # Optimization: Clear match_history from memory-intensive objects
@@ -629,16 +587,20 @@ class MLTrainingOrchestrator:
         logger.info(f"Starting MASSIVE INFERENCE for {len(leagues)} leagues...")
         self.cache_service.set(self.CACHE_KEY_MESSAGE, f"Pre-calculando pronósticos para {len(leagues)} ligas...", ttl_seconds=3600)
         
-        from src.application.use_cases.use_cases import GetPredictionsUseCase
-        from src.api.dependencies import get_match_aggregator_service
+        from src.application.use_cases.use_cases import GetPredictionsUseCase, DataSources
         
         # We re-use orchestrator's knowledge to build the Use Case
         # This keeps logic in sync between the API and the Training Cycle
         use_case = GetPredictionsUseCase(
-            data_sources=self.training_data_service.data_sources,
+            data_sources=DataSources(
+                football_data_uk=self.training_data_service.data_sources.football_data_uk,
+                football_data_org=self.training_data_service.data_sources.football_data_org,
+                openfootball=self.training_data_service.data_sources.openfootball,
+                thesportsdb=self.training_data_service.data_sources.thesportsdb,
+                fotmob=self.training_data_service.data_sources.fotmob
+            ),
             prediction_service=self.prediction_service,
             statistics_service=self.statistics_service,
-            match_aggregator=get_match_aggregator_service(),
             persistence_repository=self.persistence_repository
         )
 

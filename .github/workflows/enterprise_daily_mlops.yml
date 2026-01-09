@@ -64,9 +64,8 @@ jobs:
         run: |
           cd backend
           source .venv/bin/activate
-          # $(nproc) detecta dinámicamente los cores disponibles para usar toda la potencia real
-          # Se elimina cualquier restricción de tiempo interna y se fuerza el re-entrenamiento completo por liga
-          python scripts/train_model_optimized.py --days 550 --n-jobs $(nproc) --force-retrain-per-league --no-timeout
+          # Revert to standalone training script (Monday version logic)
+          python scripts/train_model_standalone.py --days-back 550
 
       - name: 💾 Commit & Push Trained Models
         run: |
