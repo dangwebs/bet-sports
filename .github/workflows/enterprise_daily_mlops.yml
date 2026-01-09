@@ -2,7 +2,7 @@ name: Enterprise Daily MLOps
 
 on:
   schedule:
-    - cron: "0 11 * * *" # Daily at 6:00 AM Colombia (11:00 UTC)
+    - cron: "0 */6 * * *" # Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
   workflow_dispatch:
     inputs:
       force_train:
@@ -10,13 +10,8 @@ on:
         type: boolean
         default: true
 
-# Evita condiciones de carrera y ahorra recursos cancelando ejecuciones obsoletas
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 env:
@@ -26,8 +21,7 @@ env:
   THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
   RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
   LOG_LEVEL: INFO
-  # Optimización: Los runners estándar de GitHub tienen 2 vCPUs.
-  # Ajustar a 2 evita el overhead por context switching excesivo y mejora la estabilidad.
+  # Configuración para aprovechar ambos cores disponibles en GitHub Actions
   OMP_NUM_THREADS: 2
   OPENBLAS_NUM_THREADS: 2
   MKL_NUM_THREADS: 2
@@ -41,9 +35,7 @@ jobs:
   train-model:
     name: 🧠 Train ML Model
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # Upgrade: Extended training time allowed per user request (Max GitHub Free limit)
-    outputs:
-      cache-key: ${{ steps.set-cache-key.outputs.key }}
+    timeout-minutes: 60
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -52,45 +44,111 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-worker.txt"
 
       - name: 📦 Install Dependencies
         run: |
           cd backend
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install --force-reinstall -r requirements-worker.txt
+          pip install -r requirements-worker.txt
 
-      - name: 🏋️ Run Training (Max Power)
+      - name: 🏋️ Run Training (Parallelized with 2 cores)
         run: |
           cd backend
-          source .venv/bin/activate
-          # Revert to standalone training script (Monday version logic)
-          python scripts/train_model_standalone.py --days-back 550
-
-      - name: 💾 Commit & Push Trained Models
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add backend/ml_models/
-          git commit -m "chore(ml): update trained models [skip ci]" || echo "No changes to commit"
-          git push
+          python scripts/orchestrator_cli.py train --days 400 --n-jobs 2
 
       - name: 📤 Upload Model Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ml-model
-          path: |
-            backend/ml_picks_classifier.joblib
-            backend/ml_models/
+          path: backend/ml_picks_classifier.joblib
           retention-days: 1
-          compression-level: 6 # Balance óptimo entre velocidad de CPU y tamaño
+          compression-level: 9 # Compresión máxima para transferencia rápida
 
   # ------------------------------------------------------------------
-  # JOB 2: AGGREGATION & REPORTING
+  # JOB 2: PREDICTION MATRIX (Horizontal Scaling - 17 jobs en paralelo)
+  # ------------------------------------------------------------------
+  predict-leagues:
+    name: 🔮 Predict ${{ matrix.group }}
+    needs: train-model
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true # Una falla no detiene las demás
+    strategy:
+      max-parallel: 20 # GitHub permite hasta 20 jobs concurrentes en tier gratuito
+      fail-fast: false # No detener otros jobs si uno falla
+      matrix:
+        include:
+          # Dividir en grupos más pequeños para máximo paralelismo
+          # Total: 17 jobs corriendo simultáneamente
+          - group: "England_Premier"
+            leagues: "E0"
+          - group: "England_Championship"
+            leagues: "E1"
+          - group: "England_L1_L2"
+            leagues: "E2,E3"
+          - group: "Scotland"
+            leagues: "SC0,SC1"
+          - group: "Germany_Bundesliga"
+            leagues: "D1"
+          - group: "Germany_2"
+            leagues: "D2"
+          - group: "Netherlands"
+            leagues: "N1"
+          - group: "Belgium"
+            leagues: "B1"
+          - group: "Spain_LaLiga"
+            leagues: "SP1"
+          - group: "Spain_2"
+            leagues: "SP2"
+          - group: "Portugal"
+            leagues: "P1"
+          - group: "Turkey"
+            leagues: "T1"
+          - group: "Greece"
+            leagues: "G1"
+          - group: "Italy_SerieA"
+            leagues: "I1"
+          - group: "Italy_SerieB"
+            leagues: "I2"
+          - group: "France_Ligue1"
+            leagues: "F1"
+          - group: "France_Ligue2"
+            leagues: "F2"
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-worker.txt"
+
+      - name: 📦 Install Dependencies
+        run: |
+          cd backend
+          pip install -r requirements-worker.txt
+
+      - name: 📥 Download Model
+        uses: actions/download-artifact@v4
+        with:
+          name: ml-model
+          path: backend/
+
+      - name: 🚀 Run Predictions (Parallelized)
+        run: |
+          cd backend
+          python scripts/orchestrator_cli.py predict --leagues "${{ matrix.leagues }}" --parallel
+
+  # ------------------------------------------------------------------
+  # JOB 3: AGGREGATION & REPORTING
   # ------------------------------------------------------------------
   finalize-process:
     name: 🏁 Finalize & Report
-    needs: [train-model]
+    needs: [predict-leagues]
     runs-on: ubuntu-latest
     if: always() # Run even if some matrix jobs failed
 
@@ -102,51 +160,28 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-worker.txt"
 
       - name: 📦 Install Dependencies
         run: |
           cd backend
-          python -m venv .venv
-          source .venv/bin/activate
           pip install -r requirements-worker.txt
 
-      - name: 📥 Download Model Artifacts
-        if: needs.train-model.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: ml-model
-          path: backend/
-
       - name: 🏆 Generate Top Picks
-        if: needs.train-model.result == 'success'
         run: |
           cd backend
-          source .venv/bin/activate
           python scripts/orchestrator_cli.py top-picks
 
       - name: 🧹 Clear Render Cache
         env:
-          RENDER_APP_URL: "https://football-prediction-api-x4pm.onrender.com/"
-          # IMPORTANTE: Verifica que este secreto coincida con la validación de tu backend para X-Admin-Token
-          ADMIN_TOKEN: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
-        if: needs.train-model.result == 'success'
+          RENDER_APP_URL: "https://football-prediction-api-8sl4.onrender.com"
+          ADMIN_TOKEN: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          echo "Intentando limpiar caché en: $RENDER_APP_URL"
-          for i in {1..5}; do # Reduced retries to 5 (user preference usually)
-            HTTP_CODE=$(curl -s -L -w "%{http_code}" -o response.txt -X DELETE "${RENDER_APP_URL%/}/cache/clear" \
-              -H "X-Admin-Token: ${ADMIN_TOKEN}" \
-              -H "Content-Type: application/json")
-            
-            if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 204 ]; then
-              echo "✅ Caché limpiada exitosamente."
-              exit 0
-            fi
-            echo "⚠️ Intento $i falló con código $HTTP_CODE."
-            sleep 5
-          done
-          echo "❌ Warning: No se pudo limpiar la caché."
-          # exit 0 to not fail pipeline just for cache clear
-          exit 0
+          curl -X DELETE "${RENDER_APP_URL}/cache/clear" \
+            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --fail || echo "Warning: Failed to clear cache (Service might be sleeping)"
 
       - name: 📊 Summary Report
         if: always()
@@ -154,8 +189,9 @@ jobs:
           echo "### 📈 Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Training: Completed" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔮 Predictions: Processed" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 Parallelism: 6 concurrent jobs (Top Tier)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔮 Predictions: ${{ strategy.job-total }} leagues processed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏆 Top Picks: Generated" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Parallelism: 17 concurrent jobs" >> $GITHUB_STEP_SUMMARY
 
       - name: 📧 Notify on Failure
         if: contains(needs.*.result, 'failure')
