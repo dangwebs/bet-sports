@@ -78,7 +78,7 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None):
             "roi": training_result.roi,
             "global_averages": getattr(training_result, 'global_averages', {})
         }
-        cache.set(orchestrator.CACHE_KEY_RESULT, training_data, ttl_seconds=86400)
+        cache.set("ml_training_result_data", training_data, ttl_seconds=86400)
         
         # [FIX] Persist to Database for Dashboard Visibility
         # This allows the API to serve this data even after the GitHub Action runner dies
