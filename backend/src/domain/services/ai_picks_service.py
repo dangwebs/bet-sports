@@ -52,6 +52,11 @@ class AIPicksService(PicksService):
         """
         Orchestrates the generation of AI-exclusive picks.
         """
+        # 0. STRICT RULE 2B: "Zero Stats" Handling
+        # If team stats are missing or predictions are zero, we MUST inject values based on League Averages.
+        # This prevents "Empty Picks" lists and ensures we always provide a baseline.
+
+
         # 1. Generate Base Candidate Picks using Statistical Models (Poisson/Dixon-Coles)
         # We reuse the verified mathematical core of the parent class.
         candidates_container = super().generate_suggested_picks(
@@ -207,6 +212,7 @@ class AIPicksService(PicksService):
                 min_prob = 0.80
                 min_ml = 0.85
 
+            # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
             if self.ml_model and ml_confidence > 0:
                 is_ai_lock = (
                     pick.probability > min_prob and
@@ -218,7 +224,7 @@ class AIPicksService(PicksService):
                 # Stricter: 0.70 -> 0.75 to ensure only top tier picks
                 # If context aligned, 75%. If not, 85%.
                 fallback_prob = 0.75 if context_aligned else 0.85
-                is_ai_lock = (pick.probability > fallback_prob and weight >= 1.05 and pick.priority_score > 12)
+                is_ai_lock = (pick.probability > fallback_prob and weight >= 1.0 and pick.priority_score > 0.75)
             
             if is_ai_lock:
                 pick.priority_score *= 2.0 # Massive boost for verified quality

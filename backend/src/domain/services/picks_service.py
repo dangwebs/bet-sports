@@ -492,8 +492,9 @@ class PicksService:
         
         # RELAXED: We attempt to generate picks even with partial data
         # but we track data quality to adjust confidence
-        has_home_stats = home_stats is not None and home_stats.matches_played > 0
-        has_away_stats = away_stats is not None and away_stats.matches_played > 0
+        # UPDATE: User Rule - Minimum 4 matches required to use stats.
+        has_home_stats = home_stats is not None and home_stats.matches_played >= 4
+        has_away_stats = away_stats is not None and away_stats.matches_played >= 4
         has_prediction_data = (
             predicted_home_goals > 0 or predicted_away_goals > 0 or
             predicted_home_corners > 0 or predicted_away_corners > 0 or
@@ -548,9 +549,10 @@ class PicksService:
                 picks.add_pick(pick)
             
             # Red cards require specific team stats, so keep strict check
-            red_card_pick = self._generate_red_cards_pick(home_stats, away_stats, match)
-            if red_card_pick:
-                picks.add_pick(red_card_pick)
+            if home_stats and away_stats:
+                red_card_pick = self._generate_red_cards_pick(home_stats, away_stats, match)
+                if red_card_pick:
+                    picks.add_pick(red_card_pick)
         
         # 4. Prediction-based picks (Winner/Goals)
         # We can generate winner picks if we have probability (even from odds), 
