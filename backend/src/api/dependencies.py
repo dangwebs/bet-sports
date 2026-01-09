@@ -146,8 +146,7 @@ def get_ml_training_orchestrator() -> MLTrainingOrchestrator:
         prediction_service=get_prediction_service(),
         learning_service=get_learning_service(),
         resolution_service=get_pick_resolution_service(),
-        cache_service=get_cache_service(),
-        persistence_repository=get_persistence_repository()
+        cache_service=get_cache_service()
     )
 
 from src.domain.services.audit_service import AuditService
