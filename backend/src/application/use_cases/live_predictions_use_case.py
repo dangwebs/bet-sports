@@ -556,19 +556,34 @@ class GetLivePredictionsUseCase:
     
     def _prediction_to_dto(self, prediction: Prediction, picks: list = []) -> PredictionDTO:
         """Convert Prediction entity to DTO."""
-        
+        from src.application.dtos.dtos import PredictionDTO, SuggestedPickDTO
+         
         picks_dtos = []
-        for pick in picks:
-             picks_dtos.append(SuggestedPickDTO(
-                 market_type=pick.market_type,
-                 market_label=pick.market_label,
-                 probability=pick.probability,
-                 confidence_level=pick.confidence_level,
-                 reasoning=pick.reasoning,
-                 risk_level=pick.risk_level,
-                 is_recommended=pick.is_recommended,
-                 priority_score=pick.priority_score
-             ))
+        for p in picks:
+              picks_dtos.append(SuggestedPickDTO(
+                  market_type=p.market_type,
+                  market_label=p.market_label,
+                  probability=p.probability,
+                  confidence_level=p.confidence_level,
+                  reasoning=p.reasoning,
+                  risk_level=p.risk_level,
+                  is_recommended=p.is_recommended,
+                  priority_score=p.priority_score,
+                  is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
+                  ml_confidence=getattr(p, 'ml_confidence', 0.0),
+                  suggested_stake=getattr(p, 'suggested_stake', 0.0),
+                  kelly_percentage=getattr(p, 'kelly_percentage', 0.0),
+                  clv_beat=getattr(p, 'clv_beat', False),
+                  expected_value=getattr(p, 'expected_value', 0.0),
+                  opening_odds=getattr(p, 'odds', 0.0),
+                  closing_odds=getattr(p, 'closing_odds', 0.0),
+              ))
+
+        # Top ML Picks = All picks with probability >= 75% (ML High Confidence tier)
+        TOP_ML_THRESHOLD = 0.75
+        top_ml_picks = [p for p in picks_dtos if p.probability >= TOP_ML_THRESHOLD]
+        # Sort by probability descending
+        top_ml_picks.sort(key=lambda x: x.probability, reverse=True)
 
         return PredictionDTO(
             match_id=prediction.match_id,
@@ -583,7 +598,8 @@ class GetLivePredictionsUseCase:
             data_sources=prediction.data_sources,
             recommended_bet=prediction.recommended_bet,
             over_under_recommendation=prediction.over_under_recommendation,
-            suggested_picks=picks_dtos,
+            suggested_picks=pick_dtos,
+            top_ml_picks=top_ml_picks,
             created_at=prediction.created_at,
         )
     

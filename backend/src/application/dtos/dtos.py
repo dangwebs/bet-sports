@@ -153,6 +153,7 @@ class PredictionDTO(BaseModel):
     recommended_bet: str
     over_under_recommendation: str
     suggested_picks: list["SuggestedPickDTO"] = Field(default_factory=list) # Full list of picks
+    top_ml_picks: list["SuggestedPickDTO"] = Field(default_factory=list)
     highlights_url: Optional[str] = None
     real_time_odds: Optional[dict[str, float]] = None
     created_at: datetime
@@ -164,6 +165,7 @@ class MatchPredictionDTO(BaseModel):
     """Combined match and prediction DTO."""
     match: MatchDTO
     prediction: PredictionDTO
+    top_ml_picks: list["SuggestedPickDTO"] = Field(default_factory=list)
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -24,6 +24,15 @@ class MarketType(str, Enum):
     GOALS_UNDER = "goals_under"
     TEAM_GOALS_OVER = "team_goals_over"
     TEAM_GOALS_UNDER = "team_goals_under"
+    
+    # --- New Markets ---
+    DRAW_NO_BET_1 = "draw_no_bet_1"
+    DRAW_NO_BET_2 = "draw_no_bet_2"
+    CORRECT_SCORE = "correct_score"
+    CORNERS_1X2_1 = "corners_1x2_1"
+    CORNERS_1X2_X = "corners_1x2_x"
+    CORNERS_1X2_2 = "corners_1x2_2"
+
     RESULT_1X2 = "result_1x2"
     DOUBLE_CHANCE_1X = "double_chance_1x"
     DOUBLE_CHANCE_X2 = "double_chance_x2"

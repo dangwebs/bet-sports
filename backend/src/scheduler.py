@@ -54,7 +54,7 @@ class BotScheduler:
             from src.api.dependencies import (
                 get_ml_training_orchestrator, get_cache_service, get_data_sources, 
                 get_prediction_service, get_statistics_service, get_audit_service, 
-                get_persistence_repository, get_risk_manager, get_match_aggregator_service
+                get_persistence_repository, get_match_aggregator_service
             )
             from src.application.use_cases.use_cases import GetPredictionsUseCase
             from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
@@ -65,8 +65,7 @@ class BotScheduler:
             data_sources = get_data_sources()
             prediction_service = get_prediction_service()
             statistics_service = get_statistics_service()
-            risk_manager = get_risk_manager()
-            match_aggregator = get_match_aggregator_service() # We need this too, checking previous imports
+            match_aggregator = get_match_aggregator_service()
             
             leagues = list(LEAGUES_METADATA.keys())
             
@@ -103,7 +102,7 @@ class BotScheduler:
                         "team_stats": training_result.team_stats,
                         "global_averages": getattr(training_result, 'global_averages', {})
                     }
-                    cache.set(orchestrator.CACHE_KEY_RESULT, training_data, ttl_seconds=cache.TTL_TRAINING)
+                    cache.set("ml_training_result", training_data, ttl_seconds=cache.TTL_TRAINING)
                     logger.info(f"Unified Cache updated with training results.")
                 except Exception as e:
                     logger.error(f"Failed to update unified cache: {e}")
@@ -130,8 +129,7 @@ class BotScheduler:
                 prediction_service=prediction_service,
                 statistics_service=statistics_service,
                 match_aggregator=match_aggregator,
-                risk_manager=risk_manager,
-                persistence_repository=persistence_repository
+                persistence_repository=persistence_repo
             )
             
             leagues_processed = 0

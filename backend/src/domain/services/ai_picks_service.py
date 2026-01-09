@@ -265,25 +265,51 @@ class AIPicksService(PicksService):
 
             refined_picks.append(pick)
             
-        # --- PHASE F: Competition for "IA CONFIRMED" Badge ---
-        # Rule: Only ONE pick per match can have the label "is_ia_confirmed" (The absolute best).
-        # We sort by priority and only keep the flag on the top 1, removing it from others.
+        # --- PHASE F: Tiered Classification ---
+        # User-defined thresholds:
+        # - IA CONFIRMED: 85%+ (is_ia_confirmed=True)
+        # - ML High Confidence: 75%-84% (is_ml_confirmed=True, confidence=HIGH)
+        # - Normal: 65%-74% (standard pick)
+        # - Below 65%: Filtered out (already done by earlier phases)
+        
+        IA_CONFIRMED_THRESHOLD = 0.85
+        ML_HIGH_THRESHOLD = 0.75
+        NORMAL_THRESHOLD = 0.65
+        
+        # Filter out picks below Normal threshold
+        refined_picks = [p for p in refined_picks if p.probability >= NORMAL_THRESHOLD]
+        
         if refined_picks:
-            # Sort by Priority Descending
-            refined_picks.sort(key=lambda x: x.priority_score, reverse=True)
+            # Sort by probability descending
+            refined_picks.sort(key=lambda x: x.probability, reverse=True)
             
-            # Find the first one that qualified as AI Lock
-            best_pick = refined_picks[0]
-            
-            # Reset the flag for everyone first to ensure exclusivity
+            # Reset all flags first
             for p in refined_picks:
                 p.is_ia_confirmed = False
-                
-            # If the best pick was indeed an AI Lock (is_ml_confirmed checks criteria), grant the Crown
-            if best_pick.is_ml_confirmed:
-                best_pick.is_ia_confirmed = True
-                # Enhance reasoning if not already present
-                if "IA CONFIRMED" not in best_pick.reasoning:
-                    best_pick.reasoning = f"[🎯 TOP ML] {best_pick.reasoning}"
+                p.is_ml_confirmed = False
+                p.confidence_level = ConfidenceLevel.MEDIUM  # Default
+            
+            # Apply tiered classification
+            for p in refined_picks:
+                if p.probability >= IA_CONFIRMED_THRESHOLD:
+                    # Tier 1: IA CONFIRMED (85%+)
+                    p.is_ia_confirmed = True
+                    p.is_ml_confirmed = True
+                    p.is_recommended = True
+                    p.confidence_level = ConfidenceLevel.HIGH
+                    if "[🎯 IA CONFIRMED]" not in p.reasoning:
+                        p.reasoning = f"[🎯 IA CONFIRMED] {p.reasoning}"
+                elif p.probability >= ML_HIGH_THRESHOLD:
+                    # Tier 2: ML High Confidence (75%-84%)
+                    p.is_ml_confirmed = True
+                    p.is_recommended = True
+                    p.confidence_level = ConfidenceLevel.HIGH
+                    if "[⭐ ML ALTA CONFIANZA]" not in p.reasoning:
+                        p.reasoning = f"[⭐ ML ALTA CONFIANZA] {p.reasoning}"
+                else:
+                    # Tier 3: Normal (65%-74%)
+                    p.confidence_level = ConfidenceLevel.MEDIUM
+                    if "[📊 NORMAL]" not in p.reasoning:
+                        p.reasoning = f"[📊 NORMAL] {p.reasoning}"
 
         return refined_picks

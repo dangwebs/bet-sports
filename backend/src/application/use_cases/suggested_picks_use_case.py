@@ -652,11 +652,10 @@ class GetTopMLPicksUseCase:
             
             from src.application.dtos.dtos import SuggestedPickDTO, TopMLPicksDTO
             
-            # 2. Extract picks from each prediction
+            # 2. Extract best pick from each prediction
+            unique_match_picks = []
+            
             for pred_data in active_preds:
-                # pred_data is the JSON dict stored in 'match_predictions.data'
-                # Structure: { match: {...}, prediction: { suggested_picks: [...] } }
-                
                 prediction = pred_data.get("prediction", {})
                 match_info = pred_data.get("match", {})
                 
@@ -674,7 +673,6 @@ class GetTopMLPicksUseCase:
                             m_date = match_date_str.replace("Z", "+00:00")
                             m_date = datetime.fromisoformat(m_date)
                         except (ValueError, AttributeError) as e:
-                            # If complex format, skip or log (but dateutil is gone)
                             logger.warning(f"Could not parse date {match_date_str}: {e}")
                             continue
                         if m_date.tzinfo is None:
@@ -690,7 +688,6 @@ class GetTopMLPicksUseCase:
                         # 1. It's in the future
                         # 2. It's currently marked as live
                         # 3. It's PAUSED/HALFTIME etc.
-                        # Strictly exclude FT/AET/PEN even if "recent" to avoid confusion
                         if match_info.get("status") in ["FT", "AET", "PEN", "FINISHED"]:
                             continue
 
@@ -706,28 +703,38 @@ class GetTopMLPicksUseCase:
                 match_label = f"{match_info.get('home_team', {}).get('name', '')} vs {match_info.get('away_team', {}).get('name', '')}"
                 match_id = match_info.get("id")
                 
+                # Local sorting to find the best pick for THIS match
+                match_picks_objects = []
                 for p in picks:
-                    # Filter out low value picks?
-                    # Let's keep all and sort by priority/probability
-                    
-                    # Ensure it's a valid pick object/dict
                     if isinstance(p, dict):
                          # Enrich reasoning with match info for the global list
                          base_reasoning = p.get("reasoning", "")
                          p["reasoning"] = f"[{match_label}] {base_reasoning}"
                          
-                         # Ensure formatting flags are passed if present in dict
-                         # (They should be, as we are reading what we just saved)
-                         
                          dto = SuggestedPickDTO(**p)
-                         all_picks.append(dto)
+                         match_picks_objects.append(dto)
+                
+                if not match_picks_objects:
+                    continue
+                    
+                # Sort match specific picks
+                match_picks_objects.sort(key=lambda x: (
+                    getattr(x, 'is_ia_confirmed', False),
+                    getattr(x, 'is_ml_confirmed', False),
+                    x.priority_score, 
+                    x.probability
+                ), reverse=True)
+                
+                # Take the BEST one
+                best_pick = match_picks_objects[0]
+                unique_match_picks.append(best_pick)
             
-            # 3. Sort picks
+            # 3. Sort unified picks (best from each match)
             # Primary: IA Confirmed (Absolute Best)
             # Secondary: ML Confirmed (High Confidence)
             # Tertiary: Priority Score (Expected Value + ML Confidence)
             # Quaternary: Probability
-            all_picks.sort(key=lambda x: (
+            unique_match_picks.sort(key=lambda x: (
                 getattr(x, 'is_ia_confirmed', False), # True (1) > False (0)
                 getattr(x, 'is_ml_confirmed', False),
                 x.priority_score, 
@@ -735,7 +742,7 @@ class GetTopMLPicksUseCase:
             ), reverse=True)
             
             # 4. Limit
-            top_picks = all_picks[:limit]
+            top_picks = unique_match_picks[:limit]
             
             from src.utils.time_utils import get_current_time
             return TopMLPicksDTO(

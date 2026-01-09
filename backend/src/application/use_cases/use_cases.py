@@ -787,6 +787,12 @@ class GetPredictionsUseCase:
                  )
                  for p in picks
              ]
+         
+         # Top ML Picks = All picks with probability >= 75% (ML High Confidence tier)
+         TOP_ML_THRESHOLD = 0.75
+         top_ml_picks = [p for p in pick_dtos if p.probability >= TOP_ML_THRESHOLD]
+         # Sort by probability descending
+         top_ml_picks.sort(key=lambda x: x.probability, reverse=True)
 
          return PredictionDTO(
             match_id=prediction.match_id,
@@ -811,6 +817,7 @@ class GetPredictionsUseCase:
             recommended_bet=prediction.recommended_bet,
             over_under_recommendation=prediction.over_under_recommendation,
             suggested_picks=pick_dtos,
+            top_ml_picks=top_ml_picks,
             created_at=prediction.created_at,
         )
     

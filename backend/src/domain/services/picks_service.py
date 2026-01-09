@@ -547,6 +547,20 @@ class PicksService:
             )
             for pick in cards_picks:
                 picks.add_pick(pick)
+                
+            # Generate TEAM Specific Corners/Cards
+            if has_home_stats and has_away_stats:
+                team_corners = self._generate_team_corners_picks(
+                    home_stats, away_stats, predicted_home_corners, predicted_away_corners
+                )
+                for pick in team_corners:
+                    picks.add_pick(pick)
+                    
+                team_cards = self._generate_team_cards_picks(
+                    home_stats, away_stats, predicted_home_yellow_cards, predicted_away_yellow_cards
+                )
+                for pick in team_cards:
+                    picks.add_pick(pick)
             
             # Red cards require specific team stats, so keep strict check
             if home_stats and away_stats:
@@ -575,6 +589,13 @@ class PicksService:
             )
             for pick in dc_picks:
                 picks.add_pick(pick)
+                
+            # Generate DNB picks
+            dnb_picks = self._generate_dnb_picks(
+                match, home_win_prob, draw_prob, away_win_prob
+            )
+            for pick in dnb_picks:
+                picks.add_pick(pick)
         
         # 5. Goal/BTTS/Team Goals picks (Consistently generated if we have any stats or prediction)
         # 100% REAL DATA: NO fallback to league averages for goals if no prediction data.
@@ -595,7 +616,7 @@ class PicksService:
             )
             for pick in goals_picks:
                 picks.add_pick(pick)
-                
+
             # Generate BTTS picks (returns list)
             btts_picks = self._generate_btts_pick(
                 predicted_home_goals, predicted_away_goals, is_low_scoring, market_odds
@@ -603,18 +624,20 @@ class PicksService:
             for pick in btts_picks:
                 picks.add_pick(pick)
                 
-            # Generate Team Goals picks
-            home_goals_picks = self._generate_team_goals_picks(
-                 predicted_home_goals, match.home_team.name, True, is_low_scoring
+            # Generate Correct Score
+            cs_picks = self._generate_correct_score_picks(
+                predicted_home_goals, predicted_away_goals
             )
-            for pick in home_goals_picks:
+            for pick in cs_picks:
                 picks.add_pick(pick)
-                
-            away_goals_picks = self._generate_team_goals_picks(
-                 predicted_away_goals, match.away_team.name, False, is_low_scoring
-            )
-            for pick in away_goals_picks:
-                picks.add_pick(pick)
+             
+            # Generate Team Goals
+            if has_home_stats and has_away_stats:
+                tg_picks = self._generate_team_goals_picks(
+                    home_stats, away_stats, predicted_home_goals, predicted_away_goals
+                )
+                for pick in tg_picks:
+                    picks.add_pick(pick)
         
         # 6. Team Corners & Cards (Unconditional - User requested "all possible picks")
         # Decoupled logic: Generate for Home even if Away is missing, and vice-versa
@@ -1304,6 +1327,13 @@ class PicksService:
         return 1 - under_prob
 
     @staticmethod
+    def _poisson_probability(k: int, lamb: float) -> float:
+        """Calculate exact Poisson probability P(X=k)."""
+        if lamb < 0: return 0.0
+        return (math.exp(-lamb) * (lamb ** k)) / math.factorial(k)
+
+
+    @staticmethod
     @functools.lru_cache(maxsize=1024)
     def _poisson_model_probability(expected_home: float, expected_away: float, line: float, is_over: bool) -> float:
         """
@@ -1655,45 +1685,214 @@ class PicksService:
              
         return picks
 
-    def _generate_team_goals_picks(
-        self,
-        predicted_goals: float,
-        team_name: str,
-        is_home: bool,
-        is_low_scoring: bool
+    def _generate_double_chance_picks(
+        self, match: Match, home_prob: float, draw_prob: float, away_prob: float
     ) -> list[SuggestedPick]:
-        """Generate goals picks for a specific team."""
+        """Generate Double Chance (1X, X2, 12) picks."""
         picks = []
-        if predicted_goals <= 0: return picks
-        
-        thresholds = [0.5, 1.5, 2.5, 3.5]
-        
-        for threshold in thresholds:
-            # Over
-            prob = self._poisson_over_probability(predicted_goals, threshold)
-            
-            # Context adjustment
-            if is_low_scoring: prob *= 0.9
-            prob = min(0.95, prob)
-            
-            if prob > 0.01:
+
+        # 1X (Home or Draw)
+        prob_1x = home_prob + draw_prob
+        # X2 (Draw or Away)
+        prob_x2 = draw_prob + away_prob
+        # 12 (Home or Away)
+        prob_12 = home_prob + away_prob
+
+        # Calculate EV and Build Picks
+        for market, prob, label, reasoning in [
+            (MarketType.DOUBLE_CHANCE_1X, prob_1x, "Doble Oportunidad: 1X", "Favorito Local o Empate."),
+            (MarketType.DOUBLE_CHANCE_X2, prob_x2, "Doble Oportunidad: X2", "Visitante suma puntos."),
+            (MarketType.DOUBLE_CHANCE_12, prob_12, "Doble Oportunidad: 12", "Partido abierto, sin empate.")
+        ]:
+            if prob > 0.65: # Threshold for Double Chance (usually high prob, low odds)
                  display_prob = self._boost_prob(prob)
                  confidence = SuggestedPick.get_confidence_level(display_prob)
                  risk = self._calculate_risk_level(display_prob)
-                 pick = SuggestedPick(
-                    market_type=MarketType.TEAM_GOALS_OVER,
-                    market_label=f"{team_name} - Más de {threshold} goles",
+                 
+                 odds = 0.0 # TODO: Get from market_odds if available
+                 
+                 picks.append(SuggestedPick(
+                    market_type=market,
+                    market_label=label,
                     probability=round(display_prob, 3),
                     confidence_level=confidence,
-                    reasoning=f"{team_name} esperamos {predicted_goals:.2f} goles.",
+                    reasoning=reasoning,
                     risk_level=risk,
-                    is_recommended=display_prob > 0.65,
-                    priority_score=display_prob * self.MARKET_PRIORITY.get(MarketType.TEAM_GOALS_OVER, 0.7),
-                    expected_value=self._calculate_ev(prob)
-                 )
-                 picks.append(pick)
-                 
+                    is_recommended=(display_prob > 0.75),
+                    priority_score=display_prob * 0.9, # Lower priority than direct wins
+                    expected_value=0.0
+                 ))
         return picks
+
+    def _generate_dnb_picks(
+        self, match: Match, home_prob: float, draw_prob: float, away_prob: float
+    ) -> list[SuggestedPick]:
+        """Generate Draw No Bet (DNB) picks."""
+        picks = []
+        
+        # DNB Probability = P(Win) / (P(Win) + P(Away)) -- Removing Draw mass
+        denom_home = home_prob + away_prob
+        denom_away = away_prob + home_prob
+        
+        if denom_home > 0:
+            prob_dnb_1 = home_prob / denom_home
+            if prob_dnb_1 > 0.60:
+                 picks.append(self._build_simple_pick(
+                    MarketType.DRAW_NO_BET_1, "Apuesta Sin Empate: Local", prob_dnb_1, "Local protege en caso de empate."
+                 ))
+
+        if denom_away > 0:
+            prob_dnb_2 = away_prob / denom_away
+            if prob_dnb_2 > 0.60:
+                 picks.append(self._build_simple_pick(
+                    MarketType.DRAW_NO_BET_2, "Apuesta Sin Empate: Visitante", prob_dnb_2, "Visitante protege en caso de empate."
+                 ))
+        return picks
+
+    def _generate_correct_score_picks(
+        self, predicted_home: float, predicted_away: float
+    ) -> list[SuggestedPick]:
+        """Generate Correct Score picks based on Poisson."""
+        picks = []
+        
+        scores = []
+        # Check scores from 0-0 to 3-3
+        import math
+        for h in range(4):
+            for a in range(4):
+                prob = self._poisson_probability(k=h, lamb=predicted_home) * self._poisson_probability(k=a, lamb=predicted_away)
+                scores.append(((h, a), prob))
+        
+        # Sort by prob
+        scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Take top 3
+        for (h, a), prob in scores[:3]:
+            if prob > 0.08: # Min threshold to be relevant
+                 picks.append(SuggestedPick(
+                    market_type=MarketType.CORRECT_SCORE,
+                    market_label=f"Marcador Exacto: {h}-{a}",
+                    probability=round(prob, 3),
+                    confidence_level=ConfidenceLevel.LOW, # Always low conf for exact scores
+                    reasoning=f"Proyección matemática más probable ({prob*100:.1f}%).",
+                    risk_level=4, # High risk
+                    is_recommended=False,
+                    priority_score=prob * 0.5,
+                    expected_value=0.0
+                 ))
+        return picks
+
+    def _generate_team_goals_picks(
+        self, home_stats: TeamStatistics, away_stats: TeamStatistics, 
+        predicted_home: float, predicted_away: float
+    ) -> list[SuggestedPick]:
+        """Generate Team Total Goals picks."""
+        picks = []
+        
+        # Home Team Over 1.5
+        prob_home_o15 = self._poisson_model_probability(predicted_home, 0, 1.5, is_over=True) # Check only h_lambda
+        if prob_home_o15 > 0.55:
+            picks.append(self._build_simple_pick(
+                MarketType.TEAM_GOALS_OVER, f"{home_stats.team_id} Más de 1.5 Goles", prob_home_o15, "Ataque local productivo."
+            ))
+            
+        # Away Team Over 1.5
+        prob_away_o15 = self._poisson_model_probability(0, predicted_away, 1.5, is_over=True)
+        if prob_away_o15 > 0.55:
+            picks.append(self._build_simple_pick(
+               MarketType.TEAM_GOALS_OVER, f"{away_stats.team_id} Más de 1.5 Goles", prob_away_o15, "Ataque visitante productivo."
+            ))
+            
+        return picks
+        
+    def _generate_team_corners_picks(
+        self, home_stats: TeamStatistics, away_stats: TeamStatistics,
+        predicted_home_corners: float, predicted_away_corners: float
+    ) -> list[SuggestedPick]:
+        """Generate Team Specific Corner Picks."""
+        picks = []
+        
+        # Home Over
+        for line in [3.5, 4.5, 5.5, 6.5]:
+             if predicted_home_corners > line + 0.5:
+                  prob = 1.0 - math.exp(-predicted_home_corners) # Simplified placeholder or implement poisson for corners
+                  # Actually better to just check mean distance
+                  # Simple heuristic: if pred > line + 1.2 -> High Prob
+                  dist = predicted_home_corners - line
+                  prob = 0.5 + (dist * 0.15)
+                  prob = min(0.95, prob)
+                  
+                  if prob > 0.60:
+                      picks.append(self._build_simple_pick(
+                          MarketType.HOME_CORNERS_OVER, f"{home_stats.team_id} Más de {line} Córners", prob, f"Proyección: {predicted_home_corners:.1f}"
+                      ))
+
+        # Away Over
+        for line in [3.5, 4.5, 5.5]:
+             dist = predicted_away_corners - line
+             prob = 0.5 + (dist * 0.15)
+             prob = min(0.95, prob)
+             if prob > 0.60:
+                  picks.append(self._build_simple_pick(
+                      MarketType.AWAY_CORNERS_OVER, f"{away_stats.team_id} Más de {line} Córners", prob, f"Proyección: {predicted_away_corners:.1f}"
+                  ))
+
+        # Corners 1X2
+        if predicted_home_corners > predicted_away_corners + 1.5:
+             picks.append(self._build_simple_pick(
+                 MarketType.CORNERS_1X2_1, f"Más Córners: {home_stats.team_id}", 0.70, "Dominio en saques de esquina."
+             ))
+        elif predicted_away_corners > predicted_home_corners + 1.5:
+             picks.append(self._build_simple_pick(
+                 MarketType.CORNERS_1X2_2, f"Más Córners: {away_stats.team_id}", 0.70, "Visitante genera más córners."
+             ))
+
+        return picks
+
+    def _generate_team_cards_picks(
+        self, home_stats: TeamStatistics, away_stats: TeamStatistics,
+        pred_home_cards: float, pred_away_cards: float
+    ) -> list[SuggestedPick]:
+        """Generate Team Specific Card Picks."""
+        picks = []
+        # Home Over 1.5 / 2.5
+        for line in [1.5, 2.5]:
+            dist = pred_home_cards - line
+            prob = 0.5 + (dist * 0.20)
+            prob = min(0.95, prob)
+            if prob > 0.60:
+                 picks.append(self._build_simple_pick(
+                    MarketType.HOME_CARDS_OVER, f"{home_stats.team_id} Más de {line} Tarjetas", prob, f"Proyección: {pred_home_cards:.1f}"
+                 ))
+        
+        # Away Over 1.5 / 2.5
+        for line in [1.5, 2.5]:
+            dist = pred_away_cards - line
+            prob = 0.5 + (dist * 0.20)
+            prob = min(0.95, prob)
+            if prob > 0.60:
+                 picks.append(self._build_simple_pick(
+                    MarketType.AWAY_CARDS_OVER, f"{away_stats.team_id} Más de {line} Tarjetas", prob, f"Proyección: {pred_away_cards:.1f}"
+                 ))
+        return picks
+
+    def _build_simple_pick(self, market_type, label, prob, reasoning):
+        """Helper to build a simple pick object."""
+        prob = min(0.98, prob)
+        return SuggestedPick(
+            market_type=market_type,
+            market_label=label,
+            probability=round(prob, 3),
+            confidence_level=SuggestedPick.get_confidence_level(prob),
+            reasoning=reasoning,
+            risk_level=self._calculate_risk_level(prob),
+            is_recommended=(prob > 0.70),
+            priority_score=prob * 0.85,
+            expected_value=0.0
+        )
+
+
+
 
     def _assign_match_results(self, match: Match, picks: list[SuggestedPick]) -> None:
         """

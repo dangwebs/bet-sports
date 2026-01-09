@@ -69,6 +69,8 @@ class FootballDataOrgSource:
         self._request_times: list[datetime] = []
         self._memory_cache: dict = {}
         self._last_request_time: Optional[datetime] = None
+        self._blocked_until: Optional[datetime] = None
+        self._lock: Optional[asyncio.Lock] = None
     
     @property
     def is_configured(self) -> bool:
@@ -78,20 +80,35 @@ class FootballDataOrgSource:
     async def _wait_strict(self):
         """
         Strict rate limiting: 10 req/min = 1 req every 6 seconds.
-        We force 6.5s to be safe.
+        We force 10s to be extremely safe/conservative as requested.
+        Uses a Lock to ensure thread/task safety in async contexts.
         """
-        now = datetime.utcnow()
-        if self._last_request_time:
-            # Check elapsed time since LAST request (not window)
-            elapsed = (now - self._last_request_time).total_seconds()
-            required_wait = 6.5
+        if self._lock is None:
+             self._lock = asyncio.Lock()
+             
+        async with self._lock:
+            now = datetime.utcnow()
             
-            if elapsed < required_wait:
-                wait_time = required_wait - elapsed
-                logger.debug(f"Rate Limit: Waiting {wait_time:.2f}s to respect strict 6.5s gap")
-                await asyncio.sleep(wait_time)
-        
-        self._last_request_time = datetime.utcnow()
+            # Check global block first
+            if self._blocked_until and now < self._blocked_until:
+                wait_time = (self._blocked_until - now).total_seconds()
+                if wait_time > 0:
+                    logger.warning(f"Global 429 Block Active. Sleeping {wait_time:.2f}s...")
+                    await asyncio.sleep(wait_time)
+                    # Refresh now after sleep
+                    now = datetime.utcnow()
+            
+            if self._last_request_time:
+                # Check elapsed time since LAST request
+                elapsed = (now - self._last_request_time).total_seconds()
+                required_wait = 10.0
+                
+                if elapsed < required_wait:
+                    wait_time = required_wait - elapsed
+                    logger.debug(f"Rate Limit: Waiting {wait_time:.2f}s to respect strict 10s gap")
+                    await asyncio.sleep(wait_time)
+            
+            self._last_request_time = datetime.utcnow()
 
     async def _make_request(
         self,
@@ -155,7 +172,11 @@ class FootballDataOrgSource:
                     if response.status_code == 429:
                         if attempt < max_retries:
                             retry_after = int(response.headers.get("Retry-After", backoff))
-                            logger.warning(f"429 Too Many Requests. Waiting {retry_after}s...")
+                            logger.warning(f"429 Too Many Requests. Blocking all requests for {retry_after}s...")
+                            
+                            # Set global block
+                            self._blocked_until = datetime.utcnow() + timedelta(seconds=retry_after)
+                            
                             await asyncio.sleep(retry_after)
                             continue
                         return None
