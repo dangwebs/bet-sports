@@ -237,6 +237,32 @@ async def cmd_top_picks():
         logger.error(f"❌ Top Picks Generation Failed: {e}")
         sys.exit(1)
 
+async def cmd_cleanup():
+    """
+    Step 0: Clear ALL cached data and predictions before running the pipeline.
+    This ensures fresh data on every run.
+    """
+    logger.info("🧹 CMD: CLEANUP - Clearing ALL cached data...")
+    from src.api.dependencies import get_persistence_repository, get_cache_service
+    
+    repo = get_persistence_repository()
+    cache = get_cache_service()
+    
+    try:
+        # 1. Clear Database tables (predictions, training results, API cache)
+        db_results = repo.clear_all_data()
+        logger.info(f"📊 Database cleanup results: {db_results}")
+        
+        # 2. Clear in-memory/Redis cache (if applicable)
+        cache.clear()
+        logger.info("✅ In-memory cache cleared.")
+        
+        logger.info("✅ CLEANUP COMPLETE - All cached data has been cleared.")
+        
+    except Exception as e:
+        logger.error(f"❌ Cleanup Failed: {e}", exc_info=True)
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser(description="MLOps Orchestrator - Optimized for Parallel Processing")
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -262,6 +288,9 @@ def main():
     # Top Picks
     parser_top = subparsers.add_parser('top-picks', help='Generate top ML picks')
     
+    # Cleanup
+    parser_cleanup = subparsers.add_parser('cleanup', help='Clear ALL cached data before pipeline run')
+    
     args = parser.parse_args()
     
     try:
@@ -271,6 +300,8 @@ def main():
             asyncio.run(cmd_predict(args.leagues, args.parallel, args.force))
         elif args.command == 'top-picks':
             asyncio.run(cmd_top_picks())
+        elif args.command == 'cleanup':
+            asyncio.run(cmd_cleanup())
     except KeyboardInterrupt:
         logger.info("⚠️  Interrupted by user")
         pass

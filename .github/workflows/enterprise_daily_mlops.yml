@@ -52,6 +52,11 @@ jobs:
           cd backend
           pip install -r requirements-worker.txt
 
+      - name: 🧹 Cleanup Old Data
+        run: |
+          cd backend
+          python scripts/orchestrator_cli.py cleanup
+
       - name: 🏋️ Run Training (Parallelized with 2 cores)
         run: |
           cd backend

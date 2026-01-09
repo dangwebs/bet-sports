@@ -279,9 +279,9 @@ class PersistenceRepository:
         session = self.db_service.get_session()
         try:
             # Delete all rows in the match_predictions table
-            session.query(MatchPredictionModel).delete()
+            deleted_count = session.query(MatchPredictionModel).delete()
             session.commit()
-            logger.info("🗑️ Cleared all match predictions from database.")
+            logger.info(f"🗑️ Cleared {deleted_count} match predictions from database.")
             return True
         except Exception as e:
             logger.error(f"Failed to clear predictions: {e}")
@@ -289,6 +289,60 @@ class PersistenceRepository:
             return False
         finally:
             session.close()
+
+    def clear_all_training_results(self) -> bool:
+        """
+        Clear all stored training results.
+        Useful for a complete reset of ML pipeline data.
+        """
+        session = self.db_service.get_session()
+        try:
+            deleted_count = session.query(TrainingResultModel).delete()
+            session.commit()
+            logger.info(f"🗑️ Cleared {deleted_count} training results from database.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to clear training results: {e}")
+            session.rollback()
+            return False
+        finally:
+            session.close()
+
+    def clear_all_api_cache(self) -> bool:
+        """
+        Clear all cached API responses.
+        Forces fresh data fetches from external APIs.
+        """
+        session = self.db_service.get_session()
+        try:
+            deleted_count = session.query(ApiCacheModel).delete()
+            session.commit()
+            logger.info(f"🗑️ Cleared {deleted_count} cached API responses from database.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to clear API cache: {e}")
+            session.rollback()
+            return False
+        finally:
+            session.close()
+
+    def clear_all_data(self) -> dict:
+        """
+        Clear ALL data from all tables (predictions, training results, API cache).
+        Use with caution - this is a complete database reset for ML data.
+        Returns a summary of what was cleared.
+        """
+        results = {
+            "predictions_cleared": self.clear_all_predictions(),
+            "training_results_cleared": self.clear_all_training_results(),
+            "api_cache_cleared": self.clear_all_api_cache()
+        }
+        all_success = all(results.values())
+        if all_success:
+            logger.info("✅ Successfully cleared ALL ML data from database.")
+        else:
+            logger.warning(f"⚠️ Partial clear - some operations failed: {results}")
+        return results
 
     def bulk_save_predictions(self, predictions_batch: list[dict], chunk_size: int = 50) -> bool:
         """
