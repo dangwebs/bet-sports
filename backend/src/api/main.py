@@ -82,7 +82,7 @@ statistical analysis, and machine learning models.
 ---
 ⚠️ **Educational purposes only** - Not for actual betting
 """
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 # Global reference to hold background tasks to prevent garbage collection
 background_tasks = set()
