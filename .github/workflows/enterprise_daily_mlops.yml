@@ -71,7 +71,7 @@ jobs:
           compression-level: 9 # Compresión máxima para transferencia rápida
 
   # ------------------------------------------------------------------
-  # JOB 2: PREDICTION MATRIX (Horizontal Scaling - 17 jobs en paralelo)
+  # JOB 2: PREDICTION MATRIX (Sequential to respect API rate limits)
   # ------------------------------------------------------------------
   predict-leagues:
     name: 🔮 Predict ${{ matrix.group }}
@@ -80,12 +80,12 @@ jobs:
     timeout-minutes: 360
     continue-on-error: true # Una falla no detiene las demás
     strategy:
-      max-parallel: 6 # GitHub permite hasta 6 jobs concurrentes en tier gratuito
+      max-parallel: 1 # Serialized to respect football-data.org 10 req/min limit
       fail-fast: false # No detener otros jobs si uno falla
       matrix:
         include:
-          # Dividir en grupos más pequeños para máximo paralelismo
-          # Total: 6 jobs corriendo simultáneamente
+          # Sequential processing to avoid API rate limiting
+          # Total: 6 leagues processed one at a time
           - group: "England_Premier"
             leagues: "E0"
           - group: "Germany_Bundesliga"
