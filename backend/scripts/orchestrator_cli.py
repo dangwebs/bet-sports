@@ -210,8 +210,11 @@ async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = Fal
         if failed and len(failed) == len(leagues):
             logger.error("❌ All leagues failed!")
             sys.exit(1)
-
-        sys.exit(1)
+        
+        if failed:
+            logger.warning(f"⚠️  Some leagues failed: {failed}")
+        else:
+            logger.info("✨ All leagues processed successfully.")
 
 async def cmd_cleanup():
     """
