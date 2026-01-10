@@ -47,6 +47,9 @@ class MLTrainingOrchestrator:
     Application service that orchestrates the entire ML training pipeline.
     Coordinates data fetching, feature extraction, training, and result calculation.
     """
+    CACHE_KEY_STATUS = "ml_training_status"
+    CACHE_KEY_MESSAGE = "ml_training_message"
+    CACHE_KEY_RESULT = "ml_training_result_data"
 
     def __init__(
         self,

@@ -111,12 +111,12 @@ class RoiEvolutionPoint(BaseModel):
 
 class TrainingStatus(BaseModel):
     matches_processed: int
-    correct_predictions: int
-    accuracy: float
-    total_bets: int
-    roi: float
-    profit_units: float
-    market_stats: dict
+    correct_predictions: Optional[int] = 0
+    accuracy: float = 0.0
+    total_bets: Optional[int] = 0
+    roi: float = 0.0
+    profit_units: Optional[float] = 0.0
+    market_stats: Optional[dict] = {}
     match_history: List[MatchPredictionHistory] = []
     roi_evolution: List[RoiEvolutionPoint] = []
     pick_efficiency: List[dict] = [] # Granular stats per pick type
