@@ -196,15 +196,17 @@ class GetPredictionsUseCase:
                         from datetime import timedelta
                         from datetime import timezone as dt_timezone
                         
-                        gen_at_str = cached_response['generated_at']
-                        # Handle Z suffix for older python versions compat
-                        if gen_at_str.endswith('Z'):
-                            gen_at_str = gen_at_str[:-1] + '+00:00'
-                        
-                        # Parse and Localize
-                        # Using top-level datetime import
                         from datetime import datetime as dt
-                        gen_at = dt.fromisoformat(gen_at_str)
+                        gen_at_val = cached_response['generated_at']
+                        
+                        if isinstance(gen_at_val, dt):
+                            gen_at = gen_at_val
+                        else:
+                            # Handle Z suffix for older python versions compat
+                            if gen_at_val.endswith('Z'):
+                                gen_at_val = gen_at_val[:-1] + '+00:00'
+                            gen_at = dt.fromisoformat(gen_at_val)
+                        
                         if gen_at.tzinfo is None:
                                 gen_at = gen_at.replace(tzinfo=dt_timezone.utc)
                         else:
