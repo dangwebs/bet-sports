@@ -242,6 +242,40 @@ async def cmd_cleanup():
         logger.error(f"❌ Cleanup Failed: {e}", exc_info=True)
         sys.exit(1)
 
+async def cmd_top_picks(limit: int = 50, leagues_str: str = None):
+    """
+    Step 3: Synthesize and persist top ML picks for all or specific leagues.
+    """
+    leagues = [l.strip() for l in leagues_str.split(',') if l.strip()] if leagues_str else DEFAULT_LEAGUES
+    logger.info(f"CMD: TOP-PICKS. Limit: {limit}, Target Leagues: {leagues}")
+    
+    from src.api.dependencies import get_persistence_repository
+    from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
+    
+    repo = get_persistence_repository()
+    use_case = GetTopMLPicksUseCase(repo)
+    
+    try:
+        # 1. Generate for each league individually (Map)
+        for league_id in leagues:
+            logger.info(f"🏆 Generating Top Picks for {league_id}...")
+            result = await use_case.execute(limit=limit, league_id=league_id)
+            if result and result.picks:
+                key = f"top_ml_picks_{league_id}"
+                repo.save_training_result(key, result.model_dump())
+                logger.info(f"✅ Saved {len(result.picks)} top picks for {league_id}")
+        
+        # 2. Generate global top picks (Reduce)
+        logger.info("🌎 Generating Global Top Picks...")
+        global_result = await use_case.execute(limit=limit)
+        if global_result and global_result.picks:
+            repo.save_training_result("top_ml_picks_all", global_result.model_dump())
+            logger.info(f"✅ Saved global top picks (key: top_ml_picks_all)")
+            
+    except Exception as e:
+        logger.error(f"❌ Top-Picks Generation Failed: {e}", exc_info=True)
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser(description="MLOps Orchestrator - Optimized for Parallel Processing")
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -266,6 +300,13 @@ def main():
     parser_predict.add_argument('--force', action='store_true',
                                 help='Force regeneration of predictions (ignore cache)')
     
+    # Top-Picks
+    parser_top_picks = subparsers.add_parser('top-picks', help='Generate and persist top ML picks')
+    parser_top_picks.add_argument('--limit', type=int, default=50,
+                                  help='Max number of picks to store (default: 50)')
+    parser_top_picks.add_argument('--leagues', type=str, default=None,
+                                  help='Optional comma separated league IDs filter')
+    
     # Cleanup
     parser_cleanup = subparsers.add_parser('cleanup', help='Clear ALL cached data before pipeline run')
     
@@ -288,6 +329,8 @@ def main():
             asyncio.run(cmd_train(args.days, args.n_jobs, args.skip_cleanup))
         elif args.command == 'predict':
             asyncio.run(cmd_predict(args.leagues, args.parallel, args.force))
+        elif args.command == 'top-picks':
+            asyncio.run(cmd_top_picks(args.limit, args.leagues))
         elif args.command == 'cleanup':
             asyncio.run(cmd_cleanup())
     except KeyboardInterrupt:
