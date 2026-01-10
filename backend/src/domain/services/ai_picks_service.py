@@ -290,17 +290,20 @@ class AIPicksService(PicksService):
                 p.confidence_level = ConfidenceLevel.MEDIUM  # Default
             
             # Apply tiered classification
+            ia_confirmed_assigned = False
             for p in refined_picks:
-                if p.probability >= IA_CONFIRMED_THRESHOLD:
-                    # Tier 1: IA CONFIRMED (85%+)
+                if p.probability >= IA_CONFIRMED_THRESHOLD and not ia_confirmed_assigned:
+                    # Tier 1: IA CONFIRMED (85%+) - ONLY ONE PER MATCH
                     p.is_ia_confirmed = True
                     p.is_ml_confirmed = True
                     p.is_recommended = True
                     p.confidence_level = ConfidenceLevel.HIGH
                     if "[🎯 IA CONFIRMED]" not in p.reasoning:
                         p.reasoning = f"[🎯 IA CONFIRMED] {p.reasoning}"
+                    ia_confirmed_assigned = True
                 elif p.probability >= ML_HIGH_THRESHOLD:
-                    # Tier 2: ML High Confidence (75%-84%)
+                    # Tier 2: ML High Confidence (75%-84% or extra 85% picks)
+                    p.is_ia_confirmed = False
                     p.is_ml_confirmed = True
                     p.is_recommended = True
                     p.confidence_level = ConfidenceLevel.HIGH
@@ -308,6 +311,8 @@ class AIPicksService(PicksService):
                         p.reasoning = f"[⭐ ML ALTA CONFIANZA] {p.reasoning}"
                 else:
                     # Tier 3: Normal (65%-74%)
+                    p.is_ia_confirmed = False
+                    p.is_ml_confirmed = False
                     p.confidence_level = ConfidenceLevel.MEDIUM
                     if "[📊 NORMAL]" not in p.reasoning:
                         p.reasoning = f"[📊 NORMAL] {p.reasoning}"

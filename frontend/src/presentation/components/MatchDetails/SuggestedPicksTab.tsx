@@ -72,14 +72,15 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
               size="small"
               sx={{
                 ml: 1,
-                background: "linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)",
-                color: "#ffffff",
+                bgcolor: "rgba(37, 99, 235, 0.15)",
+                color: "#60a5fa",
                 borderColor: "#60a5fa",
                 borderWidth: "1px",
-                fontWeight: 800,
+                borderStyle: "solid",
+                fontWeight: 900,
                 fontSize: "0.65rem",
                 height: 20,
-                boxShadow: "0 0 8px rgba(59, 130, 246, 0.4)",
+                boxShadow: "0 0 8px rgba(37, 99, 235, 0.3)",
                 "& .MuiChip-label": { px: 1 },
               }}
             />
@@ -173,12 +174,13 @@ const PickRow: React.FC<{ pick: SuggestedPick }> = memo(({ pick }) => {
           {(() => {
             // Clean the reasoning text
             let text = pick.formatted_reasoning || pick.reasoning || "";
-            // Remove redundant tags if present
-            text = text.replace("[🎯 TOP ML]", "").trim();
-            text = text.replace("[ML Confianza Alta]", "").trim();
-            text = text.replace("[IA CONFIRMED]", "").trim();
+            // Remove redundant tags if present (including those with emojis)
+            text = text.replace(/\[.*IA CONFIRMED\]/g, "").trim();
+            text = text.replace(/\[.*TOP ML\]/g, "").trim();
+            text = text.replace(/\[.*ML ALTA CONFIANZA\]/g, "").trim();
+            text = text.replace(/\[.*NORMAL\]/g, "").trim();
             // Remove leading/trailing punctuation/whitespace left over
-            text = text.replace(/^[,.\s]+|[,.\s]+$/g, "");
+            text = text.replace(/^[,.\s:]+|[,.\s:]+$/g, "");
             return text;
           })()}
         </Typography>
