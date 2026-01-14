@@ -266,11 +266,10 @@ class AIPicksService(PicksService):
             refined_picks.append(pick)
             
         # --- PHASE F: Tiered Classification ---
-        # User-defined thresholds:
-        # - IA CONFIRMED: 85%+ (is_ia_confirmed=True)
-        # - ML High Confidence: 75%-84% (is_ml_confirmed=True, confidence=HIGH)
-        # - Normal: 65%-74% (standard pick)
-        # - Below 65%: Filtered out (already done by earlier phases)
+        # REGLAS PARA IA CONFIRMED:
+        # 1. Probabilidad >= 85%
+        # 2. Es el pick con mayor probabilidad del partido (ordenamos DESC)
+        # 3. DEBE haber sido avalado por el modelo ML (is_ml_confirmed = True de PHASE D)
         
         IA_CONFIRMED_THRESHOLD = 0.85
         ML_HIGH_THRESHOLD = 0.75
@@ -280,24 +279,29 @@ class AIPicksService(PicksService):
         refined_picks = [p for p in refined_picks if p.probability >= NORMAL_THRESHOLD]
         
         if refined_picks:
-            # Sort by probability descending
+            # Sort by probability descending (regla 2: mayor probabilidad primero)
             refined_picks.sort(key=lambda x: x.probability, reverse=True)
             
-            # Reset all flags first
+            # IMPORTANTE: NO resetear is_ml_confirmed para preservar la validación de PHASE D
+            # Solo resetear is_ia_confirmed para reasignar
             for p in refined_picks:
                 p.is_ia_confirmed = False
-                p.is_ml_confirmed = False
-                p.confidence_level = ConfidenceLevel.MEDIUM  # Default
+                # p.is_ml_confirmed se PRESERVA de PHASE D
             
             # Apply tiered classification
             ia_confirmed_assigned = False
             for p in refined_picks:
-                # NUEVA REGLA: Descalificar "Under" en líneas bajas de IA CONFIRMED
-                # Corners Under < 9.5 y Cards Under < 4.5 no califican para ser el pick principal
+                # Descalificar "Under" en líneas bajas de IA CONFIRMED
                 is_disqualified_for_ia = self._is_low_line_under_bet(p)
                 
-                if p.probability >= IA_CONFIRMED_THRESHOLD and not ia_confirmed_assigned and not is_disqualified_for_ia:
-                    # Tier 1: IA CONFIRMED (85%+) - ONLY ONE PER MATCH
+                # REGLA 3: El pick DEBE haber sido avalado por el modelo ML (is_ml_confirmed de PHASE D)
+                was_ml_validated = p.is_ml_confirmed
+                
+                if (p.probability >= IA_CONFIRMED_THRESHOLD and 
+                    not ia_confirmed_assigned and 
+                    not is_disqualified_for_ia and
+                    was_ml_validated):  # REGLA 3: Debe estar avalado por ML
+                    # Tier 1: IA CONFIRMED (85%+, mayor probabilidad, avalado por ML)
                     p.is_ia_confirmed = True
                     p.is_ml_confirmed = True
                     p.is_recommended = True
@@ -306,19 +310,19 @@ class AIPicksService(PicksService):
                         p.reasoning = f"[🎯 IA CONFIRMED] {p.reasoning}"
                     ia_confirmed_assigned = True
                 elif p.probability >= ML_HIGH_THRESHOLD:
-                    # Tier 2: ML High Confidence (75%-84% or extra 85% picks)
+                    # Tier 2: ML High Confidence (75%-84% o 85%+ sin validación ML)
                     p.is_ia_confirmed = False
-                    p.is_ml_confirmed = True
+                    p.is_ml_confirmed = True  # Promover a ML confirmed si tiene alta prob
                     p.is_recommended = True
                     p.confidence_level = ConfidenceLevel.HIGH
                     if "[⭐ ML ALTA CONFIANZA]" not in p.reasoning:
                         p.reasoning = f"[⭐ ML ALTA CONFIANZA] {p.reasoning}"
-                else:
+                elif p.probability >= NORMAL_THRESHOLD:
                     # Tier 3: Normal (65%-74%)
                     p.is_ia_confirmed = False
-                    p.is_ml_confirmed = False
+                    # Mantener is_ml_confirmed si ya lo tenía de PHASE D
                     p.confidence_level = ConfidenceLevel.MEDIUM
-                    if "[📊 NORMAL]" not in p.reasoning:
+                    if "[📊 NORMAL]" not in p.reasoning and "[⭐" not in p.reasoning and "[🎯" not in p.reasoning:
                         p.reasoning = f"[📊 NORMAL] {p.reasoning}"
 
         return refined_picks
