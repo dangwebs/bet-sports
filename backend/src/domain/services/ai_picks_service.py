@@ -292,7 +292,11 @@ class AIPicksService(PicksService):
             # Apply tiered classification
             ia_confirmed_assigned = False
             for p in refined_picks:
-                if p.probability >= IA_CONFIRMED_THRESHOLD and not ia_confirmed_assigned:
+                # NUEVA REGLA: Descalificar "Under" en líneas bajas de IA CONFIRMED
+                # Corners Under < 9.5 y Cards Under < 4.5 no califican para ser el pick principal
+                is_disqualified_for_ia = self._is_low_line_under_bet(p)
+                
+                if p.probability >= IA_CONFIRMED_THRESHOLD and not ia_confirmed_assigned and not is_disqualified_for_ia:
                     # Tier 1: IA CONFIRMED (85%+) - ONLY ONE PER MATCH
                     p.is_ia_confirmed = True
                     p.is_ml_confirmed = True
@@ -318,3 +322,39 @@ class AIPicksService(PicksService):
                         p.reasoning = f"[📊 NORMAL] {p.reasoning}"
 
         return refined_picks
+
+    def _is_low_line_under_bet(self, pick: SuggestedPick) -> bool:
+        """
+        Detecta si un pick es una apuesta 'Under' en línea baja.
+        Estos picks tienen alta probabilidad matemática pero bajo valor estratégico.
+        
+        Reglas de descalificación para IA CONFIRMED:
+        - CORNERS_UNDER con línea < 9.5
+        - CARDS_UNDER con línea < 4.5
+        - Cualquier UNDER con "Menos de" en el label que no sea línea alta
+        """
+        market_type_str = pick.market_type.value if hasattr(pick.market_type, "value") else str(pick.market_type)
+        label = pick.market_label.lower()
+        
+        # Detectar línea del label (e.g., "Menos de 6.5 corners" -> 6.5)
+        import re
+        line_match = re.search(r'(\d+\.?\d*)', pick.market_label)
+        line = float(line_match.group(1)) if line_match else 0.0
+        
+        # Regla 1: Corners Under con línea < 9.5
+        if "CORNERS_UNDER" in market_type_str or ("corner" in label and "menos" in label):
+            if line < 9.5:
+                return True
+        
+        # Regla 2: Cards Under con línea < 4.5
+        if "CARDS_UNDER" in market_type_str or ("tarjeta" in label and "menos" in label):
+            if line < 4.5:
+                return True
+        
+        # Regla 3: Goals Under 0.5 o 1.5 (0-0 o bajo goles no es buen headline)
+        if "GOALS_UNDER" in market_type_str or ("goles" in label and "menos" in label):
+            if line <= 1.5:
+                return True
+        
+        return False
+

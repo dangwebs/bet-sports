@@ -1040,7 +1040,7 @@ class PicksService:
         if prob_1x > 0.01:
              picks.append(self._create_double_chance_pick(
                 MarketType.DOUBLE_CHANCE_1X,
-                f"1X - {match.home_team.name} o Empate",
+                f"{match.home_team.name} o Empate",
                 prob_1x,
                 f"Alta probabilidad combinada ({prob_1x:.0%}) de que {match.home_team.name} no pierda en casa."
             ))
@@ -1050,7 +1050,7 @@ class PicksService:
         if prob_x2 > 0.01:
              picks.append(self._create_double_chance_pick(
                 MarketType.DOUBLE_CHANCE_X2,
-                f"X2 - Empate o {match.away_team.name}",
+                f"Empate o {match.away_team.name}",
                 prob_x2,
                 f"Alta probabilidad combinada ({prob_x2:.0%}) de que {match.away_team.name} sume puntos."
             ))
@@ -1060,7 +1060,7 @@ class PicksService:
         if prob_12 > 0.01:
              picks.append(self._create_double_chance_pick(
                 MarketType.DOUBLE_CHANCE_12,
-                f"12 - {match.home_team.name} o {match.away_team.name}",
+                f"{match.home_team.name} o {match.away_team.name} gana",
                 prob_12,
                 f"Baja probabilidad de empate. Se espera un ganador."
             ))
@@ -1116,14 +1116,14 @@ class PicksService:
         selection_prob = max_prob
         
         if idx == 0: # Home
-            label = f"Victoria {match.home_team.name} (1)"
+            label = f"Victoria {match.home_team.name}"
             odds = match.home_odds or 0.0
         elif idx == 1: # Draw
-             label = "Empate (X)"
+             label = "Empate"
              odds = match.draw_odds or 0.0
              base_threshold = 0.35 # Draws are harder
         else: # Away
-            label = f"Victoria {match.away_team.name} (2)"
+            label = f"Victoria {match.away_team.name}"
             odds = match.away_odds or 0.0
             
         # Refined EV Calculation

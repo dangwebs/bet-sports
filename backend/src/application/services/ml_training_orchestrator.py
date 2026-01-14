@@ -4,7 +4,7 @@ import os
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
-from tqdm import tqdm
+
 
 # ML Imports
 try:
@@ -121,7 +121,14 @@ class MLTrainingOrchestrator:
         total_matches = len(all_matches)
         logger.info(f"Processing {total_matches} matches...")
 
-        for match in tqdm(all_matches, desc="Training", unit="match"):
+        # Try importing tqdm for progress bar, otherwise just iterate
+        try:
+            from tqdm import tqdm
+            iterator = tqdm(all_matches, desc="Training", unit="match")
+        except ImportError:
+            iterator = all_matches
+
+        for match in iterator:
             if match.home_goals is None or match.away_goals is None:
                 continue
 

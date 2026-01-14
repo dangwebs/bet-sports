@@ -30,6 +30,11 @@ def _map_match_to_dto(match: Any) -> MatchDTO:
     """Helper function to convert domain Match object to MatchDTO."""
     from src.domain.services.team_service import TeamService
     
+    # FORCED LOGO HYDRATION: Priorizar TeamService (JSON) sobre valores cacheados
+    # Las URLs del JSON (ESPN) son estables, las cacheadas (TheSportsDB) pueden expirar.
+    home_logo = TeamService.get_team_logo(match.home_team.name) or match.home_team.logo_url
+    away_logo = TeamService.get_team_logo(match.away_team.name) or match.away_team.logo_url
+    
     return MatchDTO(
         id=match.id,
         home_team=TeamDTO(
@@ -37,14 +42,14 @@ def _map_match_to_dto(match: Any) -> MatchDTO:
             name=match.home_team.name,
             short_name=match.home_team.short_name or TeamService.get_team_short_name(match.home_team.name),
             country=match.home_team.country,
-            logo_url=match.home_team.logo_url or TeamService.get_team_logo(match.home_team.name),
+            logo_url=home_logo,  # Usar logo fresco primero
         ),
         away_team=TeamDTO(
             id=match.away_team.id,
             name=match.away_team.name,
             short_name=match.away_team.short_name or TeamService.get_team_short_name(match.away_team.name),
             country=match.away_team.country,
-            logo_url=match.away_team.logo_url or TeamService.get_team_logo(match.away_team.name),
+            logo_url=away_logo,  # Usar logo fresco primero
         ),
         league=LeagueDTO(
             id=match.league.id,

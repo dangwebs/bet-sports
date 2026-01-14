@@ -3,10 +3,34 @@ import argparse
 import logging
 import sys
 import os
+import warnings
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import multiprocessing
-from tqdm import tqdm
+
+# Suprimir warnings de sklearn (versión inconsistente del modelo)
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
+
+# Import tqdm with fallback
+try:
+    from tqdm import tqdm
+except ImportError:
+    # Fallback: Simple iterator without progress bar
+    class tqdm:
+        def __init__(self, iterable=None, **kwargs):
+            self.iterable = iterable
+            self.total = kwargs.get('total', len(iterable) if iterable else 0)
+        def __iter__(self):
+            return iter(self.iterable) if self.iterable else iter([])
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def update(self, n=1):
+            pass
+        def set_postfix_str(self, s):
+            pass
 
 # Load environment variables from .env file FIRST
 from dotenv import load_dotenv

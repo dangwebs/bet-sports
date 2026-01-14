@@ -130,7 +130,7 @@ def get_training_data_service() -> TrainingDataService:
         enrichment_service=get_match_enrichment_service()
     )
 from src.infrastructure.repositories.persistence_repository import PersistenceRepository
-from src.application.services.ml_training_orchestrator import MLTrainingOrchestrator
+
 
 @lru_cache()
 def get_persistence_repository() -> PersistenceRepository:
@@ -138,8 +138,9 @@ def get_persistence_repository() -> PersistenceRepository:
     return PersistenceRepository()
 
 @lru_cache()
-def get_ml_training_orchestrator() -> MLTrainingOrchestrator:
+def get_ml_training_orchestrator() -> "MLTrainingOrchestrator":
     """Get ML training orchestrator service (cached)."""
+    from src.application.services.ml_training_orchestrator import MLTrainingOrchestrator
     return MLTrainingOrchestrator(
         training_data_service=get_training_data_service(),
         statistics_service=get_statistics_service(),

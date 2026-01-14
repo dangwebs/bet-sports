@@ -41,7 +41,6 @@ async def get_league_predictions(
     from src.api.dependencies import (
         get_data_sources, get_prediction_service, 
         get_background_processor, get_statistics_service,
-        get_background_processor, get_statistics_service,
         get_persistence_repository, # get_risk_manager,
         get_match_aggregator_service
     )
@@ -62,14 +61,19 @@ async def get_league_predictions(
         
         result = await use_case.execute(league_id, limit=30)
         
-        # POST-PROCESS: Inject logos into cached data that may be missing them
+        # POST-PROCESS: FORCED LOGO HYDRATION
+        # CRÍTICO: Siempre sobrescribir logo_url con el valor más reciente de team_logos.json
+        # Esto ignora cualquier URL antigua (posiblemente rota) que esté cacheada en DB/caché.
+        # Razón: Las URLs de TheSportsDB expiran, pero las de ESPN son estables.
         for pred in result.predictions:
             if pred.match.home_team:
-                if not pred.match.home_team.logo_url:
-                    pred.match.home_team.logo_url = TeamService.get_team_logo(pred.match.home_team.name)
+                fresh_logo = TeamService.get_team_logo(pred.match.home_team.name)
+                if fresh_logo:
+                    pred.match.home_team.logo_url = fresh_logo  # Forzar sobrescritura
             if pred.match.away_team:
-                if not pred.match.away_team.logo_url:
-                    pred.match.away_team.logo_url = TeamService.get_team_logo(pred.match.away_team.name)
+                fresh_logo = TeamService.get_team_logo(pred.match.away_team.name)
+                if fresh_logo:
+                    pred.match.away_team.logo_url = fresh_logo  # Forzar sobrescritura
         
         if not result.predictions:
             logger.warning(f"No predictions found for {league_id}")
