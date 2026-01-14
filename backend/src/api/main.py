@@ -15,6 +15,10 @@ from datetime import datetime
 warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*utcnow.*")
 warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*ast.Num.*")
 
+# Suppress sklearn InconsistentVersionWarning (modelo entrenado con versión anterior)
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
