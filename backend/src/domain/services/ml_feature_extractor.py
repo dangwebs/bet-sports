@@ -170,6 +170,22 @@ class MLFeatureExtractor:
             features.extend(a_card_var)
 
             # ============================================================
+            # EFFICIENCY & INTERACTION FEATURES (New Intelligence Layer)
+            # ============================================================
+            
+            # 1. Goal Conversion (Clinicality): Goals / Total Shots
+            h_shots_total = getattr(home_stats, 'total_shots', 0)
+            a_shots_total = getattr(away_stats, 'total_shots', 0)
+            h_conversion = home_stats.goals_scored / h_shots_total if h_shots_total > 0 else 0.0
+            a_conversion = away_stats.goals_scored / a_shots_total if a_shots_total > 0 else 0.0
+            features.append(float(h_conversion))
+            features.append(float(a_conversion))
+            
+            # 2. Interaction (Simple xG Proxy): Attack Strength * Defense Weakness
+            features.append(float((home_stats.goals_scored / mp_h) * (away_stats.goals_conceded / mp_a)))
+            features.append(float((away_stats.goals_scored / mp_a) * (home_stats.goals_conceded / mp_h)))
+
+            # ============================================================
             # REFEREE FEATURES (New)
             # ============================================================
             # Placeholder: In the future, fetch actual referee stats from StatisticsService
@@ -178,8 +194,7 @@ class MLFeatureExtractor:
             features.append(ref_strictness)
 
         else:
-            # Padding if no stats provided (35 zeros: 16 original + 6 corners/cards + 12 variance + 1 referee)
-            features.extend([0.0] * 35)
+            # Padding if no stats provided (39 zeros: 35 original + 4 new efficiency/interaction features)
+            features.extend([0.0] * 39)
             
         return features
-

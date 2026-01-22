@@ -20,7 +20,7 @@ A diferencia de versiones anteriores, el sistema ahora utiliza una arquitectura 
 1.  **Persistencia Robusta**: Sustitución de Redis por **PostgreSQL**. Todos los resultados de entrenamiento, estadísticas globales y picks pre-calculados se almacenan de forma permanente en SQL.
 2.  **Caché Multi-Capa (Ephemerality-Aware)**:
     - **L1 (Memoria)**: Acceso instantáneo en RAM para peticiones calientes.
-    - **L2 (DiskCache)**: Almacenamiento local persistente vía SQLite para mitigar reinicios del servidor sin saturar la DB.
+    - **L2 (DiskCache)**: Almacenamiento local persistente (basado en archivos) para mitigar reinicios del servidor sin saturar la DB.
 3.  **Entrenamiento Híbrido**:
     - **GitHub Actions**: Realiza el entrenamiento pesado diariamente, garantizando que el modelo `.joblib` esté actualizado.
     - **API Runtime**: Recupera estadísticas y predicciones directamente de PostgreSQL, eliminando la necesidad de cálculos CPU-intensivos en cada request.
@@ -48,7 +48,7 @@ A diferencia de versiones anteriores, el sistema ahora utiliza una arquitectura 
 | :---------------- | :-------------------------- | :------------------------------------------------ |
 | **Backend**       | **Python 3.11 + FastAPI**   | Motor de API asíncrono.                           |
 | **Base de Datos** | **PostgreSQL**              | Persistencia de largo plazo (SSOT).               |
-| **Caché**         | **DiskCache (SQLite)**      | Capa de aceleración local y persistencia efímera. |
+| **Caché**         | **DiskCache (File-based)**  | Capa de aceleración local y persistencia efímera. |
 | **ML Engine**     | **Scikit-learn**            | Inferencia y entrenamiento de modelos.            |
 | **Frontend**      | **React 19 + Vite**         | Interfaz de usuario PWA de alto rendimiento.      |
 | **Diseño**        | **Material UI v5**          | Sistema de componentes limpio y moderno.          |

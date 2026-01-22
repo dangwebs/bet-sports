@@ -170,11 +170,8 @@ async def lifespan(app: FastAPI):
 
     except Exception as e:
         logger.error(f"❌ Failed to hydrate cache on startup: {e}")
-    # --------------------------------
-        logger.info("   - ML computations: DISABLED")
-        logger.info("   - Background tasks: DISABLED")
-        logger.info("   - Data source: PostgreSQL only")
-        logger.info("   - Memory footprint: ~100-150MB")
+        # Re-raise to prevent the app from starting in a broken state (Fail Fast)
+        raise e
     else:
         logger.info("🔬 Starting in FULL MODE (Development)")
         logger.info("   - ML computations: ENABLED")
@@ -325,7 +322,10 @@ async def lifespan(app: FastAPI):
 
     except Exception as e:
         logger.error(f"FAILURE: Lifespan startup error: {e}", exc_info=True)
+        # Re-raise to prevent the app from starting in a broken state (Fail Fast)
+        raise e
 
+    logger.info(f"✅ API Server is ready and listening on port {os.getenv('PORT', '8000')}")
     yield
     
     # 2. Shutdown Logic wrapped in try-except

@@ -13,27 +13,29 @@ class DatabaseService:
     """
     
     def __init__(self, db_url: str = None):
-        # Priority: db_url param -> DATABASE_URL env -> sqlite fallback
+        # Priority: db_url param -> DATABASE_URL env
         self.db_url = db_url or os.getenv("DATABASE_URL")
         
         if not self.db_url:
-            # Fallback to local sqlite for development if no database is provided
-            # Note: Render provides DATABASE_URL automatically for linked databases
-            self.db_url = "sqlite:///./app_persistence.db"
-            logger.warning(f"DATABASE_URL not found. Falling back to SQLite: {self.db_url}")
+            # Fail Fast: The application must not run without a configured PostgreSQL database.
+            raise ValueError("DATABASE_URL environment variable is not set. Cannot initialize database.")
         
         # Adjust URL for SQLAlchemy if it starts with postgres:// (old Heroku/Render format)
         if self.db_url.startswith("postgres://"):
             self.db_url = self.db_url.replace("postgres://", "postgresql://", 1)
-            
+        
+        if "sqlite" in self.db_url:
+            raise ValueError("SQLite is not supported. The application must use a PostgreSQL database.")
+
+        self._initialize_engine()
+
+    def _initialize_engine(self):
         try:
             # Create engine
             # pool_pre_ping=True helps with dropped connections (common in cloud envs)
             self.engine = create_engine(
-                self.db_url, 
-                pool_pre_ping=True,
-                # SQLite doesn't support multiple threads by default in SQLAlchemy
-                connect_args={"check_same_thread": False} if self.db_url.startswith("sqlite") else {}
+                self.db_url,
+                pool_pre_ping=True
             )
             
             # Create session factory
@@ -41,11 +43,13 @@ class DatabaseService:
             
             # Verify connection immediately
             with self.engine.connect() as conn:
-                logger.info(f"✅ Database connection successful: {self.db_url.split('@')[-1] if '@' in self.db_url else 'local DB'}")
+                db_type = "PostgreSQL"
+                host_info = self.db_url.split('@')[-1] if '@' in self.db_url else "local file"
+                logger.info(f"✅ Database connection successful ({db_type}): {host_info}")
             
         except Exception as e:
-            logger.error(f"Failed to initialize DatabaseService: {e}")
-            raise e
+            logger.error(f"FATAL: Failed to initialize DatabaseService with PostgreSQL: {self.db_url}: {e}")
+            raise e # Re-raise the exception to stop the application startup
 
     def create_tables(self):
         """Create all tables defined in Base."""

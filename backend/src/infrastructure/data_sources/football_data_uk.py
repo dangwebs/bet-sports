@@ -33,58 +33,6 @@ class FootballDataConfig:
     timeout: int = 30
 
 
-# Mapping of league codes to Football-Data.co.uk CSV paths
-LEAGUE_CSV_PATHS = {
-    # England
-    "E0": "england/premier-league",    # Premier League
-    "E1": "england/championship",       # Championship
-    "E_FA": "england/fa-cup",           # FA Cup (Placeholder)
-    "E2": "england/league-one",         # League One
-    "E3": "england/league-two",         # League Two
-    
-    # Spain
-    "SP1": "spain/la-liga",             # La Liga
-    "SP2": "spain/segunda",             # Segunda Division
-    "SP_C": "spain/copa-del-rey",       # Copa del Rey (Placeholder)
-    
-    # Germany
-    "D1": "germany/bundesliga",         # Bundesliga
-    "D2": "germany/bundesliga-2",       # 2. Bundesliga
-    
-    # Italy
-    "I1": "italy/serie-a",              # Serie A
-    "I2": "italy/serie-b",              # Serie B
-    
-    # France
-    "F1": "france/ligue-1",             # Ligue 1
-    "F2": "france/ligue-2",             # Ligue 2
-    
-    # Netherlands
-    "N1": "netherlands/eredivisie",     # Eredivisie
-    "N2": "netherlands/eerste-divisie", # Eerste Divisie (Placeholder)
-    
-    # Belgium
-    "B1": "belgium/jupiler-league",     # Jupiler Pro League
-    "B2": "belgium/challenger-pro",     # Challenger Pro League (Placeholder)
-    
-    # Portugal
-    "P1": "portugal/primeira-liga",     # Primeira Liga
-    "P2": "portugal/liga-portugal-2",   # Liga Portugal 2 (Placeholder)
-
-
-    # International (Europe & Americas)
-    "UCL": "international/champions-league",   # Champions League
-    "UEL": "international/europa-league",      # Europa League
-    "UECL": "international/conference-league", # Conference League
-    "EURO": "international/euro-championship", # Euro Championship
-    "LIB": "international/libertadores",       # Copa Libertadores (Placeholder)
-    "SUD": "international/sudamericana",       # Copa Sudamericana (Placeholder)
-}
-
-
-
-
-
 def retry_async(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
     """
     Retry decorator for async functions.
@@ -122,7 +70,7 @@ class FootballDataUKSource:
     SOURCE_NAME = "Football-Data.co.uk"
     
     # Whitelist of league codes known to provide valid .csv files at /mmz4281/{season}/{code}.csv
-    # Excludes Cups (UCL, UEL) and unsupported partial leagues (P2, etc.) to prevent 404s/Redirects.
+    # Excludes unsupported partial leagues (P2, etc.) to prevent 404s/Redirects.
     SUPPORTED_LEAGUES = {
         "E0", "E1", "E2", "E3",  # England
         "SP1", "SP2",            # Spain

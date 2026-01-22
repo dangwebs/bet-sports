@@ -55,7 +55,21 @@ class AIPicksService(PicksService):
         # 0. STRICT RULE 2B: "Zero Stats" Handling
         # If team stats are missing or predictions are zero, we MUST inject values based on League Averages.
         # This prevents "Empty Picks" lists and ensures we always provide a baseline.
+        if league_averages:
+            # Fallback values (Standard averages) if league_averages is somehow empty
+            avg_corners_home = getattr(league_averages, 'avg_corners_home', 4.5) or 4.5
+            avg_corners_away = getattr(league_averages, 'avg_corners_away', 4.0) or 4.0
+            avg_cards_home = getattr(league_averages, 'avg_yellow_cards_home', 2.0) or 2.0
+            avg_cards_away = getattr(league_averages, 'avg_yellow_cards_away', 2.0) or 2.0
 
+            if predicted_home_corners <= 0.1:
+                predicted_home_corners = avg_corners_home
+            if predicted_away_corners <= 0.1:
+                predicted_away_corners = avg_corners_away
+            if predicted_home_yellow_cards <= 0.1:
+                predicted_home_yellow_cards = avg_cards_home
+            if predicted_away_yellow_cards <= 0.1:
+                predicted_away_yellow_cards = avg_cards_away
 
         # 1. Generate Base Candidate Picks using Statistical Models (Poisson/Dixon-Coles)
         # We reuse the verified mathematical core of the parent class.
@@ -130,6 +144,16 @@ class AIPicksService(PicksService):
              points_gap = abs(home_ppg - away_ppg)
              if points_gap > 1.2: # Significant PPG difference
                  semantics["one_sided"] = True
+                 
+        # High Volatility: High scoring expectation OR erratic form (Glass Cannon teams)
+        # If predicted total goals > 3.2 OR (Home has Wins AND Losses in recent form AND concedes > 1.5)
+        if (pred_home + pred_away > 3.2):
+             semantics["high_volatility"] = True
+        elif home_stats.recent_form and "W" in home_stats.recent_form and "L" in home_stats.recent_form:
+             # Check if they are leaky at the back
+             conceded_avg = home_stats.goals_conceded / max(1, home_stats.matches_played)
+             if conceded_avg > 1.4:
+                 semantics["high_volatility"] = True
         
         return semantics
 
@@ -154,7 +178,7 @@ class AIPicksService(PicksService):
             weight = self.learning_weights.get_market_adjustment(market_type)
             
             # STRICTER: weight < 0.6 -> Discard (Quality over Quantity)
-            if weight < 0.6:
+            if weight < 0.15:  # RELAXED: Allow markets unless they are absolutely broken (<0.15)
                 logger.debug(f"AI Discarded {pick.market_label} (Weight {weight:.2f} < 0.6)")
                 continue
 
@@ -174,6 +198,14 @@ class AIPicksService(PicksService):
                 if "HANDICAP" in market_type or "TEAM_GOALS" in market_type or "WINNER" in market_type:
                      pick.priority_score *= 1.2
                      pick.reasoning += " ⚔️ Desigualdad detectada."
+
+            # Rule: High Volatility -> Favor OVER / BTTS / Double Chance (12)
+            if context["high_volatility"]:
+                if "OVER" in market_type or "BTTS_YES" in market_type or "12" in market_type:
+                    pick.priority_score *= 1.15
+                    pick.reasoning += " ⚡ Partido Volátil."
+                elif "UNDER" in market_type or "BTTS_NO" in market_type:
+                    pick.priority_score *= 0.85 # Penalize defensive bets in chaos
 
             # --- PHASE C: ML Confirmation (Predict Proba) ---
             ml_confidence = 0.0
@@ -260,11 +292,16 @@ class AIPicksService(PicksService):
 
             # FINAL FILTER: Discard picks with very low absolute probability unless they are high EV longshots (handled elsewhere)
             # For "Quality over Quantity", we ignore "lottery tickets" < 45% even if EV+
-            if pick.probability < 0.45:
-                 continue
+            # RELAXED: Allow picks down to 35% if they have positive EV (Value Bets)
+            if pick.probability < 0.20 and pick.expected_value <= 0:
+                continue
 
             refined_picks.append(pick)
             
+        # --- PHASE G: Narrative Coherence (Intelligence Layer) ---
+        # Boost picks that reinforce each other (Synergy)
+        self._apply_narrative_coherence(refined_picks)
+
         # --- PHASE F: Tiered Classification ---
         # REGLAS PARA IA CONFIRMED:
         # 1. Probabilidad >= 85%
@@ -275,8 +312,8 @@ class AIPicksService(PicksService):
         ML_HIGH_THRESHOLD = 0.75
         NORMAL_THRESHOLD = 0.65
         
-        # Filter out picks below Normal threshold
-        refined_picks = [p for p in refined_picks if p.probability >= NORMAL_THRESHOLD]
+        # REMOVED: Do NOT filter out picks below Normal threshold. 
+        # We want to show all valid markets, just classified differently.
         
         if refined_picks:
             # Sort by probability descending (regla 2: mayor probabilidad primero)
@@ -318,7 +355,7 @@ class AIPicksService(PicksService):
                     if "[⭐ ML ALTA CONFIANZA]" not in p.reasoning:
                         p.reasoning = f"[⭐ ML ALTA CONFIANZA] {p.reasoning}"
                 elif p.probability >= NORMAL_THRESHOLD:
-                    # Tier 3: Normal (65%-74%)
+                    # Tier 3: Normal (65%+)
                     p.is_ia_confirmed = False
                     # Mantener is_ml_confirmed si ya lo tenía de PHASE D
                     p.confidence_level = ConfidenceLevel.MEDIUM
@@ -326,6 +363,28 @@ class AIPicksService(PicksService):
                         p.reasoning = f"[📊 NORMAL] {p.reasoning}"
 
         return refined_picks
+
+    def _apply_narrative_coherence(self, picks: List[SuggestedPick]):
+        """
+        Boosts picks that align with the dominant narrative of the generated set.
+        Example: If 'Over 2.5 Goals' is very likely, boost 'BTTS Yes'.
+        """
+        # Identify dominant signals (High confidence anchors)
+        over_signal = any(p.market_type == MarketType.GOALS_OVER_2_5 and p.probability > 0.60 for p in picks)
+        under_signal = any(p.market_type == MarketType.GOALS_UNDER_2_5 and p.probability > 0.60 for p in picks)
+        
+        for p in picks:
+            # Coherence: Over 2.5 -> BTTS / Team Goals Over
+            if over_signal:
+                if p.market_type in [MarketType.BTTS_YES, MarketType.TEAM_GOALS_OVER]:
+                    p.priority_score *= 1.1
+                    p.reasoning += " 🔗 Sinergia Goles."
+            
+            # Coherence: Under 2.5 -> BTTS NO / Under 3.5
+            if under_signal:
+                if p.market_type in [MarketType.BTTS_NO, MarketType.GOALS_UNDER_3_5]:
+                    p.priority_score *= 1.1
+                    p.reasoning += " 🔗 Sinergia Defensiva."
 
     def _is_low_line_under_bet(self, pick: SuggestedPick) -> bool:
         """
@@ -361,4 +420,3 @@ class AIPicksService(PicksService):
                 return True
         
         return False
-

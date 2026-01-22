@@ -493,8 +493,8 @@ class PicksService:
         # RELAXED: We attempt to generate picks even with partial data
         # but we track data quality to adjust confidence
         # UPDATE: User Rule - Minimum 4 matches required to use stats.
-        has_home_stats = home_stats is not None and home_stats.matches_played >= 4
-        has_away_stats = away_stats is not None and away_stats.matches_played >= 4
+        has_home_stats = home_stats is not None and home_stats.matches_played >= 2
+        has_away_stats = away_stats is not None and away_stats.matches_played >= 2
         has_prediction_data = (
             predicted_home_goals > 0 or predicted_away_goals > 0 or
             predicted_home_corners > 0 or predicted_away_corners > 0 or
@@ -548,8 +548,9 @@ class PicksService:
             for pick in cards_picks:
                 picks.add_pick(pick)
                 
-            # Generate TEAM Specific Corners/Cards
-            if has_home_stats and has_away_stats:
+            # Generate TEAM Specific Corners/Cards (RELAXED: Use predictions if stats missing)
+            # We check if objects exist, ignoring the strict 'matches_played >= 4' check (has_home_stats)
+            if home_stats and away_stats:
                 team_corners = self._generate_team_corners_picks(
                     home_stats, away_stats, predicted_home_corners, predicted_away_corners
                 )
@@ -631,8 +632,9 @@ class PicksService:
             for pick in cs_picks:
                 picks.add_pick(pick)
              
-            # Generate Team Goals
-            if has_home_stats and has_away_stats:
+            # Generate Team Goals (Relaxed: Use prediction data if stats are partial)
+            # We only need team names and predicted goals, which we have if has_prediction_data is True
+            if has_prediction_data:
                 tg_picks = self._generate_team_goals_picks(
                     home_stats, away_stats, predicted_home_goals, predicted_away_goals
                 )
@@ -642,15 +644,15 @@ class PicksService:
         # 6. Team Corners & Cards (Unconditional - User requested "all possible picks")
         # Decoupled logic: Generate for Home even if Away is missing, and vice-versa
         if home_stats is not None:
-            home_corners_list = self._generate_single_team_corners(home_stats, match, True)
+            home_corners_list = self._generate_single_team_corners(home_stats, match, True, predicted_home_corners)
             for p in home_corners_list: picks.add_pick(p)
-            home_cards_list = self._generate_single_team_cards(home_stats, match, True)
+            home_cards_list = self._generate_single_team_cards(home_stats, match, True, predicted_home_yellow_cards)
             for p in home_cards_list: picks.add_pick(p)
 
         if away_stats is not None:
-            away_corners_list = self._generate_single_team_corners(away_stats, match, False)
+            away_corners_list = self._generate_single_team_corners(away_stats, match, False, predicted_away_corners)
             for p in away_corners_list: picks.add_pick(p)
-            away_cards_list = self._generate_single_team_cards(away_stats, match, False)
+            away_cards_list = self._generate_single_team_cards(away_stats, match, False, predicted_away_yellow_cards)
             for p in away_cards_list: picks.add_pick(p)
 
         # 7. Apply ML Refinement (Dynamic or Global)
@@ -1571,11 +1573,15 @@ class PicksService:
         self,
         stats: TeamStatistics,
         match: Match,
-        is_home: bool
+        is_home: bool,
+        predicted_val: float = 0.0
     ) -> list[SuggestedPick]:
         """Generate corners pick for a single team."""
         team_name = match.home_team.name if is_home else match.away_team.name
         avg = stats.avg_corners_per_match
+        
+        # Fallback to prediction if avg is 0 (Rule 16/2B)
+        if (avg is None or avg <= 0) and predicted_val > 0: avg = predicted_val
         
         return self._generate_team_stat_picks(
             stat_avg=avg,
@@ -1595,11 +1601,15 @@ class PicksService:
         self,
         stats: TeamStatistics,
         match: Match,
-        is_home: bool
+        is_home: bool,
+        predicted_val: float = 0.0
     ) -> list[SuggestedPick]:
         """Generate cards pick for a single team."""
         team_name = match.home_team.name if is_home else match.away_team.name
         avg = stats.avg_yellow_cards_per_match
+        
+        # Fallback to prediction if avg is 0 (Rule 16/2B)
+        if (avg is None or avg <= 0) and predicted_val > 0: avg = predicted_val
         
         return self._generate_team_stat_picks(
             stat_avg=avg,
@@ -1736,14 +1746,14 @@ class PicksService:
         
         if denom_home > 0:
             prob_dnb_1 = home_prob / denom_home
-            if prob_dnb_1 > 0.60:
+            if prob_dnb_1 > 0.50:
                  picks.append(self._build_simple_pick(
                     MarketType.DRAW_NO_BET_1, "Apuesta Sin Empate: Local", prob_dnb_1, "Local protege en caso de empate."
                  ))
 
         if denom_away > 0:
             prob_dnb_2 = away_prob / denom_away
-            if prob_dnb_2 > 0.60:
+            if prob_dnb_2 > 0.50:
                  picks.append(self._build_simple_pick(
                     MarketType.DRAW_NO_BET_2, "Apuesta Sin Empate: Visitante", prob_dnb_2, "Visitante protege en caso de empate."
                  ))
@@ -1788,19 +1798,22 @@ class PicksService:
     ) -> list[SuggestedPick]:
         """Generate Team Total Goals picks."""
         picks = []
+        # Fallback for names if stats objects are None (rare but possible with relaxed logic)
+        h_id = home_stats.team_id if home_stats else "Local"
+        a_id = away_stats.team_id if away_stats else "Visitante"
         
         # Home Team Over 1.5
         prob_home_o15 = self._poisson_model_probability(predicted_home, 0, 1.5, is_over=True) # Check only h_lambda
-        if prob_home_o15 > 0.55:
+        if prob_home_o15 > 0.45:
             picks.append(self._build_simple_pick(
-                MarketType.TEAM_GOALS_OVER, f"{home_stats.team_id} Más de 1.5 Goles", prob_home_o15, "Ataque local productivo."
+                MarketType.TEAM_GOALS_OVER, f"{h_id} Más de 1.5 Goles", prob_home_o15, "Ataque local productivo."
             ))
             
         # Away Team Over 1.5
         prob_away_o15 = self._poisson_model_probability(0, predicted_away, 1.5, is_over=True)
-        if prob_away_o15 > 0.55:
+        if prob_away_o15 > 0.45:
             picks.append(self._build_simple_pick(
-               MarketType.TEAM_GOALS_OVER, f"{away_stats.team_id} Más de 1.5 Goles", prob_away_o15, "Ataque visitante productivo."
+               MarketType.TEAM_GOALS_OVER, f"{a_id} Más de 1.5 Goles", prob_away_o15, "Ataque visitante productivo."
             ))
             
         return picks
@@ -1812,30 +1825,8 @@ class PicksService:
         """Generate Team Specific Corner Picks."""
         picks = []
         
-        # Home Over
-        for line in [3.5, 4.5, 5.5, 6.5]:
-             if predicted_home_corners > line + 0.5:
-                  prob = 1.0 - math.exp(-predicted_home_corners) # Simplified placeholder or implement poisson for corners
-                  # Actually better to just check mean distance
-                  # Simple heuristic: if pred > line + 1.2 -> High Prob
-                  dist = predicted_home_corners - line
-                  prob = 0.5 + (dist * 0.15)
-                  prob = min(0.95, prob)
-                  
-                  if prob > 0.60:
-                      picks.append(self._build_simple_pick(
-                          MarketType.HOME_CORNERS_OVER, f"{home_stats.team_id} Más de {line} Córners", prob, f"Proyección: {predicted_home_corners:.1f}"
-                      ))
-
-        # Away Over
-        for line in [3.5, 4.5, 5.5]:
-             dist = predicted_away_corners - line
-             prob = 0.5 + (dist * 0.15)
-             prob = min(0.95, prob)
-             if prob > 0.60:
-                  picks.append(self._build_simple_pick(
-                      MarketType.AWAY_CORNERS_OVER, f"{away_stats.team_id} Más de {line} Córners", prob, f"Proyección: {predicted_away_corners:.1f}"
-                  ))
+        # NOTE: Over/Under logic moved to _generate_single_team_corners (Step 6) 
+        # to avoid duplicates and ensure consistency with Poisson models.
 
         # Corners 1X2
         if predicted_home_corners > predicted_away_corners + 1.5:
@@ -1855,25 +1846,8 @@ class PicksService:
     ) -> list[SuggestedPick]:
         """Generate Team Specific Card Picks."""
         picks = []
-        # Home Over 1.5 / 2.5
-        for line in [1.5, 2.5]:
-            dist = pred_home_cards - line
-            prob = 0.5 + (dist * 0.20)
-            prob = min(0.95, prob)
-            if prob > 0.60:
-                 picks.append(self._build_simple_pick(
-                    MarketType.HOME_CARDS_OVER, f"{home_stats.team_id} Más de {line} Tarjetas", prob, f"Proyección: {pred_home_cards:.1f}"
-                 ))
-        
-        # Away Over 1.5 / 2.5
-        for line in [1.5, 2.5]:
-            dist = pred_away_cards - line
-            prob = 0.5 + (dist * 0.20)
-            prob = min(0.95, prob)
-            if prob > 0.60:
-                 picks.append(self._build_simple_pick(
-                    MarketType.AWAY_CARDS_OVER, f"{away_stats.team_id} Más de {line} Tarjetas", prob, f"Proyección: {pred_away_cards:.1f}"
-                 ))
+        # NOTE: Over/Under logic moved to _generate_single_team_cards (Step 6)
+        # to avoid duplicates.
         return picks
 
     def _build_simple_pick(self, market_type, label, prob, reasoning):

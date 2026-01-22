@@ -114,6 +114,7 @@ El proyecto se limita EXCLUSIVAMENTE a las siguientes ligas Top-Tier:
 - 🇫🇷 **Francia**: Ligue 1 (`F1`)
 - 🇧🇪 **Bélgica**: Jupiler Pro League (`B1`)
 - 🇵🇹 **Portugal**: Liga Portugal (`P1`)
+- 🇪🇺 **Europa**: Champions League (`UCL`)
 
 ## 16. Cobertura Obligatoria de Mercados (CRÍTICO)
 

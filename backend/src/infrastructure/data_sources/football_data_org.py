@@ -30,10 +30,19 @@ class FootballDataOrgConfig:
     api_key: Optional[str] = None
     base_url: str = "https://api.football-data.org/v4"
     timeout: int = 30
+    min_wait_seconds: float = 6.5  # Optimized for Free Tier (10 req/min = 1 per 6s)
     
     def __post_init__(self):
         if self.api_key is None:
             self.api_key = os.getenv("FOOTBALL_DATA_ORG_KEY")
+            
+        # Allow overriding rate limit via env var (e.g. set to 0.5 for paid plans)
+        env_wait = os.getenv("FOOTBALL_DATA_ORG_WAIT_SECONDS")
+        if env_wait:
+            try:
+                self.min_wait_seconds = float(env_wait)
+            except ValueError:
+                pass
 
 
 # Mapping of our league codes to Football-Data.org competition codes
@@ -101,11 +110,11 @@ class FootballDataOrgSource:
             if self._last_request_time:
                 # Check elapsed time since LAST request
                 elapsed = (now - self._last_request_time).total_seconds()
-                required_wait = 10.0
+                required_wait = self.config.min_wait_seconds
                 
                 if elapsed < required_wait:
                     wait_time = required_wait - elapsed
-                    logger.debug(f"Rate Limit: Waiting {wait_time:.2f}s to respect strict 10s gap")
+                    logger.debug(f"Rate Limit: Waiting {wait_time:.2f}s to respect strict {required_wait}s gap")
                     await asyncio.sleep(wait_time)
             
             self._last_request_time = datetime.utcnow()
