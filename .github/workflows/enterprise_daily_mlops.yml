@@ -98,6 +98,8 @@ jobs:
             leagues: "I1"
           - group: "France_Ligue1"
             leagues: "F1"
+          - group: "International_UCL"
+            leagues: "UCL"
 
     steps:
       - name: 📥 Checkout
