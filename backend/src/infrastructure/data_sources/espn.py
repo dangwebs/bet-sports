@@ -260,7 +260,9 @@ class ESPNSource:
     async def get_finished_matches(
         self,
         league_codes: Optional[List[str]] = None,
-        days_back: int = 7,
+        days_back: Optional[int] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> List[Match]:
         """
         Get finished matches from ESPN.
@@ -269,26 +271,33 @@ class ESPNSource:
         matches = []
         leagues_to_fetch = league_codes or list(ESPN_LEAGUE_MAPPING.keys())
         
-        # ESPN requires day-by-day fetching for scoreboard
-        # We will limit to efficient range
-        dates_to_fetch = []
-        for i in range(1, days_back + 1):
-            d = datetime.utcnow() - timedelta(days=i)
-            dates_to_fetch.append(d.strftime("%Y%m%d"))
+        # Determine date range
+        if start_date and end_date:
+            date_range = []
+            curr = start_date
+            while curr <= end_date:
+                date_range.append(curr.strftime("%Y%m%d"))
+                curr += timedelta(days=1)
+        elif days_back:
+            date_range = []
+            for i in range(days_back):
+                d = datetime.utcnow() - timedelta(days=i)
+                date_range.append(d.strftime("%Y%m%d"))
+        else:
+            # Default to last 7 days
+            date_range = [(datetime.utcnow() - timedelta(days=i)).strftime("%Y%m%d") for i in range(7)]
             
-        # Simple approach: Loop days. 
-        # If days_back is large (e.g. 365), this is slow.
-        # ESPN is best for RECENT detailed stats (last 60 days).
-        eff_days_back = min(days_back, 60) 
-        
         for code in leagues_to_fetch:
             slug = ESPN_LEAGUE_MAPPING.get(code)
             if not slug:
                 continue
             
-            for i in range(1, eff_days_back + 1):
-                date_str = (datetime.utcnow() - timedelta(days=i)).strftime("%Y%m%d")
-                
+            logger.info(f"ESPN: Fetching history for {code} ({slug}) for {len(date_range)} days...")
+            
+            # Fetch scoreboard for each date in range
+            # Note: For large ranges, we SHOULD use the seasonal scoreboard endpoint if available,
+            # but ESPN's dates=YYYYMMDD is most reliable for stats.
+            for date_str in date_range:
                 url = f"{self.BASE_URL}/{slug}/scoreboard"
                 data = await self._make_request(url, {"dates": date_str})
                 
@@ -302,6 +311,7 @@ class ESPNSource:
                         
                     try:
                         match_id = event.get("id")
+                        # Detailed fetch for stats
                         match = await self._get_match_details(slug, match_id, event, code)
                         if match:
                             matches.append(match)
@@ -310,7 +320,7 @@ class ESPNSource:
                         logger.debug(f"Error parsing ESPN match: {e}")
                         continue
                         
-        logger.info(f"ESPN: fetched {len(matches)} matches")
+        logger.info(f"ESPN: fetched {len(matches)} matches total")
         return matches
 
     async def _get_match_details(self, slug: str, match_id: str, event_summary: dict, league_code: str) -> Optional[Match]:

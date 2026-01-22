@@ -67,7 +67,17 @@ class MatchAggregatorService:
         else:
             tasks.append(asyncio.sleep(0))
             
-        # 3. OpenFootball (Fallback)
+        # 3. ESPN (Support for UCL/International)
+        if self.espn:
+            # ESPN is great for recent history of UCL
+            tasks.append(self.espn.get_finished_matches(
+                league_codes=[league_id],
+                days_back=120 # Get last 4 months for UCL context
+            ))
+        else:
+            tasks.append(asyncio.sleep(0))
+
+        # 4. OpenFootball (Fallback)
         from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
         if self.openfootball and league_id in LEAGUES_METADATA:
             meta = LEAGUES_METADATA[league_id]
@@ -81,12 +91,14 @@ class MatchAggregatorService:
         
         uk_matches = results[0] if not isinstance(results[0], Exception) else []
         org_matches = results[1] if not isinstance(results[1], Exception) and results[1] is not None else []
-        open_matches = results[2] if not isinstance(results[2], Exception) and results[2] is not None else []
+        espn_matches = results[2] if not isinstance(results[2], Exception) and results[2] is not None else []
+        open_matches = results[3] if not isinstance(results[3], Exception) and results[3] is not None else []
         
         if isinstance(results[0], Exception): logger.warning(f"UK Source Error: {results[0]}")
+        if isinstance(results[2], Exception): logger.warning(f"ESPN Source Error: {results[2]}")
 
         # Merge
-        merged_matches = self._merge_matches(uk_matches, org_matches, open_matches)
+        merged_matches = self._merge_matches(uk_matches, org_matches, open_matches, espn_matches)
         
         # Validate Sanity (Rule 13)
         valid_matches = []
@@ -122,9 +134,9 @@ class MatchAggregatorService:
 
         return True
 
-    def _merge_matches(self, uk: List[Match], org: List[Match], open_src: List[Match]) -> List[Match]:
+    def _merge_matches(self, uk: List[Match], org: List[Match], open_src: List[Match], espn_src: List[Match]) -> List[Match]:
         """
-        Merge strategy: UK > Org > Open.
+        Merge strategy: UK > Org > ESPN > Open.
         CRITICAL REFACTOR: Performs Deep Merge (Enrichment) instead of simple deduplication.
         If a match exists, we fill in missing fields (Corners, Cards, Referee) from secondary sources.
         """
@@ -170,7 +182,7 @@ class MatchAggregatorService:
             if not matches: return count
             for m in matches:
                 # Basic validation
-                if m.status not in ["FT", "AET", "PEN", "FINISHED"]: continue
+                if m.status not in ["FT", "AET", "PEN", "FINISHED", "post"]: continue
                 if not m.match_date: continue
                 
                 key = get_merge_key(m)
@@ -187,9 +199,10 @@ class MatchAggregatorService:
         # Process in order of priority (Primary creates the base, Secondary fills gaps)
         c_uk = process_list(uk or [], "UK")
         c_org = process_list(org or [], "Org")
+        c_espn = process_list(espn_src or [], "ESPN")
         c_open = process_list(open_src or [], "Open")
         
-        logger.info(f"Merged History: UK={c_uk}, Org={c_org}, Open={c_open}. Unique Total={len(merged)}")
+        logger.info(f"Merged History: UK={c_uk}, Org={c_org}, ESPN={c_espn}, Open={c_open}. Unique Total={len(merged)}")
         return list(merged.values())
 
     async def get_upcoming_matches(self, league_id: str, limit: int = 20) -> List[Match]:

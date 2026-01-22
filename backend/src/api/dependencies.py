@@ -61,6 +61,7 @@ def get_data_sources() -> DataSources:
         football_data_org=get_football_data_org(),
         openfootball=get_openfootball(),
         thesportsdb=get_thesportsdb(),
+        espn=get_espn_source()
     )
 
 # ... (Keeping existing code) ...

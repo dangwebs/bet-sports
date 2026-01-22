@@ -30,6 +30,8 @@ from src.infrastructure.data_sources.football_data_uk import (
 from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
+from src.infrastructure.data_sources.espn import ESPNSource
+from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
 from src.infrastructure.data_sources.club_elo import ClubEloSource
 from src.application.dtos.dtos import (
     TeamDTO,
@@ -63,6 +65,7 @@ class DataSources:
     football_data_org: FootballDataOrgSource
     openfootball: OpenFootballSource
     thesportsdb: TheSportsDBClient
+    espn: Optional[ESPNSource] = None
     club_elo: Optional[ClubEloSource] = None
 
 
@@ -382,11 +385,20 @@ class GetPredictionsUseCase:
             data_sources_used.append(FootballDataOrgSource.SOURCE_NAME)
         if self.data_sources.openfootball:
              data_sources_used.append(OpenFootballSource.SOURCE_NAME)
+        if hasattr(self.data_sources, 'espn') or 'ESPN' not in data_sources_used:
+             data_sources_used.append("ESPN")
         
         # Prepare parallel tasks
         match_tasks = []
         matches_processing_data = [] # To keep context for post-processing
         
+        # Determine min_matches threshold based on league type
+        # International tournaments (UCL/UEL) have fewer matches in recent history
+        min_matches = 6
+        if league_id in ["UCL", "UEL", "UECL"]:
+            min_matches = 3
+            logger.info(f"Using relaxed min_matches={min_matches} for tournament {league_id}")
+
         for match in upcoming_matches[:limit]:
             # Get team statistics using the generic service
             home_stats = self.statistics_service.calculate_team_statistics(
@@ -415,7 +427,7 @@ class GetPredictionsUseCase:
                     away_stats=away_stats,
                     league_averages=league_averages,
                     global_averages=global_averages,
-
+                    min_matches=min_matches,
                     data_sources=data_sources_used,
                 )
                 
