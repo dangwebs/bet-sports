@@ -74,12 +74,22 @@ class GetLeaguesUseCase:
     
     async def execute(self) -> LeaguesResponseDTO:
         """Get all available leagues grouped by country."""
-        leagues = self.data_sources.football_data_uk.get_available_leagues()
+        from src.core.constants import DEFAULT_LEAGUES
+        
+        # Get all default leagues using metadata
+        leagues = []
+        for lid in DEFAULT_LEAGUES:
+            if lid in LEAGUES_METADATA:
+                meta = LEAGUES_METADATA[lid]
+                leagues.append(League(
+                    id=lid,
+                    name=meta["name"],
+                    country=meta["country"],
+                ))
         
         # Group by country
         countries_dict: dict[str, list[League]] = {}
         for league in leagues:
-
             if league.country not in countries_dict:
                 countries_dict[league.country] = []
             countries_dict[league.country].append(league)
