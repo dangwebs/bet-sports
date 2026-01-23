@@ -801,6 +801,7 @@ class GetPredictionsUseCase:
                      is_recommended=p.is_recommended,
                      priority_score=p.priority_score,
                      is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
+                     is_ia_confirmed=getattr(p, 'is_ia_confirmed', False),
                      ml_confidence=getattr(p, 'ml_confidence', 0.0),
                      suggested_stake=getattr(p, 'suggested_stake', 0.0),
                      kelly_percentage=getattr(p, 'kelly_percentage', 0.0),
@@ -1101,6 +1102,15 @@ class GetMatchDetailsUseCase:
                      risk_level=p.risk_level,
                      is_recommended=p.is_recommended,
                      priority_score=p.priority_score,
+                     is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
+                     is_ia_confirmed=getattr(p, 'is_ia_confirmed', False),
+                     ml_confidence=getattr(p, 'ml_confidence', 0.0),
+                     suggested_stake=getattr(p, 'suggested_stake', 0.0),
+                     kelly_percentage=getattr(p, 'kelly_percentage', 0.0),
+                     clv_beat=getattr(p, 'clv_beat', False),
+                     expected_value=getattr(p, 'expected_value', 0.0),
+                     opening_odds=getattr(p, 'odds', 0.0),
+                     closing_odds=getattr(p, 'closing_odds', 0.0),
                  )
                  for p in picks
              ]

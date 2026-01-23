@@ -570,6 +570,7 @@ class GetLivePredictionsUseCase:
                   is_recommended=p.is_recommended,
                   priority_score=p.priority_score,
                   is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
+                  is_ia_confirmed=getattr(p, 'is_ia_confirmed', False),
                   ml_confidence=getattr(p, 'ml_confidence', 0.0),
                   suggested_stake=getattr(p, 'suggested_stake', 0.0),
                   kelly_percentage=getattr(p, 'kelly_percentage', 0.0),

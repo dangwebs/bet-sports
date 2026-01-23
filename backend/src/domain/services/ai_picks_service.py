@@ -308,7 +308,7 @@ class AIPicksService(PicksService):
         # 2. Es el pick con mayor probabilidad del partido (ordenamos DESC)
         # 3. DEBE haber sido avalado por el modelo ML (is_ml_confirmed = True de PHASE D)
         
-        IA_CONFIRMED_THRESHOLD = 0.85
+        IA_CONFIRMED_THRESHOLD = 0.80
         ML_HIGH_THRESHOLD = 0.75
         NORMAL_THRESHOLD = 0.65
         

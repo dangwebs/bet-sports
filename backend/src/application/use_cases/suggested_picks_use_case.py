@@ -195,6 +195,7 @@ class GetSuggestedPicksUseCase:
                     is_recommended=pick.is_recommended,
                     priority_score=pick.priority_score,
                     is_ml_confirmed=pick.is_ml_confirmed,
+                    is_ia_confirmed=getattr(pick, 'is_ia_confirmed', False),
                     ml_confidence=pick.ml_confidence,
                     suggested_stake=pick.suggested_stake,
                     kelly_percentage=pick.kelly_percentage,
@@ -531,6 +532,7 @@ class GetSuggestedPicksUseCase:
                 is_recommended=p.is_recommended,
                 priority_score=p.priority_score,
                 is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
+                is_ia_confirmed=getattr(p, 'is_ia_confirmed', False),
             )
             for p in picks.suggested_picks
         ]
