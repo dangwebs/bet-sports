@@ -100,6 +100,10 @@ jobs:
             leagues: "F1"
           - group: "International_UCL"
             leagues: "UCL"
+          - group: "International_UEL"
+            leagues: "UEL"
+          - group: "International_UECL"
+            leagues: "UECL"
 
     steps:
       - name: 📥 Checkout
