@@ -303,12 +303,13 @@ class AIPicksService(PicksService):
         self._apply_narrative_coherence(refined_picks)
 
         # --- PHASE F: Tiered Classification ---
-        # REGLAS PARA IA CONFIRMED:
-        # 1. Probabilidad >= 85%
+        # REGLAS PARA IA CONFIRMED (SIMPLIFICADAS):
+        # 1. Probabilidad >= 80% (threshold reducido)
         # 2. Es el pick con mayor probabilidad del partido (ordenamos DESC)
-        # 3. DEBE haber sido avalado por el modelo ML (is_ml_confirmed = True de PHASE D)
+        # 3. NO está descalificado por ser línea baja de Under
+        # NOTA: La validación ML es un BOOST, no un requisito bloqueante.
         
-        IA_CONFIRMED_THRESHOLD = 0.80
+        IA_CONFIRMED_THRESHOLD = 0.90
         ML_HIGH_THRESHOLD = 0.75
         NORMAL_THRESHOLD = 0.65
         
@@ -331,14 +332,12 @@ class AIPicksService(PicksService):
                 # Descalificar "Under" en líneas bajas de IA CONFIRMED
                 is_disqualified_for_ia = self._is_low_line_under_bet(p)
                 
-                # REGLA 3: El pick DEBE haber sido avalado por el modelo ML (is_ml_confirmed de PHASE D)
-                was_ml_validated = p.is_ml_confirmed
-                
+                # CAMBIO: IA CONFIRMED ya no requiere was_ml_validated
+                # El pick de mayor probabilidad >= 80% obtiene IA CONFIRMED
                 if (p.probability >= IA_CONFIRMED_THRESHOLD and 
                     not ia_confirmed_assigned and 
-                    not is_disqualified_for_ia and
-                    was_ml_validated):  # REGLA 3: Debe estar avalado por ML
-                    # Tier 1: IA CONFIRMED (85%+, mayor probabilidad, avalado por ML)
+                    not is_disqualified_for_ia):
+                    # Tier 1: IA CONFIRMED (80%+, mayor probabilidad)
                     p.is_ia_confirmed = True
                     p.is_ml_confirmed = True
                     p.is_recommended = True
@@ -347,7 +346,7 @@ class AIPicksService(PicksService):
                         p.reasoning = f"[🎯 IA CONFIRMED] {p.reasoning}"
                     ia_confirmed_assigned = True
                 elif p.probability >= ML_HIGH_THRESHOLD:
-                    # Tier 2: ML High Confidence (75%-84% o 85%+ sin validación ML)
+                    # Tier 2: ML High Confidence (75%-79%)
                     p.is_ia_confirmed = False
                     p.is_ml_confirmed = True  # Promover a ML confirmed si tiene alta prob
                     p.is_recommended = True

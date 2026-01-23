@@ -29,6 +29,10 @@ orjson
 
 # Caching (for ephemeral cache layer)
 diskcache==5.6.3
+
+# Data processing (minimal - required for parsing)
+numpy==1.26.4
+
 joblib==1.4.2
 
 # =============================================================================
