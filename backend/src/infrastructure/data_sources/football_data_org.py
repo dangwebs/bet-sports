@@ -56,9 +56,10 @@ COMPETITION_CODE_MAPPING = {
     "N1": "DED",  # Eredivisie
     "P1": "PPL",  # Primeira Liga
     # "B1": "BJL",  # Belgium Jupiler Pro League (Not supported on Free Tier)
-    "UCL": "CL",  # Champions League
-    "UEL": "EL",  # Europa League
-    "UECL": "CLI",  # Conference League
+    "UCL": "CL",  # UEFA Champions League
+    "UEL": "EL",  # UEFA Europa League
+    # UECL: Football-Data.org uses "UCL" code which conflicts with our Champions League code
+    # Conference League not available without conflict, will rely on ESPN only
     "EURO": "EC", # European Championship
     "WC": "WC",   # World Cup
 }

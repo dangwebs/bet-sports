@@ -209,9 +209,13 @@ class MatchAggregatorService:
         """
         Fetch upcoming matches from available sources.
         """
+        # Tournament leagues play less frequently, need more days_ahead
+        tournament_leagues = ["UCL", "UEL", "UECL", "EURO", "WC"]
+        days_ahead = 30 if league_id in tournament_leagues else 7
+        
         # 1. Try ESPN (Primary - Has Odds)
         try:
-            matches = await self.espn.get_upcoming_matches(league_id)
+            matches = await self.espn.get_upcoming_matches(league_id, days_ahead=days_ahead)
             if matches:
                  return self._sort_and_limit(matches, limit)
         except Exception as e:
