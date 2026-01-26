@@ -192,6 +192,19 @@ class GetLivePredictionsUseCase:
                     continue
 
                 # 2. EMERGENCY FALLBACK: Real-time calculation
+                # SAFETY: Check execution time to prevent HTTP 504/Timeout
+                import time
+                if 'start_time' not in locals():
+                    start_time = time.time()
+                
+                if time.time() - start_time > 20.0:  # 20s Soft Timeout (leaving buffer for response)
+                    logger.warning(f"⏳ Time limit reached (20s). Skipping ML for {match.id} to avoid API timeout.")
+                    results.append(MatchPredictionDTO(
+                        match=self._match_to_dto(match),
+                        prediction=self._empty_prediction(match.id),
+                    ))
+                    continue
+
                 logger.warning(f"⚠ Cache/DB miss for {match.id}. Running emergency real-time inference...")
                 prediction_dto = await self._generate_prediction(match, bulk_history)
                 match_dto = self._match_to_dto(match)

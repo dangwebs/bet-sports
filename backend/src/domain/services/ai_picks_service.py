@@ -30,6 +30,35 @@ class AIPicksService(PicksService):
     context-awareness, and value detection.
     """
 
+    # Semantic Categories for Robust Logic (Enum-based)
+    DEFENSIVE_MARKETS = {
+        MarketType.GOALS_UNDER, MarketType.GOALS_UNDER_0_5, MarketType.GOALS_UNDER_1_5,
+        MarketType.GOALS_UNDER_2_5, MarketType.GOALS_UNDER_3_5,
+        MarketType.CORNERS_UNDER, MarketType.HOME_CORNERS_UNDER, MarketType.AWAY_CORNERS_UNDER,
+        MarketType.CARDS_UNDER, MarketType.HOME_CARDS_UNDER, MarketType.AWAY_CARDS_UNDER,
+        MarketType.BTTS_NO, MarketType.DOUBLE_CHANCE_1X, MarketType.DOUBLE_CHANCE_X2
+    }
+
+    OFFENSIVE_MARKETS = {
+        MarketType.GOALS_OVER, MarketType.GOALS_OVER_0_5, MarketType.GOALS_OVER_1_5,
+        MarketType.GOALS_OVER_2_5, MarketType.GOALS_OVER_3_5,
+        MarketType.CORNERS_OVER, MarketType.HOME_CORNERS_OVER, MarketType.AWAY_CORNERS_OVER,
+        MarketType.CARDS_OVER, MarketType.HOME_CARDS_OVER, MarketType.AWAY_CARDS_OVER,
+        MarketType.BTTS_YES, MarketType.TEAM_GOALS_OVER,
+        MarketType.DOUBLE_CHANCE_12
+    }
+
+    FAVORITE_MARKETS = {
+        MarketType.RESULT_1X2, MarketType.VA_HANDICAP, 
+        MarketType.TEAM_GOALS_OVER, MarketType.CORNERS_1X2_1, MarketType.CORNERS_1X2_2
+    }
+
+    VOLATILITY_MARKETS = {
+        MarketType.GOALS_OVER_2_5, MarketType.GOALS_OVER_3_5,
+        MarketType.BTTS_YES, MarketType.DOUBLE_CHANCE_12,
+        MarketType.CARDS_OVER, MarketType.RED_CARDS
+    }
+
     def generate_suggested_picks(
         self,
         match: Match,
@@ -185,26 +214,26 @@ class AIPicksService(PicksService):
             # --- PHASE B: Integration of Context ---
             # Rule: Defensive Struggle -> Force UNDER / NO BTTS
             if context["defensive_struggle"]:
-                if "UNDER" in market_type or "BTTS_NO" in market_type:
+                if market_type in self.DEFENSIVE_MARKETS:
                     pick.priority_score *= 1.25
                     pick.reasoning += " 🛡️ Contexto Defensivo."
                     pick.confidence_level = ConfidenceLevel.HIGH # Boost confidence directly
-                elif "OVER" in market_type or "BTTS_YES" in market_type:
+                elif market_type in self.OFFENSIVE_MARKETS:
                     # Penalize contradictory picks in this context
                      pick.priority_score *= 0.5 # Stricter penalty
             
             # Rule: One-Sided -> Prioritize HANDICAP / TEAM GOALS / WINNER
             if context["one_sided"]:
-                if "HANDICAP" in market_type or "TEAM_GOALS" in market_type or "WINNER" in market_type:
+                if market_type in self.FAVORITE_MARKETS:
                      pick.priority_score *= 1.2
                      pick.reasoning += " ⚔️ Desigualdad detectada."
 
             # Rule: High Volatility -> Favor OVER / BTTS / Double Chance (12)
             if context["high_volatility"]:
-                if "OVER" in market_type or "BTTS_YES" in market_type or "12" in market_type:
+                if market_type in self.VOLATILITY_MARKETS:
                     pick.priority_score *= 1.15
                     pick.reasoning += " ⚡ Partido Volátil."
-                elif "UNDER" in market_type or "BTTS_NO" in market_type:
+                elif market_type in self.DEFENSIVE_MARKETS:
                     pick.priority_score *= 0.85 # Penalize defensive bets in chaos
 
             # --- PHASE C: ML Confirmation (Predict Proba) ---
@@ -228,11 +257,11 @@ class AIPicksService(PicksService):
             context_aligned = True
             if context["defensive_struggle"]:
                 # In defensive games, only defensive picks can be locks
-                if not ("UNDER" in market_type or "BTTS_NO" in market_type or "DRAW" in market_type):
+                if market_type not in self.DEFENSIVE_MARKETS:
                     context_aligned = False
             elif context["one_sided"]:
                 # In one-sided games, only favorites/goals can be locks
-                if not ("WIN" in market_type or "HANDICAP" in market_type or "TEAM_GOALS" in market_type):
+                if market_type not in self.FAVORITE_MARKETS:
                     context_aligned = False
             
             # Baseline Thresholds
@@ -278,7 +307,7 @@ class AIPicksService(PicksService):
                     # Validate with context to ensure it's not a "trap"
                     # Simple heuristic: if context agrees with pick direction
                     context_supports = True
-                    if "OVER" in market_type and context["defensive_struggle"]:
+                    if market_type in self.OFFENSIVE_MARKETS and context["defensive_struggle"]:
                         context_supports = False
                     
                     if context_supports:

@@ -37,6 +37,29 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+class PicksConfig:
+    """Centralized configuration for Picks Logic thresholds and weights."""
+    KELLY_FRACTION = 0.2
+    MIN_PROBABILITY_THRESHOLD = 0.01
+    RECOMMENDATION_THRESHOLD = 0.65
+    
+    # EV Thresholds
+    EV_HIGH_THRESHOLD = 0.10
+    EV_MODERATE_THRESHOLD = 0.05
+    
+    # Probability Floors for Value Bets
+    VAL_BET_MIN_PROB_HIGH_EV = 0.40
+    VAL_BET_MIN_PROB_MOD_EV = 0.50
+
+    # Boost & Penalty Factors
+    LOW_SCORING_PENALTY = 0.85
+    LOW_SCORING_BOOST = 1.1
+    WINNER_PROB_THRESHOLD = 0.45
+    WINNER_VOLATILE_THRESHOLD = 0.50
+    DRAW_THRESHOLD = 0.35
+    MIN_WINNER_PROB = 0.30
+    
+
 class PicksService:
     """
     Domain service for generating suggested picks.
@@ -322,7 +345,7 @@ class PicksService:
         # We scale this to a 0-1 confidence "boost" or risk adjustment.
         # Let's say max sensible Kelly is ~0.2.
         
-        return f_star * fraction # fractional kelly
+        return f_star * PicksConfig.KELLY_FRACTION # fractional kelly
 
     
     @staticmethod
@@ -359,11 +382,11 @@ class PicksService:
             # Boost priority based on EV
             priority_mult = 1.0 + ev  # e.g. EV 0.20 -> 1.2x multiplier
             
-            if ev > 0.10 and probability > 0.40:
+            if ev > PicksConfig.EV_HIGH_THRESHOLD and probability > PicksConfig.VAL_BET_MIN_PROB_HIGH_EV:
                 is_recommended = True
                 priority_mult = 1.3 # Strong boost for high value
                 suffix = f" 💎 VALUE (+{ev:.1%})"
-            elif ev > 0.05 and probability > 0.50:
+            elif ev > PicksConfig.EV_MODERATE_THRESHOLD and probability > PicksConfig.VAL_BET_MIN_PROB_MOD_EV:
                 is_recommended = True
                 priority_mult = 1.15
                 suffix = f" (EV +{ev:.1%})"
@@ -382,8 +405,8 @@ class PicksService:
         odds: float,
         reasoning: str,
         priority_multiplier: float = 1.0,
-        min_threshold: float = 0.01,
-        recommendation_threshold: float = 0.65,
+        min_threshold: float = PicksConfig.MIN_PROBABILITY_THRESHOLD,
+        recommendation_threshold: float = PicksConfig.RECOMMENDATION_THRESHOLD,
         penalty_note: str = ""
     ) -> Optional[SuggestedPick]:
         """
@@ -1108,8 +1131,8 @@ class PicksService:
         # Volatility check: High draw probability reduces confidence in any winner
         is_volatile = draw_prob > 0.28
         
-        base_threshold = 0.45
-        if is_volatile: base_threshold = 0.50
+        base_threshold = PicksConfig.WINNER_PROB_THRESHOLD
+        if is_volatile: base_threshold = PicksConfig.WINNER_VOLATILE_THRESHOLD
 
         # Odds fetching (assuming standard keys)
         # Note: We don't have explicit 'market_odds' passed here in original method signature, 
@@ -1123,7 +1146,7 @@ class PicksService:
         elif idx == 1: # Draw
              label = "Empate"
              odds = match.draw_odds or 0.0
-             base_threshold = 0.35 # Draws are harder
+             base_threshold = PicksConfig.DRAW_THRESHOLD # Draws are harder
         else: # Away
             label = f"Victoria {match.away_team.name}"
             odds = match.away_odds or 0.0
@@ -1154,7 +1177,7 @@ class PicksService:
             
         # Final gate: Must pass base threshold OR have high EV
         # RELAXED: During early season/training, we lower this to 0.3 to ensure we always have a candidate
-        if selection_prob < 0.3 and ev < 0.05:
+        if selection_prob < PicksConfig.MIN_WINNER_PROB and ev < 0.05:
             return None
         # Construct Pick
         # Boost probability for confidence display only if valid bet
@@ -1256,7 +1279,7 @@ class PicksService:
             
             penalty_note = ""
             if is_low_scoring and line >= 2.5:
-                adjusted_over_prob *= 0.85 
+                adjusted_over_prob *= PicksConfig.LOW_SCORING_PENALTY
                 penalty_note = " ⚠️ Contexto defensivo."
 
             pick_over = self._build_pick_candidate(
@@ -1284,7 +1307,7 @@ class PicksService:
             
             boost_note = ""
             if is_low_scoring and line <= 2.5:
-                adjusted_under_prob *= 1.1
+                adjusted_under_prob *= PicksConfig.LOW_SCORING_BOOST
                 boost_note = " ✅ Contexto defensivo."
 
             pick_under = self._build_pick_candidate(

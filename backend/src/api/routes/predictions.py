@@ -65,13 +65,23 @@ async def get_league_predictions(
         # CRÍTICO: Siempre sobrescribir logo_url con el valor más reciente de team_logos.json
         # Esto ignora cualquier URL antigua (posiblemente rota) que esté cacheada en DB/caché.
         # Razón: Las URLs de TheSportsDB expiran, pero las de ESPN son estables.
+        
+        # OPTIMIZACIÓN: Memoización local para evitar I/O repetitivo en el bucle (N+1)
+        # Intentar carga masiva si está disponible, sino usar caché local
+        _logo_cache = TeamService.get_all_logos() if hasattr(TeamService, 'get_all_logos') else {}
+        
+        def get_cached_logo(team_name: str):
+            if team_name not in _logo_cache:
+                _logo_cache[team_name] = TeamService.get_team_logo(team_name)
+            return _logo_cache[team_name]
+
         for pred in result.predictions:
             if pred.match.home_team:
-                fresh_logo = TeamService.get_team_logo(pred.match.home_team.name)
+                fresh_logo = get_cached_logo(pred.match.home_team.name)
                 if fresh_logo:
                     pred.match.home_team.logo_url = fresh_logo  # Forzar sobrescritura
             if pred.match.away_team:
-                fresh_logo = TeamService.get_team_logo(pred.match.away_team.name)
+                fresh_logo = get_cached_logo(pred.match.away_team.name)
                 if fresh_logo:
                     pred.match.away_team.logo_url = fresh_logo  # Forzar sobrescritura
         
