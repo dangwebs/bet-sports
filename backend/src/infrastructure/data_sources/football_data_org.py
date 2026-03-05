@@ -153,7 +153,6 @@ class FootballDataOrgSource:
                 repo = get_persistence_repository()
                 cached_data = repo.get_cached_response(endpoint, params)
                 if cached_data:
-                    # logger.info(f"DB Cache Hit: {endpoint}")
                     self._memory_cache[cache_key] = cached_data # Populate memory
                     return cached_data
             except Exception as e:

@@ -112,7 +112,6 @@ async def get_live_matches(
         cache = get_cache_service()
         cached_data = cache.get_live_matches("global")
         if cached_data:
-            # logger.info("Using cached global live matches")
             return [MatchDTO(**m) if isinstance(m, dict) else m for m in cached_data]
 
         from src.application.use_cases.use_cases import GetGlobalLiveMatchesUseCase
@@ -158,7 +157,6 @@ async def get_daily_matches(
         cached_data = cache.get(cache_key)
         
         if cached_data:
-            # logger.info(f"Using cached daily matches for {target_date}")
             return [MatchDTO(**m) if isinstance(m, dict) else m for m in cached_data]
 
         from src.application.use_cases.use_cases import GetGlobalDailyMatchesUseCase

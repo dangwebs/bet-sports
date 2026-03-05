@@ -686,11 +686,9 @@ class PredictionService:
                 prediction = model.predict([features])[0]
                 total_expected = float(prediction)
                 ml_success = True
-                # logger.info(f"ML Prediction (Corners) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
 
             except Exception as e:
                 # Fallback silently to heuristic if ML fails
-                # print(f"ML Prediction failed: {e}")
                 pass
 
         # HEURISTIC FALLBACK
@@ -810,11 +808,9 @@ class PredictionService:
                 prediction = model.predict([features])[0]
                 total_expected = float(prediction)
                 ml_success = True
-                # logger.info(f"ML Prediction (Cards) for {match.home_team.name} vs {match.away_team.name}: {total_expected}")
 
             except Exception as e:
                 # Fallback silently to heuristic if ML fails
-                # print(f"ML Prediction failed: {e}")
                 pass
 
         # HEURISTIC FALLBACK
