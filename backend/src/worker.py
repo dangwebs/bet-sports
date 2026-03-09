@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.infrastructure.repositories.mongo_repository import get_mongo_repository
+from src.infrastructure.services.github_exporter import GithubExporterService
 from src.scheduler import BotScheduler
 from src.utils.time_utils import get_current_time
 
@@ -40,7 +41,19 @@ async def run_worker():
                 "status": "success",
                 "message": "Orchestrated job completed successfully."
             })
-            
+            # Extract and export JSON to Github
+            logger.info("📦 Extracting predictions for static export...")
+            active_predictions = mongo_repo.get_all_active_predictions()
+            if active_predictions:
+                exporter = GithubExporterService()
+                success = exporter.export_and_push(active_predictions)
+                if success:
+                    logger.info("🚀 Data statically exported to Github!")
+                else:
+                    logger.warning("⚠️ Github export failed or skipped.")
+            else:
+                logger.info("ℹ️ No active predictions to export.")
+                
             logger.info("✅ Training cycle completed successfully.")
         except Exception as e:
             logger.error(f"❌ Error during training cycle: {e}")

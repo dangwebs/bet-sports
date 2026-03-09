@@ -29,6 +29,10 @@ services:
     environment:
       MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
       MONGO_DB_NAME: "bjj_betsports"
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_USERNAME: ${GITHUB_USERNAME:-Worker-Bot}
+      GITHUB_EMAIL: ${GITHUB_EMAIL:-worker@bjj-betsports.local}
+      GITHUB_REPO: ${GITHUB_REPO:-}
       # Insert other env vars manually if needed via .env
     env_file:
       - ./backend/.env
