@@ -4,22 +4,39 @@
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: bjj-postgres-dev
+  mongodb:
+    image: mongo:6.0
+    container_name: bjj-mongo-dev
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: bjj_betsports
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpassword
+      MONGO_INITDB_DATABASE: bjj_betsports
     ports:
-      - "5432:5432"
+      - "27017:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
       timeout: 5s
       retries: 5
 
+  ml-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bjj-ml-worker-dev
+    environment:
+      MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
+      MONGO_DB_NAME: "bjj_betsports"
+      # Insert other env vars manually if needed via .env
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
 volumes:
-  postgres_data:
+  mongodb_data:

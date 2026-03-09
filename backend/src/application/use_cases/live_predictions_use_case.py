@@ -25,7 +25,7 @@ from src.infrastructure.data_sources.football_data_org import (
     FootballDataOrgSource,
     COMPETITION_CODE_MAPPING,
 )
-from src.infrastructure.repositories.persistence_repository import PersistenceRepository
+from src.infrastructure.repositories.mongo_repository import MongoRepository
 from src.application.dtos.dtos import (
     TeamDTO,
     LeagueDTO,

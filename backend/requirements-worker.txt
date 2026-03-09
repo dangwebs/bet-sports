@@ -6,8 +6,7 @@ scipy==1.13.1
 joblib==1.4.2
 
 # Base de datos y utilidades
-sqlalchemy==2.0.30
-psycopg2-binary==2.9.9
+pymongo==4.7.0
 python-dotenv==1.0.1
 
 # HTTP clients for data fetching

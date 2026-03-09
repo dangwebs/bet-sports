@@ -8,7 +8,7 @@ from src.application.use_cases.use_cases import GetPredictionsUseCase, DataSourc
 from src.infrastructure.cache.cache_service import CacheService
 from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
-from src.infrastructure.repositories.persistence_repository import PersistenceRepository
+from src.infrastructure.repositories.mongo_repository import MongoRepository
 from src.domain.services.match_aggregator_service import MatchAggregatorService
 # from src.domain.services.risk_management.risk_manager import RiskManager
 

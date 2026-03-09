@@ -20,7 +20,7 @@ from src.domain.services.prediction_service import PredictionService
 from src.domain.services.picks_service import PicksService
 from src.domain.services.ai_picks_service import AIPicksService
 from src.domain.services.match_aggregator_service import MatchAggregatorService
-from src.infrastructure.repositories.persistence_repository import PersistenceRepository
+from src.infrastructure.repositories.mongo_repository import MongoRepository
 from src.domain.value_objects.value_objects import LeagueAverages
 from src.domain.exceptions import InsufficientDataException
 from src.infrastructure.data_sources.football_data_uk import (
@@ -133,7 +133,7 @@ class GetPredictionsUseCase:
         statistics_service: StatisticsService,
         match_aggregator: MatchAggregatorService,
         # risk_manager: RiskManager,
-        persistence_repository: Optional["PersistenceRepository"] = None,
+        persistence_repository: Optional["MongoRepository"] = None,
         background_processor: Optional[BackgroundProcessor] = None,
     ):
         self.data_sources = data_sources
@@ -1361,7 +1361,7 @@ class GetGlobalLiveMatchesUseCase:
     - Aggregates and deduplicates data to provide the most complete picture.
     """
     
-    def __init__(self, data_sources: DataSources, persistence_repository: Optional[PersistenceRepository] = None):
+    def __init__(self, data_sources: DataSources, persistence_repository: Optional["MongoRepository"] = None):
         self.data_sources = data_sources
         self.persistence_repository = persistence_repository
         
@@ -1529,7 +1529,7 @@ class GetGlobalDailyMatchesUseCase:
     - NO mock data allowed.
     """
     
-    def __init__(self, data_sources: DataSources, persistence_repository: Optional[PersistenceRepository] = None):
+    def __init__(self, data_sources: DataSources, persistence_repository: Optional["MongoRepository"] = None):
         self.data_sources = data_sources
         self.persistence_repository = persistence_repository
         

@@ -27,7 +27,7 @@ class BotScheduler:
         """Standalone audit job (08:00 AM)."""
         logger.info("Starting scheduled data audit...")
         try:
-             from src.api.dependencies import get_audit_service
+             from src.dependencies import get_audit_service
              audit_service = get_audit_service()
              report = await audit_service.audit_and_fix(fix_missing=True)
              logger.info(f"Scheduled Audit Complete. Status: {report['status']}")
@@ -51,10 +51,10 @@ class BotScheduler:
             logger.info(f"ARCHITECT: Starting memory-optimized job at {datetime.now(COLOMBIA_TZ)}")
             
             # Dynamic imports to keep initial memory low
-            from src.api.dependencies import (
+            from src.dependencies import (
                 get_ml_training_orchestrator, get_cache_service, get_data_sources, 
                 get_prediction_service, get_statistics_service, get_audit_service, 
-                get_persistence_repository, get_match_aggregator_service
+                get_match_aggregator_service, get_persistence_repository
             )
             from src.application.use_cases.use_cases import GetPredictionsUseCase
             from src.core.constants import DEFAULT_LEAGUES
