@@ -16,6 +16,7 @@ from datetime import datetime
 from src.domain.entities.entities import Team, League, Match
 
 logger = logging.getLogger(__name__)
+\
 
 @dataclass
 class TheSportsDBConfig:
@@ -189,10 +190,10 @@ class TheSportsDBClient:
         event = data["events"][0]
         
         try:
-             # Parse date/time
+            # Parse date/time
             date_str = event.get("dateEvent")
             time_str = event.get("strTime")
-            
+
             from datetime import timezone
             match_date = datetime.utcnow().replace(tzinfo=timezone.utc)
             if date_str and time_str:
@@ -200,11 +201,11 @@ class TheSportsDBClient:
                     dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
                     match_date = dt.replace(tzinfo=timezone.utc)
                 except ValueError:
-                     try:
-                         dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-                         match_date = dt.replace(tzinfo=timezone.utc)
-                     except ValueError:
-                         pass
+                    try:
+                        dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                        match_date = dt.replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        pass
 
             home_team = Team(
                 id=event.get("idHomeTeam") or "unknown",
