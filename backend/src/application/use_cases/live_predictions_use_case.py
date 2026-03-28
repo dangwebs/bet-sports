@@ -17,15 +17,10 @@ from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
 from src.domain.services.picks_service import PicksService
 from src.infrastructure.cache.cache_service import CacheService
-from src.infrastructure.data_sources.football_data_uk import (
-    FootballDataUKSource,
-    LEAGUES_METADATA,
-)
 from src.infrastructure.data_sources.football_data_org import (
     FootballDataOrgSource,
     COMPETITION_CODE_MAPPING,
 )
-from src.infrastructure.repositories.mongo_repository import MongoRepository
 from src.application.dtos.dtos import (
     TeamDTO,
     LeagueDTO,
@@ -418,7 +413,8 @@ class GetLivePredictionsUseCase:
                 league_code,
                 seasons=["2425", "2324", "2223", "2122"],
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to fetch CSV history for %s: %s", league_code, exc)
             return []
 
     async def _fetch_openfootball_history(self, league_code: str) -> list[Match]:
@@ -433,8 +429,8 @@ class GetLivePredictionsUseCase:
                 )
                 matches = await self.data_sources.openfootball.get_matches(temp_league)
                 return [m for m in matches if m.status in ["FT", "AET", "PEN"]]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("OpenFootball fetch failed for %s: %s", league_code, exc)
         return []
 
     async def _fetch_team_history_apis(self, match: Match, bulk_history: dict = None) -> list[Match]:
@@ -466,8 +462,8 @@ class GetLivePredictionsUseCase:
                 h_hist = await self.data_sources.football_data_org.get_team_history(match.home_team.name, limit=HISTORY_LIMIT)
                 a_hist = await self.data_sources.football_data_org.get_team_history(match.away_team.name, limit=HISTORY_LIMIT)
                 team_matches.extend(h_hist + a_hist)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Football-Data.org history fetch failed: %s", exc)
                 
         return team_matches
 
@@ -510,8 +506,8 @@ class GetLivePredictionsUseCase:
             for internal_code, org_code in COMPETITION_CODE_MAPPING.items():
                 if internal_code == match.league.id:
                     return internal_code
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to map internal league code for match %s: %s", getattr(match, 'id', None), exc)
         return None
     
     def _match_to_dto(self, match: Match) -> MatchDTO:
