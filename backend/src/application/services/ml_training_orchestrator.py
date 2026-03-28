@@ -1,8 +1,6 @@
 import asyncio
 import logging
-import os
-from typing import List, Optional, Dict, Any
-from datetime import datetime
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -22,9 +20,7 @@ from src.domain.services.pick_resolution_service import PickResolutionService
 from src.application.services.training_data_service import TrainingDataService
 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 from src.domain.services.picks_service import PicksService
-from src.domain.entities.entities import Match
 from src.infrastructure.cache.cache_service import CacheService
-from src.utils.time_utils import get_current_time
 from src.core.constants import DEFAULT_LEAGUES
 
 logger = logging.getLogger(__name__)
@@ -175,7 +171,13 @@ class MLTrainingOrchestrator:
                                 is_recommended=p.is_recommended, priority_score=p.priority_score,
                                 expected_value=p.expected_value or 0.0
                             ))
-                    except Exception: 
+                    except Exception as exc:
+                        logger.debug(
+                            "Failed to parse cached suggested picks for match %s: %s",
+                            match.id,
+                            exc,
+                            exc_info=True,
+                        )
                         cached_result = None
 
                 if not suggested_picks_container:
