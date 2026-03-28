@@ -57,7 +57,7 @@ backend/app_persistence.db-journal
 # ML Models
 
 # Agent files
-.github/agents/*.md
-.claude/agents/*.md
+.github/
+.claude/
 
 

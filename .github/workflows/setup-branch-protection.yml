@@ -1,0 +1,100 @@
+name: Setup Branch Protection Rules
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply_to_main:
+        description: "Aplicar protección a la rama main"
+        type: boolean
+        default: true
+      apply_to_develop:
+        description: "Aplicar protección a la rama develop"
+        type: boolean
+        default: true
+      required_approving_review_count:
+        description: "Número mínimo de revisores aprobatorios"
+        type: number
+        default: 1
+
+permissions:
+  administration: write
+  contents: read
+
+jobs:
+  protect-main:
+    name: 🔒 Proteger rama main
+    runs-on: ubuntu-latest
+    if: ${{ inputs.apply_to_main }}
+    steps:
+      - name: Aplicar reglas de protección a main
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const reviewCount = Number('${{ inputs.required_approving_review_count }}') || 1;
+
+            await github.rest.repos.updateBranchProtection({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              branch: 'main',
+              required_status_checks: null,
+              enforce_admins: true,
+              required_pull_request_reviews: {
+                dismiss_stale_reviews: true,
+                require_code_owner_reviews: false,
+                required_approving_review_count: reviewCount,
+              },
+              restrictions: null,
+              allow_force_pushes: false,
+              allow_deletions: false,
+            });
+
+            core.info('✅ Protección aplicada a la rama main');
+            core.summary.addHeading('🔒 Rama main protegida', 3);
+            core.summary.addList([
+              'Commits directos bloqueados — solo se permiten Pull Requests',
+              `Se requieren ${reviewCount} revisión(es) aprobatoria(s)`,
+              'Las reviews obsoletas se descartan al hacer nuevos commits',
+              'Reglas aplicadas también a administradores',
+              'Force push y eliminación de rama deshabilitados',
+            ]);
+            await core.summary.write();
+
+  protect-develop:
+    name: 🔒 Proteger rama develop
+    runs-on: ubuntu-latest
+    if: ${{ inputs.apply_to_develop }}
+    steps:
+      - name: Aplicar reglas de protección a develop
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const reviewCount = Number('${{ inputs.required_approving_review_count }}') || 1;
+
+            await github.rest.repos.updateBranchProtection({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              branch: 'develop',
+              required_status_checks: null,
+              enforce_admins: true,
+              required_pull_request_reviews: {
+                dismiss_stale_reviews: true,
+                require_code_owner_reviews: false,
+                required_approving_review_count: reviewCount,
+              },
+              restrictions: null,
+              allow_force_pushes: false,
+              allow_deletions: false,
+            });
+
+            core.info('✅ Protección aplicada a la rama develop');
+            core.summary.addHeading('🔒 Rama develop protegida', 3);
+            core.summary.addList([
+              'Commits directos bloqueados — solo se permiten Pull Requests',
+              `Se requieren ${reviewCount} revisión(es) aprobatoria(s)`,
+              'Las reviews obsoletas se descartan al hacer nuevos commits',
+              'Reglas aplicadas también a administradores',
+              'Force push y eliminación de rama deshabilitados',
+            ]);
+            await core.summary.write();
