@@ -4,7 +4,7 @@
 
 **On EVERY user prompt**, before doing anything else, you MUST:
 
-1. **Read** the orchestrator skill at `.claude/skills/orchestrator/SKILL.md`
+1. **Read** the orchestrator skill at `.github/skills/orchestrator/SKILL.md`
 2. **Follow** the orchestrator's full workflow (classify → announce → activate → execute)
 
 This applies to ALL prompts — questions, feature requests, bug fixes, refactoring, reviews, etc.
@@ -31,19 +31,19 @@ For any prompt that requires code changes, follow a specs-first flow before impl
 
 | Skill                   | Path                                                | Scope                                                    |
 | ----------------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| `frontend`              | `.claude/skills/frontend/SKILL.md`                   | Everything in the frontend directory                     |
-| `backend`               | `.claude/skills/backend/SKILL.md`                    | Everything in the backend directory                      |
-| `general`               | `.claude/skills/general/SKILL.md`                    | CLI, libraries, ML, scripts, non-web code                |
-| `architecture`          | `.claude/skills/architecture/SKILL.md`               | Cross-cutting, system design                             |
-| `software-architecture` | `.claude/skills/software-architecture/SKILL.md`      | Clean Arch, Hexagonal, DDD, CQRS, microservices          |
-| `design-patterns`       | `.claude/skills/design-patterns/SKILL.md`            | GoF patterns, NestJS/React-specific patterns             |
-| `clean-code`            | `.claude/skills/clean-code/SKILL.md`                 | Naming, functions, comments, error handling              |
-| `best-practices`        | `.claude/skills/best-practices/SKILL.md`             | SOLID, DRY, YAGNI, security baseline, testing            |
-| `linting`               | `.claude/skills/linting/SKILL.md`                    | ESLint, Prettier, TypeScript strict mode                 |
-| `devops`                | `.claude/skills/devops/SKILL.md`                     | Docker, CI/CD pipelines, GitHub Actions                  |
-| `conventional-commits`  | `.claude/skills/conventional-commits/SKILL.md`       | Commit messages, changelogs, git history                 |
-| `code-quality`          | `.claude/skills/code-quality/SKILL.md`               | SOLID, typing, linting, commits — always-on for code     |
-| `orchestrator`          | `.claude/skills/orchestrator/SKILL.md`               | Task routing & decomposition (always-on)                 |
+| `frontend`              | `.github/skills/frontend/SKILL.md`                   | Everything in the frontend directory                     |
+| `backend`               | `.github/skills/backend/SKILL.md`                    | Everything in the backend directory                      |
+| `general`               | `.github/skills/general/SKILL.md`                    | CLI, libraries, ML, scripts, non-web code                |
+| `architecture`          | `.github/skills/architecture/SKILL.md`               | Cross-cutting, system design                             |
+| `software-architecture` | `.github/skills/software-architecture/SKILL.md`      | Clean Arch, Hexagonal, DDD, CQRS, microservices          |
+| `design-patterns`       | `.github/skills/design-patterns/SKILL.md`            | GoF patterns, NestJS/React-specific patterns             |
+| `clean-code`            | `.github/skills/clean-code/SKILL.md`                 | Naming, functions, comments, error handling              |
+| `best-practices`        | `.github/skills/best-practices/SKILL.md`             | SOLID, DRY, YAGNI, security baseline, testing            |
+| `linting`               | `.github/skills/linting/SKILL.md`                    | ESLint, Prettier, TypeScript strict mode                 |
+| `devops`                | `.github/skills/devops/SKILL.md`                     | Docker, CI/CD pipelines, GitHub Actions                  |
+| `conventional-commits`  | `.github/skills/conventional-commits/SKILL.md`       | Commit messages, changelogs, git history                 |
+| `code-quality`          | `.github/skills/code-quality/SKILL.md`               | SOLID, typing, linting, commits — always-on for code     |
+| `orchestrator`          | `.github/skills/orchestrator/SKILL.md`               | Task routing & decomposition (always-on)                 |
 
 ### Specialist Agents Available (Claude Code)
 

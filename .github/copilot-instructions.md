@@ -65,4 +65,4 @@ For read-only questions or explanations with no code changes, answer directly.
 
 - Agent definitions: `.github/agents/`
 - Spec Kit prompts: `.github/prompts/`
-- Legacy/extended guidance: `AGENTS.md`, `CLAUDE.md`, `.claude/skills/`
+- Legacy/extended guidance: `AGENTS.md`, `CLAUDE.md`
