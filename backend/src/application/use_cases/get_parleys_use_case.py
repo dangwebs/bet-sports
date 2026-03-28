@@ -1,10 +1,12 @@
 from typing import List
 from dataclasses import dataclass
-from datetime import datetime
+import logging
 from src.domain.services.parley_service import ParleyService, ParleyConfig
 from ...domain.entities.parley import Parley
 from ...domain.entities.entities import MatchPrediction, Match, Prediction, Team, League
 from .use_cases import GetPredictionsUseCase
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class GetParleysRequest:
@@ -42,8 +44,9 @@ class GetParleysUseCase:
                         match=match_entity,
                         prediction=prediction_entity
                     ))
-            except Exception:
+            except Exception as exc:
                 # Log error but continue with other leagues
+                logger.warning("Failed to fetch predictions for league %s: %s", league_id, exc)
                 continue
             
         # 2. Configure Parley Generation
