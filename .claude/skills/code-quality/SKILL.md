@@ -118,12 +118,3 @@ When documenting changes or generating commit messages, always use the Conventio
 **Rules:**
 
 - Description must be lowercase, imperative mood, no trailing period.
-- Scope should match the module or domain area (e.g., `auth`, `users`, `workflow`).
-- Body (optional) should explain _why_, not _what_.
-
-_Example:_ `refactor(auth): extract validation logic into standalone use case`
-
----
-
-> ⚠️ **GOLDEN RULE OF THIS SKILL:**
-> Do not ask permission to clean up messy code. If you are touching a file and you see a linting issue, disordered imports, or missing types near your work area, **fix it proactively** while ensuring functionality is not broken.

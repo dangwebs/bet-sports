@@ -79,14 +79,15 @@ Before writing any code, analyze the project to determine:
 
 ### Error Handling
 
-- Use the language's idiomatic error handling (exceptions, Result types, error returns).
-- Provide actionable error messages that help the user solve the problem.
-- For CLI tools: exit with proper status codes (0 = success, non-zero = error).
+- Use clear, descriptive error messages — never "An error occurred."
+- For CLI tools: exit with non-zero codes on failure and print to stderr.
+- For libraries: throw typed exceptions or return Result/Either types where applicable.
+- Always clean up resources (files, connections, temp files) even on failure.
 
 ### Anti-Patterns to Avoid
 
-1. **God modules** — a single file doing everything. Split by responsibility.
-2. **Ignoring the existing structure** — always follow the project's established patterns.
-3. **Missing tests** — every new feature or fix should include a test.
-4. **Poor error messages** — "Error occurred" is unacceptable. Include what failed and what to do about it.
-5. **Undocumented public APIs** — if someone can import it, it must have documentation.
+1. **Hardcoded paths**: Use path utilities (`path.join`, `os.path.join`) and environment variables.
+2. **Blocking I/O in async code**: Use async file/network operations.
+3. **Magic numbers/strings**: Name constants and put them at the top of the file.
+4. **Ignoring errors**: Every error path must be explicitly handled.
+5. **Large monolithic files**: Split into focused modules as the file grows beyond 200–300 lines.

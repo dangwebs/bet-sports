@@ -11,7 +11,7 @@ description: Explicitly orchestrate a complex task across frontend, backend, and
 1. **Read the orchestrator skill**:
 
    ```
-   Read .agent/skills/orchestrator/SKILL.md
+   Read .claude/skills/orchestrator/SKILL.md
    ```
 
 2. **Classify the task** using the orchestrator's classification tree.
@@ -19,11 +19,11 @@ description: Explicitly orchestrate a complex task across frontend, backend, and
 3. **Run Discovery** on all relevant parts of the project (check dependency files, folder structure, existing patterns).
 
 4. **Read the relevant specialist skill(s)**:
-   - Frontend tasks → `.agent/skills/frontend/SKILL.md`
-   - Backend tasks → `.agent/skills/backend/SKILL.md`
-   - Non-web tasks → `.agent/skills/general/SKILL.md`
-   - Cross-cutting tasks → `.agent/skills/architecture/SKILL.md`
-   - All code tasks → `.agent/skills/code-quality/SKILL.md`
+   - Frontend tasks → `.claude/skills/frontend/SKILL.md`
+   - Backend tasks → `.claude/skills/backend/SKILL.md`
+   - Non-web tasks → `.claude/skills/general/SKILL.md`
+   - Cross-cutting tasks → `.claude/skills/architecture/SKILL.md`
+   - All code tasks → `.claude/skills/code-quality/SKILL.md`
 
 5. **Decompose the task** into ordered sub-tasks with explicit dependencies (as per orchestrator Step 3).
 

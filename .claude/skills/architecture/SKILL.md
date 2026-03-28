@@ -119,11 +119,3 @@ Does the new capability:
 └── Does it just add a field or endpoint?
     └── YES → Extend the existing service
 ```
-
-## Anti-Patterns to Avoid
-
-1. **Shared database access** — Services must not query another service's tables directly.
-2. **Circular dependencies** — If module A calls B and B calls A, redesign the boundaries.
-3. **Leaking internal models to the API** — Always use DTOs or contract types at boundaries.
-4. **Big Bang changes** — If a change touches more than 3 services, propose a phased rollout.
-5. **Skipping the contract** — Never implement backend code before the API contract is defined.
