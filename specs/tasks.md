@@ -47,6 +47,11 @@ Cada tarea debe convertirse en un issue/PR si procede. Marcar responsable y esti
        - Tests unitarios nuevos en `backend/tests/unit/test_time_utils.py`.
 
 7. Validación final y merge readiness
+   - Estado: ✅ Completado
    - Responsable: Orquestador/Dev
    - Estimación: 2h
    - Criterio de aceptación: Checklist completado, PRs con reviewers, CI verde o plan de mitigación aceptado.
+   - Evidencia:
+     - Checklist generado: `specs/merge-readiness-checklist.md`.
+     - PR #14 abierto y limpio (`mergeStateStatus: CLEAN`).
+     - Check reportado: `GitGuardian Security Checks` en `SUCCESS`.
