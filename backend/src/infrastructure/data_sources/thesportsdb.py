@@ -72,10 +72,9 @@ class TheSportsDBClient:
     async def get_league_details(self, league_name: str) -> Optional[League]:
         """Get league details."""
         # Note: TheSportsDB search is loose, might need mapping
-        data = await self._make_request(f"/search_all_leagues.php?c=England&s=Soccer") # Example specific query
-        # Ideally we search by exact league name if possible or map IDs
-        
-        # For now, let's just implement basic team search as that's the main value add (logos/info)
+        # TODO: implementar búsqueda de ligas por nombre (placeholder)
+        # Para esta pasada mantenemos la función no implementada.
+        return None
     async def get_upcoming_fixtures(self, league_id: str, next_n: int = 15) -> list[Match]:
         """
         Get upcoming fixtures for a league.
@@ -129,12 +128,12 @@ class TheSportsDBClient:
                         dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
                         match_date = dt.replace(tzinfo=timezone.utc)
                     except ValueError:
-                         # Attempt fallback without seconds
-                         try:
-                             dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-                             match_date = dt.replace(tzinfo=timezone.utc)
-                         except ValueError:
-                             pass
+                        # Attempt fallback without seconds
+                        try:
+                            dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                            match_date = dt.replace(tzinfo=timezone.utc)
+                        except ValueError:
+                            pass
 
                 # Create basic Team objects (we usually need IDs but here we only have names)
                 # We can fetch IDs later or map them if essential. For basic display, names work.
