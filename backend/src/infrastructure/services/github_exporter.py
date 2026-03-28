@@ -14,7 +14,7 @@ class GithubExporterService:
         self.github_username = os.getenv("GITHUB_USERNAME", "Worker-Bot")
         self.github_email = os.getenv("GITHUB_EMAIL", "worker@bjj-betsports.local")
         # Format: username/repo
-        self.github_repo = os.getenv("GITHUB_REPO") 
+        self.github_repo = os.getenv("GITHUB_REPO")
         self.local_repo_path = "/tmp/github_data_export"
         
     def export_and_push(self, data: List[Dict], filename: str = "latest_predictions.json") -> bool:
