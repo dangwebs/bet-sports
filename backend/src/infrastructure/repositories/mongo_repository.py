@@ -115,6 +115,18 @@ class MongoRepository:
     def clear_all_predictions(self):
          self.match_predictions.delete_many({})
 
+    def clear_all_data(self) -> Dict[str, int]:
+        """Clear training, predictions and API cache collections."""
+        training_deleted = self.training_results.delete_many({}).deleted_count
+        predictions_deleted = self.match_predictions.delete_many({}).deleted_count
+        cache_deleted = self.api_cache.delete_many({}).deleted_count
+
+        return {
+            "training_results": training_deleted,
+            "match_predictions": predictions_deleted,
+            "api_cache": cache_deleted,
+        }
+
 # Singleton accessor with old name alias to avoid changing dependencies everywhere
 _mongo_repo = None
 

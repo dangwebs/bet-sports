@@ -21,9 +21,10 @@ A diferencia de versiones anteriores, el sistema ahora utiliza una arquitectura 
 2.  **Caché Multi-Capa (Ephemerality-Aware)**:
     - **L1 (Memoria)**: Acceso instantáneo en RAM para peticiones calientes.
     - **L2 (DiskCache)**: Almacenamiento local persistente (basado en archivos) para mitigar reinicios del servidor sin saturar la DB.
-3.  **Entrenamiento Local Portable (Docker Compose)**:
-    - **Docker Compose (`mlops-pipeline`)**: Ejecuta entrenamiento, predicción y top-picks usando recursos de la máquina anfitriona.
-    - **API Runtime**: Recupera estadísticas y predicciones desde persistencia/caché, evitando cálculos CPU-intensivos por request.
+3.  **Imagen Unica Portable + Docker Compose**:
+    - **Imagen del proyecto**: contiene backend, frontend y utilidades MLOps dentro del mismo artefacto Docker.
+    - **Docker Compose (`backend-api`, `frontend`, `mlops-pipeline`)**: reutiliza esa imagen para ejecutar toda la plataforma sin bind mounts de código del host.
+    - **API Runtime**: recupera estadísticas y predicciones desde persistencia/caché, evitando cálculos CPU-intensivos por request.
 
 ---
 
@@ -86,6 +87,12 @@ backend/src/
 
 El entrenamiento se ejecuta fuera de GitHub Actions y dentro de contenedores:
 
+### Arquitectura portable
+
+- `Dockerfile.portable`: imagen única del proyecto.
+- `docker-compose.dev.yml`: orquesta MongoDB + backend + frontend + MLOps.
+- No se requieren bind mounts del código para ejecutar el stack portable.
+
 1. Levanta dependencias base:
     - `docker compose -f docker-compose.dev.yml up -d mongodb`
 2. Ejecuta el pipeline MLOps local:
@@ -102,6 +109,12 @@ Para levantar API + frontend + Mongo:
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 ```
+
+Servicios expuestos:
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- MongoDB: `localhost:27017`
 
 Para ejecutar solo el pipeline MLOps:
 

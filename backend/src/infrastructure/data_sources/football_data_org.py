@@ -148,7 +148,7 @@ class FootballDataOrgSource:
         # 2. Check DB Cache
         repo = None
         if use_cache:
-            from src.infrastructure.repositories.persistence_repository import get_persistence_repository
+            from src.dependencies import get_persistence_repository
             try:
                 repo = get_persistence_repository()
                 cached_data = repo.get_cached_response(endpoint, params)

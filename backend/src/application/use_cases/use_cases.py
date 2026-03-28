@@ -921,7 +921,7 @@ class GetMatchDetailsUseCase:
         # yielding massive RAM savings vs loading the 100MB+ training result blob.
         try:
              # Just to be safe with imports
-             from src.infrastructure.repositories.persistence_repository import get_persistence_repository
+             from src.dependencies import get_persistence_repository
              repo = get_persistence_repository()
              
              pred_data, _ = repo.get_match_prediction_with_timestamp(match_id)

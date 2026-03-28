@@ -61,21 +61,28 @@ logger = logging.getLogger("OrchestratorCLI")
 CPU_COUNT = int(os.getenv('N_JOBS', multiprocessing.cpu_count()))
 logger.info(f"🚀 Running with {CPU_COUNT} CPU cores")
 
-async def cmd_train(days_back: int = 550, n_jobs: int = None, skip_cleanup: bool = False):
+async def cmd_train(
+    days_back: int = 550,
+    n_jobs: int = None,
+    skip_cleanup: bool = False,
+    leagues_str: str | None = None,
+):
     """
     Step 1: Retrain the ML Model with parallel processing.
     """
     if n_jobs is None:
         n_jobs = CPU_COUNT
         
-    logger.info(f"CMD: TRAIN. Days back: {days_back}, n_jobs: {n_jobs}")
-    from src.api.dependencies import get_ml_training_orchestrator, get_cache_service
+    logger.info(
+        f"CMD: TRAIN. Days back: {days_back}, n_jobs: {n_jobs}, leagues: {leagues_str or 'default'}"
+    )
+    from src.dependencies import get_ml_training_orchestrator, get_cache_service
     
     orchestrator = get_ml_training_orchestrator()
     cache = get_cache_service()
     
     # [FIX] Get Persistence Repo to save results to DB (source of truth for Dashboard)
-    from src.api.dependencies import get_persistence_repository
+    from src.dependencies import get_persistence_repository
     repo = get_persistence_repository()
     
     # [AUTO-CLEANUP] Limpiar DB y caché antes de entrenar para asegurar datos frescos
@@ -89,8 +96,7 @@ async def cmd_train(days_back: int = 550, n_jobs: int = None, skip_cleanup: bool
         except Exception as cleanup_err:
             logger.warning(f"⚠️ Cleanup parcial (no fatal): {cleanup_err}")
     
-    # Use DEFAULT_LEAGUES (Top Tier Only) instead of all metadata
-    leagues = DEFAULT_LEAGUES
+    leagues = [league.strip() for league in leagues_str.split(",") if league.strip()] if leagues_str else DEFAULT_LEAGUES
     logger.info(f"Targeting Leagues: {leagues}")
     
     try:
@@ -168,7 +174,7 @@ async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = Fal
     leagues = [l.strip() for l in leagues_str.split(',') if l.strip()]
     logger.info(f"CMD: PREDICT. Target Leagues: {leagues}, Parallel: {parallel}")
     
-    from src.api.dependencies import (
+    from src.dependencies import (
         get_data_sources, get_prediction_service, 
         get_statistics_service, get_match_aggregator_service, 
         get_persistence_repository # get_risk_manager, 
@@ -246,7 +252,7 @@ async def cmd_cleanup():
     This ensures fresh data on every run.
     """
     logger.info("🧹 CMD: CLEANUP - Clearing ALL cached data...")
-    from src.api.dependencies import get_persistence_repository, get_cache_service
+    from src.dependencies import get_persistence_repository, get_cache_service
     
     repo = get_persistence_repository()
     cache = get_cache_service()
@@ -273,7 +279,7 @@ async def cmd_top_picks(limit: int = 50, leagues_str: str = None):
     leagues = [l.strip() for l in leagues_str.split(',') if l.strip()] if leagues_str else DEFAULT_LEAGUES
     logger.info(f"CMD: TOP-PICKS. Limit: {limit}, Target Leagues: {leagues}")
     
-    from src.api.dependencies import get_persistence_repository
+    from src.dependencies import get_persistence_repository
     from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
     
     repo = get_persistence_repository()
@@ -312,6 +318,8 @@ def main():
                               help='Number of parallel jobs for ML training (default: auto-detect)')
     parser_train.add_argument('--skip-cleanup', action='store_true',
                               help='Skip automatic cleanup of DB/cache before training')
+    parser_train.add_argument('--leagues', type=str, default=None,
+                              help="Optional comma separated league IDs for training scope")
     
     # Predict
     parser_predict = subparsers.add_parser('predict', help='Run predictions for leagues')
@@ -341,7 +349,7 @@ def main():
     # This ensures tables exist before any DB operations.
     # =====================================================
     try:
-        from src.api.dependencies import get_persistence_repository
+        from src.dependencies import get_persistence_repository
         repo = get_persistence_repository()
         repo.create_tables()
         logger.info("✅ Database tables verified/created.")
@@ -350,7 +358,7 @@ def main():
     
     try:
         if args.command == 'train':
-            asyncio.run(cmd_train(args.days, args.n_jobs, args.skip_cleanup))
+            asyncio.run(cmd_train(args.days, args.n_jobs, args.skip_cleanup, args.leagues))
         elif args.command == 'predict':
             asyncio.run(cmd_predict(args.leagues, args.parallel, args.force))
         elif args.command == 'top-picks':
