@@ -42,7 +42,7 @@ class DatabaseService:
             self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
             
             # Verify connection immediately
-            with self.engine.connect() as conn:
+            with self.engine.connect():
                 db_type = "PostgreSQL"
                 host_info = self.db_url.split('@')[-1] if '@' in self.db_url else "local file"
                 logger.info(f"✅ Database connection successful ({db_type}): {host_info}")
