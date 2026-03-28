@@ -16,6 +16,7 @@ from datetime import datetime
 from src.domain.entities.entities import Match, Team, League
 
 logger = logging.getLogger(__name__)
+ 
 
 class LocalGithubDataSource:
     """
@@ -200,5 +201,6 @@ class LocalGithubDataSource:
                 home_total_shots=home_total_shots,
                 away_total_shots=away_total_shots
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to parse CSV row at %s: %s", match_date, exc, exc_info=True)
             return None
