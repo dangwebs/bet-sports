@@ -130,8 +130,8 @@ class OpenFootballSource:
                         minute = int(time_parts[1]) if len(time_parts) > 1 else 0
                         dt = dt.replace(hour=hour, minute=minute)
                     except (ValueError, IndexError):
-                        # Default to 15:00 if time parsing fails
-                        dt = dt.replace(hour=15, minute=0)
+                            # Default to 15:00 if time parsing fails
+                            dt = dt.replace(hour=15, minute=0)
                 else:
                     # No time provided, default to 15:00 (typical afternoon kickoff)
                     dt = dt.replace(hour=15, minute=0)
