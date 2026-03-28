@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 import os
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from src.utils.time_utils import get_current_time
 
@@ -56,7 +56,6 @@ class MongoRepository:
 
     def get_training_results_by_pattern(self, pattern: str) -> dict:
         """Approximation of SQL LIKE pattern matching for MongoDB"""
-        import re
         regex_pattern = pattern.replace('%', '.*')
         docs = self.training_results.find({"key": {"$regex": f"^{regex_pattern}$"}})
         return {doc['key']: doc['data'] for doc in docs}
@@ -113,7 +112,7 @@ class MongoRepository:
         return None
 
     def clear_all_predictions(self):
-         self.match_predictions.delete_many({})
+        self.match_predictions.delete_many({})
 
     def clear_all_data(self) -> Dict[str, int]:
         """Clear training, predictions and API cache collections."""
