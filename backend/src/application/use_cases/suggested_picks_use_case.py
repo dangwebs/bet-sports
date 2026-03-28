@@ -51,7 +51,6 @@ class GetSuggestedPicksUseCase:
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
         self.learning_service = learning_service
-        self.learning_service = learning_service
         self.cache_service = cache_service
         self.odds_api = None # TheOddsAPISource removed
         # Initialize new sources if not passed in data_sources (fallback)
@@ -444,7 +443,8 @@ class GetSuggestedPicksUseCase:
                 league_code,
                 seasons=["2425", "2324"],
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to fetch CSV history for %s: %s", league_code, exc)
             return []
 
     async def _fetch_openfootball_history(self, league_code: str) -> list[Match]:
@@ -459,8 +459,8 @@ class GetSuggestedPicksUseCase:
                 )
                 matches = await self.data_sources.openfootball.get_matches(temp_league)
                 return [m for m in matches if m.status in ["FT", "AET", "PEN"]]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("OpenFootball fetch failed for %s: %s", league_code, exc)
         return []
 
     async def _fetch_team_history_apis(self, match: Match) -> list[Match]:
