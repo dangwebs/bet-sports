@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
+import subprocess
+import threading
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
@@ -11,6 +15,11 @@ from pydantic import BaseModel, Field
 
 from src.domain.constants import LEAGUES_METADATA
 from src.infrastructure.repositories.mongo_repository import get_mongo_repository
+
+_logger = logging.getLogger(__name__)
+_BACKEND_DIR = Path(__file__).parent.parent.parent
+_training_lock = threading.Lock()
+_training_running = False
 
 
 def _utc_now_iso() -> str:
@@ -320,6 +329,14 @@ def get_learning_stats() -> LearningStatsResponse:
 
 @app.get("/api/v1/train/status", response_model=TrainingStatusPayload)
 def get_training_status() -> TrainingStatusPayload:
+    if _training_running:
+        return TrainingStatusPayload(
+            status="IN_PROGRESS",
+            message="Entrenamiento en progreso...",
+            has_result=False,
+            result=None,
+            last_update=None,
+        )
     result, last_update = _load_training_result()
     if result is None:
         return TrainingStatusPayload(
@@ -329,7 +346,6 @@ def get_training_status() -> TrainingStatusPayload:
             result=None,
             last_update=None,
         )
-
     return TrainingStatusPayload(
         status="COMPLETED",
         message="Resultado de entrenamiento disponible.",
@@ -347,7 +363,50 @@ def get_training_cached() -> TrainingCachedPayload:
 
 @app.post("/api/v1/train/run-now")
 def trigger_training() -> dict[str, str]:
-    return {
-        "status": "accepted",
-        "message": "El entrenamiento manual debe ejecutarse via mlops-pipeline.",
-    }
+    global _training_running
+    with _training_lock:
+        if _training_running:
+            return {"status": "already_running", "message": "El entrenamiento ya está en progreso."}
+        _training_running = True
+
+    n_jobs = os.getenv("N_JOBS", "2")
+    train_days = os.getenv("TRAIN_DAYS", "550")
+    predict_leagues = os.getenv("PREDICT_LEAGUES", "E0")
+
+    def _run() -> None:
+        global _training_running
+        try:
+            _logger.info("Iniciando entrenamiento: days=%s leagues=%s", train_days, predict_leagues)
+            subprocess.run(
+                ["python3", "scripts/orchestrator_cli.py", "cleanup"],
+                cwd=str(_BACKEND_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            subprocess.run(
+                [
+                    "python3",
+                    "scripts/orchestrator_cli.py",
+                    "train",
+                    "--days",
+                    train_days,
+                    "--n-jobs",
+                    n_jobs,
+                    "--leagues",
+                    predict_leagues,
+                ],
+                cwd=str(_BACKEND_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            _logger.info("Entrenamiento finalizado.")
+        except Exception as exc:
+            _logger.error("Error en entrenamiento: %s", exc)
+        finally:
+            with _training_lock:
+                _training_running = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started", "message": "Entrenamiento iniciado dentro del contenedor."}
