@@ -17,7 +17,6 @@ from src.domain.entities.entities import Match, Team, League
 
 logger = logging.getLogger(__name__)
  
-
 class LocalGithubDataSource:
     """
     Data source for local GitHub dataset CSV.
