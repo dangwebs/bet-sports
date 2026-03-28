@@ -21,9 +21,9 @@ A diferencia de versiones anteriores, el sistema ahora utiliza una arquitectura 
 2.  **Caché Multi-Capa (Ephemerality-Aware)**:
     - **L1 (Memoria)**: Acceso instantáneo en RAM para peticiones calientes.
     - **L2 (DiskCache)**: Almacenamiento local persistente (basado en archivos) para mitigar reinicios del servidor sin saturar la DB.
-3.  **Entrenamiento Híbrido**:
-    - **GitHub Actions**: Realiza el entrenamiento pesado diariamente, garantizando que el modelo `.joblib` esté actualizado.
-    - **API Runtime**: Recupera estadísticas y predicciones directamente de PostgreSQL, eliminando la necesidad de cálculos CPU-intensivos en cada request.
+3.  **Entrenamiento Local Portable (Docker Compose)**:
+    - **Docker Compose (`mlops-pipeline`)**: Ejecuta entrenamiento, predicción y top-picks usando recursos de la máquina anfitriona.
+    - **API Runtime**: Recupera estadísticas y predicciones desde persistencia/caché, evitando cálculos CPU-intensivos por request.
 
 ---
 
@@ -52,7 +52,7 @@ A diferencia de versiones anteriores, el sistema ahora utiliza una arquitectura 
 | **ML Engine**     | **Scikit-learn**            | Inferencia y entrenamiento de modelos.            |
 | **Frontend**      | **React 19 + Vite**         | Interfaz de usuario PWA de alto rendimiento.      |
 | **Diseño**        | **Material UI v5**          | Sistema de componentes limpio y moderno.          |
-| **Infra**         | **GitHub Actions + Render** | CI/CD, Entrenamiento y Hosting.                   |
+| **Infra**         | **Docker Compose + Render** | Ejecución local portable, CI informativo y hosting. |
 
 ---
 
@@ -82,15 +82,32 @@ backend/src/
 
 ---
 
-## 🤖 Ciclo de Vida del Modelo
+## 🤖 Ciclo de Vida del Modelo (Local Portable)
 
-El workflow `daily_training.yml` asegura que el sistema esté siempre al día:
+El entrenamiento se ejecuta fuera de GitHub Actions y dentro de contenedores:
 
-1. Se activa diariamente a las **06:00 UTC**.
-2. Entrena el modelo con los datos más recientes.
-3. Sincroniza las estadísticas y resultados en **PostgreSQL**.
-4. Actualiza el binario `.joblib` en el repositorio.
-5. Render despliega el cambio de forma automática.
+1. Levanta dependencias base:
+    - `docker compose -f docker-compose.dev.yml up -d mongodb`
+2. Ejecuta el pipeline MLOps local:
+    - `./run_dev_pipeline.sh`
+3. El script dispara `mlops-pipeline` en Compose y ejecuta:
+    - `cleanup` -> `train` -> `predict` -> `top-picks`
+4. Puedes ajustar recursos sin editar código:
+    - `N_JOBS`, `TRAIN_DAYS`, `PREDICT_LEAGUES`
+
+### Ejecución full-stack local
+
+Para levantar API + frontend + Mongo:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Para ejecutar solo el pipeline MLOps:
+
+```bash
+docker compose -f docker-compose.dev.yml --profile mlops run --rm mlops-pipeline
+```
 
 ## 📄 Disclaimer
 
