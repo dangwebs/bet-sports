@@ -3,7 +3,6 @@ import asyncio
 import gc
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from pytz import timezone
 from datetime import datetime
 from typing import Generator
 from src.utils.time_utils import COLOMBIA_TZ, get_today_str
