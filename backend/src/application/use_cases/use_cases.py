@@ -10,8 +10,6 @@ from typing import Optional, List, Any
 from dataclasses import dataclass
 from pytz import timezone
 import logging
-import asyncio
-import asyncio
 from src.infrastructure.services.background_processor import BackgroundProcessor
 
 from src.domain.entities.entities import Match, League, Prediction, TeamStatistics
@@ -29,9 +27,10 @@ from src.infrastructure.data_sources.football_data_uk import (
 )
 from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
+import asyncio
+
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
 from src.infrastructure.data_sources.espn import ESPNSource
-from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
 from src.infrastructure.data_sources.club_elo import ClubEloSource
 from src.application.dtos.dtos import (
     TeamDTO,
@@ -908,8 +907,8 @@ class GetMatchDetailsUseCase:
         if not match:
             try:
                 match = await self.data_sources.thesportsdb.get_match_details(match_id)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("TheSportsDB lookup failed for %s: %s", match_id, exc)
             
         if not match:
             return None
@@ -1185,8 +1184,8 @@ class GetTeamPredictionsUseCase:
                         lid = int(match.league.id)
                         if lid in api_id_to_code:
                             internal_league_code = api_id_to_code[lid]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to map league id for match %s: %s", getattr(match, 'id', None), exc)
                     
                 if internal_league_code:
                     try:
@@ -1195,8 +1194,8 @@ class GetTeamPredictionsUseCase:
                             internal_league_code,
                             seasons=["2425", "2324"], 
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("Failed to fetch CSV history for internal league %s: %s", internal_league_code, exc)
                 
                 # 4. Calculate stats
                 home_stats = self.statistics_service.calculate_team_statistics(match.home_team.name, historical_matches)
