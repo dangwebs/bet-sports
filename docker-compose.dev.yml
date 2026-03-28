@@ -79,10 +79,12 @@ services:
       MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
       MONGO_DB_NAME: "bjj_betsports"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WORKER_MODE: ${WORKER_MODE:-cron}
+      WORKER_RUN_IMMEDIATE: ${WORKER_RUN_IMMEDIATE:-false}
     depends_on:
       mongodb:
         condition: service_healthy
-    profiles: ["worker"]
+    restart: unless-stopped
 
   mlops-pipeline:
     <<: *project-image
