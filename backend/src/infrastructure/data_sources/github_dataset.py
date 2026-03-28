@@ -16,15 +16,16 @@ from datetime import datetime
 from src.domain.entities.entities import Match, Team, League
 
 logger = logging.getLogger(__name__)
- 
+
+
 class LocalGithubDataSource:
     """
     Data source for local GitHub dataset CSV.
     """
-    
+
     SOURCE_NAME = "GitHub_Dataset"
     CSV_PATH = "src/infrastructure/data_sources/local_data/matches_github.csv"
-    
+
     LEAGUE_MAPPING = {
         "E0": "Premier League",
         "SP1": "La Liga",
@@ -35,13 +36,13 @@ class LocalGithubDataSource:
         "N1": "Eredivisie",
         # Add more as needed based on CSV "Division" column
     }
-    
+
     def __init__(self):
         # Resolve path relative to this file, not CWD
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.file_path = os.path.join(current_dir, "local_data", "matches_github.csv")
         logger.info(f"Resolved GitHub Dataset Path: {self.file_path}")
-        
+
     async def get_finished_matches(
         self,
         league_codes: Optional[List[str]] = None,
@@ -49,25 +50,25 @@ class LocalGithubDataSource:
     ) -> List[Match]:
         """
         Get matches from local CSV.
-        
+
         Args:
             league_codes: List of league codes to filter (e.g., ["E0"])
             date_from: Filter matches after this date
-            
+
         Returns:
             List of Match entities
         """
         if not os.path.exists(self.file_path):
             logger.warning(f"GitHub dataset not found at {self.file_path}")
             return []
-            
+
         matches = []
         target_divisions = set(league_codes) if league_codes else None
-        
+
         try:
-            with open(self.file_path, 'r', encoding='utf-8') as f:
+            with open(self.file_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
-                
+
                 rows_checked = 0
                 for row in reader:
                     rows_checked += 1
@@ -76,22 +77,28 @@ class LocalGithubDataSource:
                         division = row.get("Division")
                         if target_divisions and division not in target_divisions:
                             if rows_checked < 5:
-                                logger.debug(f"Skipping division: {division} (Target: {target_divisions})")
+                                logger.debug(
+                                    "Skipping division: %s (Target: %s)",
+                                    division,
+                                    target_divisions,
+                                )
                             continue
-                            
+
                         # Parse date
                         date_str = row.get("MatchDate")
                         if not date_str:
                             continue
-                            
+
                         match_date = datetime.strptime(date_str, "%Y-%m-%d")
-                        
+
                         # Filter by date
                         if date_from and match_date < date_from:
                             if rows_checked < 5:
-                                logger.debug(f"Skipping date: {match_date} (From: {date_from})")
+                                logger.debug(
+                                    f"Skipping date: {match_date} (From: {date_from})"
+                                )
                             continue
-                            
+
                         # Create match entity
                         match = self._parse_row(row, match_date)
                         if match:
@@ -99,18 +106,18 @@ class LocalGithubDataSource:
                         else:
                             if rows_checked < 20:
                                 logger.debug(f"Failed to parse row: {row}")
-                            
+
                     except Exception as e:
                         if rows_checked < 20:
                             logger.debug(f"Error processing row {rows_checked}: {e}")
                         continue
-                
+
                 logger.info(f"GitHub Dataset: Checked {rows_checked} rows")
-                        
+
         except Exception as e:
             logger.error(f"Error reading GitHub dataset: {e}")
             return []
-            
+
         logger.info(f"GitHub Dataset: loaded {len(matches)} matches")
         return matches
 
@@ -120,7 +127,7 @@ class LocalGithubDataSource:
             division = row.get("Division")
             home_team_name = row.get("HomeTeam")
             away_team_name = row.get("AwayTeam")
-            
+
             # Helper to parse float or int string to int safely
             def safe_int(val):
                 if not val:
@@ -129,7 +136,7 @@ class LocalGithubDataSource:
                     return int(float(val))
                 except (ValueError, TypeError):
                     return None
-            
+
             def safe_float(val):
                 if not val:
                     return None
@@ -140,43 +147,46 @@ class LocalGithubDataSource:
 
             home_goals = safe_int(row.get("FTHome"))
             away_goals = safe_int(row.get("FTAway"))
-            
+
             if home_goals is None or away_goals is None:
                 return None
-            
+
             # Additional stats
             home_corners = safe_int(row.get("HomeCorners"))
             away_corners = safe_int(row.get("AwayCorners"))
-            
+
             home_yellow = safe_int(row.get("HomeYellow"))
             away_yellow = safe_int(row.get("AwayYellow"))
-            
+
             home_red = safe_int(row.get("HomeRed"))
             away_red = safe_int(row.get("AwayRed"))
-            
+
             # Betting Odds
             home_odds = safe_float(row.get("OddHome"))
             draw_odds = safe_float(row.get("OddDraw"))
             away_odds = safe_float(row.get("OddAway"))
-            
+
             # Shots
             home_shots_on = safe_int(row.get("HomeTarget"))
             away_shots_on = safe_int(row.get("AwayTarget"))
             home_total_shots = safe_int(row.get("HomeShots"))
             away_total_shots = safe_int(row.get("AwayShots"))
-            
+
             # Simple ID generation
-            match_id = f"gh_{division}_{match_date.strftime('%Y%m%d')}_{home_team_name[:3]}_{away_team_name[:3]}"
-            
+            date_part = match_date.strftime("%Y%m%d")
+            home_short = home_team_name[:3]
+            away_short = away_team_name[:3]
+            match_id = f"gh_{division}_{date_part}_{home_short}_{away_short}"
+
             home_team = Team(id=home_team_name, name=home_team_name)
             away_team = Team(id=away_team_name, name=away_team_name)
-            
+
             league = League(
                 id=division,
                 name=self.LEAGUE_MAPPING.get(division, division),
-                country="International"
+                country="International",
             )
-            
+
             return Match(
                 id=match_id,
                 home_team=home_team,
@@ -198,8 +208,10 @@ class LocalGithubDataSource:
                 home_shots_on_target=home_shots_on,
                 away_shots_on_target=away_shots_on,
                 home_total_shots=home_total_shots,
-                away_total_shots=away_total_shots
+                away_total_shots=away_total_shots,
             )
         except Exception as exc:
-            logger.debug("Failed to parse CSV row at %s: %s", match_date, exc, exc_info=True)
+            logger.debug(
+                "Failed to parse CSV row at %s: %s", match_date, exc, exc_info=True
+            )
             return None
