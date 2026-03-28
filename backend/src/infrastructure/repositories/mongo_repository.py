@@ -7,6 +7,7 @@ from src.utils.time_utils import get_current_time
 
 logger = logging.getLogger(__name__)
 
+
 class MongoRepository:
     """Drop-in replacement for PostgreSQL PersistenceRepository using MongoDB."""
     def __init__(self):
@@ -125,7 +126,6 @@ class MongoRepository:
             "match_predictions": predictions_deleted,
             "api_cache": cache_deleted,
         }
-
 # Singleton accessor with old name alias to avoid changing dependencies everywhere
 _mongo_repo = None
 
