@@ -494,10 +494,10 @@ const LiveMatches: React.FC = () => {
 
   // Compat for old hook props
   const refreshing = loading;
-  const processingMessage = "";
+  const processingMessage = "Actualizando marcadores...";
 
-  // Show processing message during initial load
-  if (loading && processingMessage) {
+  // Show loading state during initial fetch
+  if (loading) {
     return (
       <Box my={4}>
         <Box display="flex" alignItems="center" gap={1} mb={2}>

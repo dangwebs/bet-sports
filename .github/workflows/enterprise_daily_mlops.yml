@@ -35,7 +35,7 @@ jobs:
   train-model:
     name: 🧠 Train ML Model
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 60
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -85,13 +85,15 @@ jobs:
       matrix:
         include:
           # Sequential processing to avoid API rate limiting
-          # Total: 6 leagues processed one at a time
+          # Scope restricted by RULES.md (top-tier active leagues)
           - group: "England_Premier"
             leagues: "E0"
           - group: "Germany_Bundesliga"
             leagues: "D1"
           - group: "Spain_LaLiga"
             leagues: "SP1"
+          - group: "Belgium_Jupiler"
+            leagues: "B1"
           - group: "Portugal"
             leagues: "P1"
           - group: "Italy_SerieA"
@@ -100,10 +102,6 @@ jobs:
             leagues: "F1"
           - group: "International_UCL"
             leagues: "UCL"
-          - group: "International_UEL"
-            leagues: "UEL"
-          - group: "International_UECL"
-            leagues: "UECL"
 
     steps:
       - name: 📥 Checkout
@@ -139,7 +137,7 @@ jobs:
     name: 🏁 Finalize & Report
     needs: [predict-leagues]
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 60
     if: always() # Run even if some matrix jobs failed
 
     steps:
@@ -181,7 +179,7 @@ jobs:
           echo "- ✅ Training: Completed" >> $GITHUB_STEP_SUMMARY
           echo "- 🔮 Predictions: ${{ strategy.job-total }} leagues processed" >> $GITHUB_STEP_SUMMARY
           echo "- 🏆 Top Picks: Generated" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 Parallelism: 17 concurrent jobs" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Parallelism: 1 league at a time (rate-limit safe)" >> $GITHUB_STEP_SUMMARY
 
       - name: 📧 Notify on Failure
         if: contains(needs.*.result, 'failure')
