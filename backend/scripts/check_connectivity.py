@@ -38,11 +38,9 @@ def check_connectivity():
         except socket.gaierror as e:
             logger.error(f"❌ DNS lookup FAILED for '{host_part}': {e}")
             if host_part == "mongodb":
+                logger.warning("💡 Tip: If you are running on HOST, use 'localhost'.")
                 logger.warning(
-                    (
-                        "💡 Tip: If you are running on HOST, use 'localhost'. "
-                        "If in Docker, ensure both containers are on the same network."
-                    )
+                    "If in Docker, ensure both containers are on the same network."
                 )
             return
 
@@ -66,8 +64,10 @@ def check_connectivity():
         db = client[db_name]
         collections = db.list_collection_names()
         logger.info(
-            f"✅ Successfully listed {len(collections)} collections in '{db_name}': "
-            f"{collections}"
+            "✅ Successfully listed %d collections in '%s': %s",
+            len(collections),
+            db_name,
+            collections,
         )
 
     except Exception as e:

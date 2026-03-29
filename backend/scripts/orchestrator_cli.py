@@ -78,7 +78,8 @@ async def cmd_train(
         n_jobs = CPU_COUNT
 
     logger.info(
-        f"CMD: TRAIN. Days back: {days_back}, n_jobs: {n_jobs}, leagues: {leagues_str or 'default'}"
+        f"CMD: TRAIN. Days back: {days_back}, n_jobs: {n_jobs}, "
+        f"leagues: {leagues_str or 'default'}"
     )
     from src.dependencies import get_cache_service, get_ml_training_orchestrator
 
@@ -131,7 +132,8 @@ async def cmd_train(
         cache.set("ml_training_result_data", training_data, ttl_seconds=86400)
 
         # [FIX] Persist to Database for Dashboard Visibility
-        # IMPORTANT: Only save lightweight metrics - full model_dump() is ~69MB and causes SSL timeouts
+        # IMPORTANT: Only save lightweight metrics - full model_dump() is ~69MB and
+        # causes SSL timeouts
         logger.info("💾 Persisting Training Result to Database...")
         lightweight_result = {
             "matches_processed": training_result.matches_processed,
@@ -242,7 +244,9 @@ async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = Fal
             elif result:
                 failed.append(result[0])
 
-        logger.info(f"📊 Results: ✅ {len(succeeded)} succeeded, ❌ {len(failed)} failed")
+        logger.info(
+            f"📊 Results: ✅ {len(succeeded)} succeeded, " f"❌ {len(failed)} failed"
+        )
 
         if failed:
             logger.warning(f"⚠️  Failed leagues: {failed}")
