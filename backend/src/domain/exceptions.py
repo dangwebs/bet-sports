@@ -10,6 +10,8 @@ class PredictionException(Exception):
 
 
 class InsufficientDataException(PredictionException):
-    """Exception raised when there is not enough historical data to generate a reliable prediction."""
+    """Exception raised when there is not enough historical data to
+    generate a reliable prediction.
+    """
 
     pass
