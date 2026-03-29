@@ -5,33 +5,32 @@ Use case for generating predictions for live matches,
 combining real-time data with historical statistics.
 """
 
-from datetime import datetime
-from typing import Optional, List
-from dataclasses import dataclass
-from pytz import timezone
-import logging
 import asyncio
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Optional
 
-from src.domain.entities.entities import Match, Prediction, TeamStatistics
-from src.domain.services.prediction_service import PredictionService
-from src.domain.services.statistics_service import StatisticsService
-from src.domain.services.picks_service import PicksService
-from src.infrastructure.cache.cache_service import CacheService
-from src.infrastructure.data_sources.football_data_org import (
-    FootballDataOrgSource,
-    COMPETITION_CODE_MAPPING,
-)
+from pytz import timezone
 from src.application.dtos.dtos import (
-    TeamDTO,
     LeagueDTO,
     MatchDTO,
-    PredictionDTO,
     MatchPredictionDTO,
+    PredictionDTO,
     SuggestedPickDTO,
+    TeamDTO,
 )
 from src.application.use_cases.use_cases import DataSources
+from src.domain.entities.entities import Match, Prediction, TeamStatistics
+from src.domain.services.picks_service import PicksService
+from src.domain.services.prediction_service import PredictionService
+from src.domain.services.statistics_service import StatisticsService
+from src.infrastructure.cache.cache_service import CacheService
+from src.infrastructure.data_sources.football_data_org import (
+    COMPETITION_CODE_MAPPING,
+    FootballDataOrgSource,
+)
 from src.utils.time_utils import get_current_time
-
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +38,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LiveMatchPrediction:
     """Combined live match data with prediction."""
+
     match: Match
     prediction: Optional[Prediction]
     is_processing: bool = False
@@ -48,13 +48,13 @@ class LiveMatchPrediction:
 class GetLivePredictionsUseCase:
     """
     Use case for getting live matches with predictions.
-    
+
     Prioritizes accuracy over speed for predictions,
     while using caching to optimize response times.
     """
-    
+
     PROCESSING_MESSAGE = "Estamos procesando la información para darte las probabilidades con mayor precisión"
-    
+
     def __init__(
         self,
         data_sources: DataSources,
@@ -70,18 +70,18 @@ class GetLivePredictionsUseCase:
         self.cache_service = cache_service
         self.picks_service = picks_service
         self.persistence_repository = persistence_repository
-    
+
     async def execute(
         self,
         filter_target_leagues: bool = True,
     ) -> List[MatchPredictionDTO]:
         """
         Get live matches with predictions.
-        
+
         Args:
             filter_target_leagues: If True, only returns matches from
                                    Premier League, La Liga, Serie A, Bundesliga
-            
+
         Returns:
             List of MatchPredictionDTO with predictions
         """
@@ -91,7 +91,7 @@ class GetLivePredictionsUseCase:
         if cached is not None:
             logger.info(f"Returning {len(cached)} cached live matches")
             return cached
-        
+
         # Get live matches
         # Get live matches
         matches = []
@@ -105,57 +105,73 @@ class GetLivePredictionsUseCase:
                     source_used = "Football-Data.org"
             except Exception as e:
                 logger.error(f"Football-Data.org live fetch failed: {e}")
-        
+
         if not matches:
             # Cache empty result for short period to avoid hammering API
             self.cache_service.set_live_matches([], cache_key)
             return []
-        
+
         logger.info(f"Fetched {len(matches)} live matches from {source_used}")
-        
+
         # Optimization: Bulk fetch history for active leagues
         bulk_history = {}
         if self.data_sources.football_data_org.is_configured:
             try:
                 # Identify active leagues
                 active_leagues = set()
-                from src.infrastructure.data_sources.football_data_org import COMPETITION_CODE_MAPPING
+                from src.infrastructure.data_sources.football_data_org import (
+                    COMPETITION_CODE_MAPPING,
+                )
+
                 internal_to_comp = {k: v for k, v in COMPETITION_CODE_MAPPING.items()}
-                
+
                 for m in matches:
-                     # Try to find internal league code
-                     lid = m.league.id
-                     if lid in internal_to_comp:
-                         active_leagues.add(lid)
-                
+                    # Try to find internal league code
+                    lid = m.league.id
+                    if lid in internal_to_comp:
+                        active_leagues.add(lid)
+
                 if active_leagues:
-                    logger.info(f"Pre-fetching history for active leagues: {active_leagues}")
+                    logger.info(
+                        f"Pre-fetching history for active leagues: {active_leagues}"
+                    )
                     from datetime import timedelta
+
                     now_date = datetime.now()
                     date_from = (now_date - timedelta(days=60)).strftime("%Y-%m-%d")
                     date_to = now_date.strftime("%Y-%m-%d")
-                    
+
                     tasks = []
                     for lid in active_leagues:
-                        tasks.append(self.data_sources.football_data_org.get_league_matches(
-                            lid, date_from, date_to, status="FINISHED"
-                        ))
-                    
-                    league_results = await asyncio.gather(*tasks, return_exceptions=True)
-                    
+                        tasks.append(
+                            self.data_sources.football_data_org.get_league_matches(
+                                lid, date_from, date_to, status="FINISHED"
+                            )
+                        )
+
+                    league_results = await asyncio.gather(
+                        *tasks, return_exceptions=True
+                    )
+
                     # Index by team name (normalized)
                     for res in league_results:
                         if isinstance(res, list):
                             for history_match in res:
-                                h_norm = self.statistics_service._normalize_name(history_match.home_team.name)
-                                a_norm = self.statistics_service._normalize_name(history_match.away_team.name)
-                                
-                                if h_norm not in bulk_history: bulk_history[h_norm] = []
-                                if a_norm not in bulk_history: bulk_history[a_norm] = []
-                                
+                                h_norm = self.statistics_service._normalize_name(
+                                    history_match.home_team.name
+                                )
+                                a_norm = self.statistics_service._normalize_name(
+                                    history_match.away_team.name
+                                )
+
+                                if h_norm not in bulk_history:
+                                    bulk_history[h_norm] = []
+                                if a_norm not in bulk_history:
+                                    bulk_history[a_norm] = []
+
                                 bulk_history[h_norm].append(history_match)
                                 bulk_history[a_norm].append(history_match)
-                    
+
                     logger.info(f"Bulk fetched history for {len(bulk_history)} teams")
 
             except Exception as e:
@@ -163,19 +179,27 @@ class GetLivePredictionsUseCase:
 
         # Generate predictions for each match
         results: List[MatchPredictionDTO] = []
-        
+
         for match in matches:
             try:
                 # 1. ATTEMPT DB LOOKUP (Pre-calculated in Training Action)
                 pre_calculated_dto = None
                 if self.persistence_repository:
-                    pre_calculated_data = self.persistence_repository.get_match_prediction(match.id)
+                    pre_calculated_data = (
+                        self.persistence_repository.get_match_prediction(match.id)
+                    )
                     if pre_calculated_data:
-                         try:
-                             pre_calculated_dto = MatchPredictionDTO(**pre_calculated_data)
-                             logger.info(f"✓ Using pre-calculated data from DB for match {match.id}")
-                         except Exception as parse_e:
-                             logger.warning(f"Failed to parse pre-calculated data for {match.id}: {parse_e}")
+                        try:
+                            pre_calculated_dto = MatchPredictionDTO(
+                                **pre_calculated_data
+                            )
+                            logger.info(
+                                f"✓ Using pre-calculated data from DB for match {match.id}"
+                            )
+                        except Exception as parse_e:
+                            logger.warning(
+                                f"Failed to parse pre-calculated data for {match.id}: {parse_e}"
+                            )
 
                 if pre_calculated_dto:
                     # Update potentially stale live data (score, minute) while keeping AI prediction
@@ -189,49 +213,66 @@ class GetLivePredictionsUseCase:
                 # 2. EMERGENCY FALLBACK: Real-time calculation
                 # SAFETY: Check execution time to prevent HTTP 504/Timeout
                 import time
-                if 'start_time' not in locals():
+
+                if "start_time" not in locals():
                     start_time = time.time()
-                
-                if time.time() - start_time > 20.0:  # 20s Soft Timeout (leaving buffer for response)
-                    logger.warning(f"⏳ Time limit reached (20s). Skipping ML for {match.id} to avoid API timeout.")
-                    results.append(MatchPredictionDTO(
-                        match=self._match_to_dto(match),
-                        prediction=self._empty_prediction(match.id),
-                    ))
+
+                if (
+                    time.time() - start_time > 20.0
+                ):  # 20s Soft Timeout (leaving buffer for response)
+                    logger.warning(
+                        f"⏳ Time limit reached (20s). Skipping ML for {match.id} to avoid API timeout."
+                    )
+                    results.append(
+                        MatchPredictionDTO(
+                            match=self._match_to_dto(match),
+                            prediction=self._empty_prediction(match.id),
+                        )
+                    )
                     continue
 
-                logger.warning(f"⚠ Cache/DB miss for {match.id}. Running emergency real-time inference...")
+                logger.warning(
+                    f"⚠ Cache/DB miss for {match.id}. Running emergency real-time inference..."
+                )
                 prediction_dto = await self._generate_prediction(match, bulk_history)
                 match_dto = self._match_to_dto(match)
-                
-                results.append(MatchPredictionDTO(
-                    match=match_dto,
-                    prediction=prediction_dto,
-                ))
+
+                results.append(
+                    MatchPredictionDTO(
+                        match=match_dto,
+                        prediction=prediction_dto,
+                    )
+                )
             except Exception as e:
-                logger.error(f"Failed to generate/retrieve prediction for match {match.id}: {e}")
+                logger.error(
+                    f"Failed to generate/retrieve prediction for match {match.id}: {e}"
+                )
                 # Still include match without prediction to avoid breaks
-                results.append(MatchPredictionDTO(
-                    match=self._match_to_dto(match),
-                    prediction=self._empty_prediction(match.id),
-                ))
-        
-        from src.utils.time_utils import get_current_time
+                results.append(
+                    MatchPredictionDTO(
+                        match=self._match_to_dto(match),
+                        prediction=self._empty_prediction(match.id),
+                    )
+                )
+
         now = get_current_time()
         from datetime import timedelta
+
         # Statuses that indicate a match is currently in play
         live_statuses = ["1H", "2H", "HT", "LIVE", "IN_PLAY", "PAUSED"]
-        
+
         filtered_results = []
         for p_dto in results:
             # Strict filtering: Only show matches that are statistically live
             if p_dto.match.status in live_statuses:
                 filtered_results.append(p_dto)
-        
+
         # Cache results
         self.cache_service.set_live_matches(filtered_results, cache_key)
-        logger.info(f"Generated {len(filtered_results)} live match predictions (after filtering {len(results) - len(filtered_results)} matches)")
-        
+        logger.info(
+            f"Generated {len(filtered_results)} live match predictions (after filtering {len(results) - len(filtered_results)} matches)"
+        )
+
         # 3. Persistence: Index calculated live matches for the Explorer
         if self.persistence_repository and filtered_results:
             try:
@@ -240,34 +281,38 @@ class GetLivePredictionsUseCase:
                         "match_id": p_dto.match.id,
                         "league_id": p_dto.match.league.id,
                         "data": p_dto.model_dump(),
-                        "ttl_seconds": 3600 # 1 hour for live matches
+                        "ttl_seconds": 3600,  # 1 hour for live matches
                     }
                     for p_dto in filtered_results
                 ]
                 self.persistence_repository.bulk_save_predictions(prediction_batch)
-                logger.info(f"Indexed {len(filtered_results)} live prediction matches in Explorer DB")
+                logger.info(
+                    f"Indexed {len(filtered_results)} live prediction matches in Explorer DB"
+                )
             except Exception as e:
                 logger.warning(f"Failed to index live predictions: {e}")
-        
+
         return filtered_results
-    
-    async def _generate_prediction(self, match: Match, bulk_history: dict = None) -> PredictionDTO:
+
+    async def _generate_prediction(
+        self, match: Match, bulk_history: dict = None
+    ) -> PredictionDTO:
         """
         Generate prediction for a single match.
-        
+
         Uses all available historical data for maximum accuracy.
         """
         # Check prediction cache
         cached_pred = self.cache_service.get_predictions(match.id)
         if cached_pred is not None:
             return cached_pred
-        
+
         # Get internal league code
         internal_code = self._get_internal_league_code(match)
-        
+
         # 1. Try to get deep stats from Unified Cache (10 years)
         training_results = self.cache_service.get("ml_training_result_data")
-        
+
         home_stats = None
         away_stats = None
         data_sources_used = [FootballDataOrgSource.SOURCE_NAME]
@@ -277,11 +322,12 @@ class GetLivePredictionsUseCase:
         global_averages = None
         if global_avg_data:
             from src.domain.value_objects.value_objects import LeagueAverages
+
             global_averages = LeagueAverages(**global_avg_data)
-        
-        if training_results and 'team_stats' in training_results:
-            team_stats_map = training_results['team_stats']
-            
+
+        if training_results and "team_stats" in training_results:
+            team_stats_map = training_results["team_stats"]
+
             # Helper to convert dict to entity
             def _dict_to_stats(name: str, raw: dict) -> TeamStatistics:
                 return TeamStatistics(
@@ -297,48 +343,59 @@ class GetLivePredictionsUseCase:
                     total_corners=raw.get("corners_for", 0),
                     total_yellow_cards=raw.get("yellow_cards", 0),
                     total_red_cards=raw.get("red_cards", 0),
-                    recent_form=raw.get("recent_form", "")
+                    recent_form=raw.get("recent_form", ""),
                 )
 
             # Look up home/away
             if match.home_team.name in team_stats_map:
-                home_stats = _dict_to_stats(match.home_team.name, team_stats_map[match.home_team.name])
-            
+                home_stats = _dict_to_stats(
+                    match.home_team.name, team_stats_map[match.home_team.name]
+                )
+
             if match.away_team.name in team_stats_map:
-                away_stats = _dict_to_stats(match.away_team.name, team_stats_map[match.away_team.name])
-                
+                away_stats = _dict_to_stats(
+                    match.away_team.name, team_stats_map[match.away_team.name]
+                )
+
             if home_stats and away_stats:
                 data_sources_used.append("Historical (10 Years)")
                 # Use simplified league averages if we have deep stats, or fetch?
-                # Calculating league avg from 18k matches is expensive if not cached. 
+                # Calculating league avg from 18k matches is expensive if not cached.
                 # Use default safely or fetch small history for it.
-                league_averages = None 
+                league_averages = None
 
         # 2. Fallback to shallow fetch (API-Football) if no training stats
         # 2. Fallback to aggregated fetch (CSV + OpenFootball + APIs)
         if not home_stats or not away_stats:
-             historical_matches = await self._get_aggregated_history(match, bulk_history)
-             
-             if not home_stats:
-                 home_stats = self.statistics_service.calculate_team_statistics(
+            historical_matches = await self._get_aggregated_history(match, bulk_history)
+
+            if not home_stats:
+                home_stats = self.statistics_service.calculate_team_statistics(
                     match.home_team.name,
                     historical_matches,
-                 )
-             if not away_stats:
-                 away_stats = self.statistics_service.calculate_team_statistics(
+                )
+            if not away_stats:
+                away_stats = self.statistics_service.calculate_team_statistics(
                     match.away_team.name,
                     historical_matches,
-                 )
-             
-             league_averages = self.statistics_service.calculate_league_averages(historical_matches) if historical_matches else None
-             if historical_matches:
-                 data_sources_used.append("Aggregated History")
-        else:
-             # We used deep stats, but maybe we still want league averages from recent data?
-             historical_matches = await self._get_aggregated_history(match, bulk_history)
-             league_averages = self.statistics_service.calculate_league_averages(historical_matches) if historical_matches else None
+                )
 
-        
+            league_averages = (
+                self.statistics_service.calculate_league_averages(historical_matches)
+                if historical_matches
+                else None
+            )
+            if historical_matches:
+                data_sources_used.append("Aggregated History")
+        else:
+            # We used deep stats, but maybe we still want league averages from recent data?
+            historical_matches = await self._get_aggregated_history(match, bulk_history)
+            league_averages = (
+                self.statistics_service.calculate_league_averages(historical_matches)
+                if historical_matches
+                else None
+            )
+
         prediction = self.prediction_service.generate_prediction(
             match=match,
             home_stats=home_stats,
@@ -347,7 +404,7 @@ class GetLivePredictionsUseCase:
             global_averages=global_averages,
             data_sources=data_sources_used,
         )
-        
+
         # Generate Suggested Picks
         picks_container = self.picks_service.generate_suggested_picks(
             match=match,
@@ -360,50 +417,53 @@ class GetLivePredictionsUseCase:
             draw_prob=prediction.draw_probability,
             away_win_prob=prediction.away_win_probability,
         )
-        
+
         # Convert to DTO
         prediction_dto = self._prediction_to_dto(prediction, picks_container.picks)
-        
+
         # Cache the prediction
         self.cache_service.set_predictions(match.id, prediction_dto)
-        
+
         return prediction_dto
-    
-    async def _get_aggregated_history(self, match: Match, bulk_history: dict = None) -> List[Match]:
+
+    async def _get_aggregated_history(
+        self, match: Match, bulk_history: dict = None
+    ) -> List[Match]:
         """
         Get historical matches from ALL available sources and unify them.
         Identical strategy to SuggestedPicksUseCase for consistency.
         """
         import asyncio
-        from src.infrastructure.data_sources.football_data_org import COMPETITION_CODE_MAPPING
-        
+
         internal_league_code = self._get_internal_league_code(match)
-        
-        logger.info(f"Aggregating live prediction data for {match.home_team.name} vs {match.away_team.name}")
-        
+
+        logger.info(
+            f"Aggregating live prediction data for {match.home_team.name} vs {match.away_team.name}"
+        )
+
         tasks = []
-        
+
         # 1. CSV Data Task
         if internal_league_code:
             tasks.append(self._fetch_csv_history(internal_league_code))
-            
+
         # 2. OpenFootball Task
         if internal_league_code and self.data_sources.openfootball:
             tasks.append(self._fetch_openfootball_history(internal_league_code))
-            
+
         # 3. Team History Task
         tasks.append(self._fetch_team_history_apis(match, bulk_history))
-        
+
         # Execute in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         all_matches = []
         for result in results:
             if isinstance(result, list):
                 all_matches.extend(result)
             elif isinstance(result, Exception):
                 logger.warning(f"Error in data source fetch: {result}")
-                
+
         # 4. Unify
         return self._deduplicate_and_merge(all_matches)
 
@@ -419,7 +479,10 @@ class GetLivePredictionsUseCase:
 
     async def _fetch_openfootball_history(self, league_code: str) -> list[Match]:
         try:
-            from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
+            from src.infrastructure.data_sources.football_data_uk import (
+                LEAGUES_METADATA,
+            )
+
             if league_code in LEAGUES_METADATA:
                 meta = LEAGUES_METADATA[league_code]
                 temp_league = League(
@@ -433,14 +496,16 @@ class GetLivePredictionsUseCase:
             logger.warning("OpenFootball fetch failed for %s: %s", league_code, exc)
         return []
 
-    async def _fetch_team_history_apis(self, match: Match, bulk_history: dict = None) -> list[Match]:
+    async def _fetch_team_history_apis(
+        self, match: Match, bulk_history: dict = None
+    ) -> list[Match]:
         team_matches = []
-        
+
         # Optimization: Check Bulk History First
         if bulk_history:
             h_norm = self.statistics_service._normalize_name(match.home_team.name)
             a_norm = self.statistics_service._normalize_name(match.away_team.name)
-            
+
             found_bulk = False
             if h_norm in bulk_history:
                 team_matches.extend(bulk_history[h_norm])
@@ -448,23 +513,27 @@ class GetLivePredictionsUseCase:
             if a_norm in bulk_history:
                 team_matches.extend(bulk_history[a_norm])
                 found_bulk = True
-                
+
             if found_bulk:
                 # logger.debug(f"Using bulk history for {match.home_team.name}/{match.away_team.name}")
                 return team_matches
 
         # Aumentamos el límite para mejorar la significancia estadística (Ley de los Grandes Números)
         HISTORY_LIMIT = 25
-        
+
         # Strategy B: Football-Data.org
         if self.data_sources.football_data_org.is_configured:
             try:
-                h_hist = await self.data_sources.football_data_org.get_team_history(match.home_team.name, limit=HISTORY_LIMIT)
-                a_hist = await self.data_sources.football_data_org.get_team_history(match.away_team.name, limit=HISTORY_LIMIT)
+                h_hist = await self.data_sources.football_data_org.get_team_history(
+                    match.home_team.name, limit=HISTORY_LIMIT
+                )
+                a_hist = await self.data_sources.football_data_org.get_team_history(
+                    match.away_team.name, limit=HISTORY_LIMIT
+                )
                 team_matches.extend(h_hist + a_hist)
             except Exception as exc:
                 logger.warning("Football-Data.org history fetch failed: %s", exc)
-                
+
         return team_matches
 
     def _deduplicate_and_merge(self, matches: list[Match]) -> list[Match]:
@@ -474,7 +543,7 @@ class GetLivePredictionsUseCase:
             h_key = "".join(filter(str.isalpha, m.home_team.name)).lower()[:10]
             a_key = "".join(filter(str.isalpha, m.away_team.name)).lower()[:10]
             key = f"{date_key}|{h_key}|{a_key}"
-            
+
             if key not in unique_map:
                 unique_map[key] = m
             else:
@@ -482,22 +551,28 @@ class GetLivePredictionsUseCase:
                 # Priorizamos datos con estadísticas más ricas para mejorar la precisión del modelo
                 current_score = 0
                 existing_score = 0
-                
-                if m.home_corners is not None: current_score += 1
-                if m.home_shots_on_target is not None: current_score += 1
-                if m.home_yellow_cards is not None: current_score += 1
-                
-                if existing.home_corners is not None: existing_score += 1
-                if existing.home_shots_on_target is not None: existing_score += 1
-                if existing.home_yellow_cards is not None: existing_score += 1
-                
+
+                if m.home_corners is not None:
+                    current_score += 1
+                if m.home_shots_on_target is not None:
+                    current_score += 1
+                if m.home_yellow_cards is not None:
+                    current_score += 1
+
+                if existing.home_corners is not None:
+                    existing_score += 1
+                if existing.home_shots_on_target is not None:
+                    existing_score += 1
+                if existing.home_yellow_cards is not None:
+                    existing_score += 1
+
                 if current_score > existing_score:
                     unique_map[key] = m
-        
+
         result = list(unique_map.values())
         result.sort(key=lambda x: x.match_date, reverse=True)
         return result
-    
+
     def _get_internal_league_code(self, match: Match) -> Optional[str]:
         """Map Football-Data.org competition code to internal code."""
         try:
@@ -507,28 +582,36 @@ class GetLivePredictionsUseCase:
                 if internal_code == match.league.id:
                     return internal_code
         except Exception as exc:
-            logger.debug("Failed to map internal league code for match %s: %s", getattr(match, 'id', None), exc)
+            logger.debug(
+                "Failed to map internal league code for match %s: %s",
+                getattr(match, "id", None),
+                exc,
+            )
         return None
-    
+
     def _match_to_dto(self, match: Match) -> MatchDTO:
         """Convert Match entity to DTO."""
         from src.domain.services.team_service import TeamService
-        
+
         return MatchDTO(
             id=match.id,
             home_team=TeamDTO(
                 id=match.home_team.id,
                 name=match.home_team.name,
-                short_name=match.home_team.short_name or TeamService.get_team_short_name(match.home_team.name),
+                short_name=match.home_team.short_name
+                or TeamService.get_team_short_name(match.home_team.name),
                 country=match.home_team.country,
-                logo_url=match.home_team.logo_url or TeamService.get_team_logo(match.home_team.name),
+                logo_url=match.home_team.logo_url
+                or TeamService.get_team_logo(match.home_team.name),
             ),
             away_team=TeamDTO(
                 id=match.away_team.id,
                 name=match.away_team.name,
-                short_name=match.away_team.short_name or TeamService.get_team_short_name(match.away_team.name),
+                short_name=match.away_team.short_name
+                or TeamService.get_team_short_name(match.away_team.name),
                 country=match.away_team.country,
-                logo_url=match.away_team.logo_url or TeamService.get_team_logo(match.away_team.name),
+                logo_url=match.away_team.logo_url
+                or TeamService.get_team_logo(match.away_team.name),
             ),
             league=LeagueDTO(
                 id=match.league.id,
@@ -562,32 +645,36 @@ class GetLivePredictionsUseCase:
             home_offsides=match.home_offsides,
             away_offsides=match.away_offsides,
         )
-    
-    def _prediction_to_dto(self, prediction: Prediction, picks: list = []) -> PredictionDTO:
+
+    def _prediction_to_dto(
+        self, prediction: Prediction, picks: list = []
+    ) -> PredictionDTO:
         """Convert Prediction entity to DTO."""
-        from src.application.dtos.dtos import PredictionDTO, SuggestedPickDTO
-         
+        from src.application.dtos.dtos import PredictionDTO
+
         picks_dtos = []
         for p in picks:
-              picks_dtos.append(SuggestedPickDTO(
-                  market_type=p.market_type,
-                  market_label=p.market_label,
-                  probability=p.probability,
-                  confidence_level=p.confidence_level,
-                  reasoning=p.reasoning,
-                  risk_level=p.risk_level,
-                  is_recommended=p.is_recommended,
-                  priority_score=p.priority_score,
-                  is_ml_confirmed=getattr(p, 'is_ml_confirmed', False),
-                  is_ia_confirmed=getattr(p, 'is_ia_confirmed', False),
-                  ml_confidence=getattr(p, 'ml_confidence', 0.0),
-                  suggested_stake=getattr(p, 'suggested_stake', 0.0),
-                  kelly_percentage=getattr(p, 'kelly_percentage', 0.0),
-                  clv_beat=getattr(p, 'clv_beat', False),
-                  expected_value=getattr(p, 'expected_value', 0.0),
-                  opening_odds=getattr(p, 'odds', 0.0),
-                  closing_odds=getattr(p, 'closing_odds', 0.0),
-              ))
+            picks_dtos.append(
+                SuggestedPickDTO(
+                    market_type=p.market_type,
+                    market_label=p.market_label,
+                    probability=p.probability,
+                    confidence_level=p.confidence_level,
+                    reasoning=p.reasoning,
+                    risk_level=p.risk_level,
+                    is_recommended=p.is_recommended,
+                    priority_score=p.priority_score,
+                    is_ml_confirmed=getattr(p, "is_ml_confirmed", False),
+                    is_ia_confirmed=getattr(p, "is_ia_confirmed", False),
+                    ml_confidence=getattr(p, "ml_confidence", 0.0),
+                    suggested_stake=getattr(p, "suggested_stake", 0.0),
+                    kelly_percentage=getattr(p, "kelly_percentage", 0.0),
+                    clv_beat=getattr(p, "clv_beat", False),
+                    expected_value=getattr(p, "expected_value", 0.0),
+                    opening_odds=getattr(p, "odds", 0.0),
+                    closing_odds=getattr(p, "closing_odds", 0.0),
+                )
+            )
 
         # Top ML Picks = All picks with probability >= 75% (ML High Confidence tier)
         TOP_ML_THRESHOLD = 0.75
@@ -612,7 +699,7 @@ class GetLivePredictionsUseCase:
             top_ml_picks=top_ml_picks,
             created_at=prediction.created_at,
         )
-    
+
     def _empty_prediction(self, match_id: str) -> PredictionDTO:
         """Create an empty prediction DTO for when prediction fails."""
         return PredictionDTO(
@@ -628,5 +715,5 @@ class GetLivePredictionsUseCase:
             data_sources=[],
             recommended_bet="N/A",
             over_under_recommendation="N/A",
-            created_at=datetime.now(timezone('America/Bogota')),
+            created_at=datetime.now(timezone("America/Bogota")),
         )

@@ -7,19 +7,19 @@ Contains factory functions for creating use case dependencies.
 
 from functools import lru_cache
 
-from src.infrastructure.data_sources.football_data_uk import FootballDataUKSource
-from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
-from src.infrastructure.data_sources.openfootball import OpenFootballSource
-from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
-from src.infrastructure.data_sources.espn import ESPNSource
-from src.infrastructure.cache.cache_service import CacheService, get_cache_service
-from src.domain.services.prediction_service import PredictionService
-from src.domain.services.statistics_service import StatisticsService
-from src.domain.services.match_enrichment_service import MatchEnrichmentService
-from src.domain.services.pick_resolution_service import PickResolutionService
 from src.application.services.training_data_service import TrainingDataService
 from src.application.use_cases.use_cases import DataSources
 from src.domain.services.match_aggregator_service import MatchAggregatorService
+from src.domain.services.match_enrichment_service import MatchEnrichmentService
+from src.domain.services.pick_resolution_service import PickResolutionService
+from src.domain.services.prediction_service import PredictionService
+from src.domain.services.statistics_service import StatisticsService
+from src.infrastructure.cache.cache_service import get_cache_service
+from src.infrastructure.data_sources.espn import ESPNSource
+from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
+from src.infrastructure.data_sources.football_data_uk import FootballDataUKSource
+from src.infrastructure.data_sources.openfootball import OpenFootballSource
+from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
 
 
 @lru_cache()
@@ -32,8 +32,6 @@ def get_football_data_uk() -> FootballDataUKSource:
 def get_football_data_org() -> FootballDataOrgSource:
     """Get Football-Data.org data source (cached)."""
     return FootballDataOrgSource()
-
-
 
 
 @lru_cache()
@@ -61,10 +59,12 @@ def get_data_sources() -> DataSources:
         football_data_org=get_football_data_org(),
         openfootball=get_openfootball(),
         thesportsdb=get_thesportsdb(),
-        espn=get_espn_source()
+        espn=get_espn_source(),
     )
 
+
 # ... (Keeping existing code) ...
+
 
 @lru_cache()
 def get_match_aggregator_service() -> MatchAggregatorService:
@@ -74,7 +74,7 @@ def get_match_aggregator_service() -> MatchAggregatorService:
         football_data_org=get_football_data_org(),
         openfootball=get_openfootball(),
         thesportsdb=get_thesportsdb(),
-        espn=get_espn_source()
+        espn=get_espn_source(),
     )
 
 
@@ -101,72 +101,90 @@ def get_learning_service() -> LearningService:
 
 from src.domain.services.parley_service import ParleyService
 
+
 @lru_cache()
 def get_parley_service() -> ParleyService:
     """Get parley service (cached)."""
     return ParleyService()
 
+
 from src.domain.services.ai_picks_service import AIPicksService
+
 
 @lru_cache()
 def get_picks_service() -> AIPicksService:
     """Get AI picks service (cached)."""
     return AIPicksService()
 
+
 @lru_cache()
 def get_match_enrichment_service() -> MatchEnrichmentService:
     """Get match enrichment service (cached)."""
     return MatchEnrichmentService(statistics_service=get_statistics_service())
+
 
 @lru_cache()
 def get_pick_resolution_service() -> PickResolutionService:
     """Get pick resolution service (cached)."""
     return PickResolutionService()
 
+
 @lru_cache()
 def get_training_data_service() -> TrainingDataService:
     """Get training data service (cached)."""
     return TrainingDataService(
         data_sources=get_data_sources(),
-        enrichment_service=get_match_enrichment_service()
+        enrichment_service=get_match_enrichment_service(),
     )
-from src.infrastructure.repositories.mongo_repository import MongoRepository, get_mongo_repository
+
+
+from src.infrastructure.repositories.mongo_repository import (
+    MongoRepository,
+    get_mongo_repository,
+)
+
 
 @lru_cache()
 def get_persistence_repository() -> MongoRepository:
     """Get the mongo repository instance (cached singleton)."""
     return get_mongo_repository()
 
+
 @lru_cache()
 def get_ml_training_orchestrator() -> "MLTrainingOrchestrator":
     """Get ML training orchestrator service (cached)."""
     from src.application.services.ml_training_orchestrator import MLTrainingOrchestrator
+
     return MLTrainingOrchestrator(
         training_data_service=get_training_data_service(),
         statistics_service=get_statistics_service(),
         prediction_service=get_prediction_service(),
         learning_service=get_learning_service(),
         resolution_service=get_pick_resolution_service(),
-        cache_service=get_cache_service()
+        cache_service=get_cache_service(),
     )
 
+
 from src.domain.services.audit_service import AuditService
+
 
 @lru_cache()
 def get_audit_service() -> AuditService:
     """Get audit service (cached)."""
-    return AuditService(
-        training_orchestrator=get_ml_training_orchestrator()
-    )
+    return AuditService(training_orchestrator=get_ml_training_orchestrator())
+
 
 from src.infrastructure.services.background_processor import BackgroundProcessor
+
 
 @lru_cache()
 def get_background_processor() -> BackgroundProcessor:
     """Get background processor (cached singleton)."""
     return BackgroundProcessor()
 
+
 from src.domain.services.risk_management.risk_manager import RiskManager
+
 
 @lru_cache()
 def get_risk_manager() -> RiskManager:

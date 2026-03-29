@@ -8,12 +8,12 @@ Repository: https://github.com/openfootball/football.json
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
-from dataclasses import dataclass
 
 import httpx
-from src.domain.entities.entities import Match, Team, League
+from src.domain.entities.entities import League, Match, Team
 
 logger = logging.getLogger(__name__)
 

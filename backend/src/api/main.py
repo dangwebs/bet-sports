@@ -9,10 +9,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+# Rate limiting (admin endpoints)
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
+from src.api.security import require_admin_key
 from src.domain.constants import LEAGUES_METADATA
 from src.infrastructure.repositories.mongo_repository import get_mongo_repository
 
@@ -183,7 +190,9 @@ def _serialize_timestamp(value: Any) -> str | None:
     return str(value)
 
 
-def _normalize_prediction_document(document: dict[str, Any], league: LeagueModel) -> MatchPredictionModel | None:
+def _normalize_prediction_document(
+    document: dict[str, Any], league: LeagueModel
+) -> MatchPredictionModel | None:
     payload = document.get("prediction") or document.get("data") or document
     if not isinstance(payload, dict):
         return None
@@ -200,13 +209,18 @@ def _normalize_prediction_document(document: dict[str, Any], league: LeagueModel
                 "match": {
                     **match_payload,
                     "league": match_payload.get("league")
-                    or {"id": league.id, "name": league.name, "country": league.country},
+                    or {
+                        "id": league.id,
+                        "name": league.name,
+                        "country": league.country,
+                    },
                 },
                 "prediction": prediction_payload,
                 "top_ml_picks": payload.get("top_ml_picks", []),
             }
         )
-    except Exception:
+    except Exception as exc:
+        _logger.debug("Failed to normalize prediction document: %s", exc, exc_info=True)
         return None
 
 
@@ -216,7 +230,9 @@ def _load_predictions_for_league(league_id: str) -> list[MatchPredictionModel]:
     documents = repository.match_predictions.find({"league_id": league_id})
     normalized = [
         parsed
-        for parsed in (_normalize_prediction_document(document, league) for document in documents)
+        for parsed in (
+            _normalize_prediction_document(document, league) for document in documents
+        )
         if parsed is not None
     ]
     return normalized
@@ -246,6 +262,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Configure rate limiter for selective endpoint protection
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(Exception)
+async def _global_exception_handler(request: Request, exc: Exception):
+    _logger.exception(
+        "Unhandled exception on %s %s: %s", request.method, request.url, exc
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -307,7 +337,10 @@ def get_team_matches(team_name: str) -> list[dict[str, Any]]:
     return []
 
 
-@app.get("/api/v1/suggested-picks/match/{match_id}", response_model=MatchSuggestedPicksResponse)
+@app.get(
+    "/api/v1/suggested-picks/match/{match_id}",
+    response_model=MatchSuggestedPicksResponse,
+)
 def get_suggested_picks(match_id: str) -> MatchSuggestedPicksResponse:
     return MatchSuggestedPicksResponse(match_id=match_id)
 
@@ -358,15 +391,21 @@ def get_training_status() -> TrainingStatusPayload:
 @app.get("/api/v1/train/cached", response_model=TrainingCachedPayload)
 def get_training_cached() -> TrainingCachedPayload:
     result, last_update = _load_training_result()
-    return TrainingCachedPayload(cached=result is not None, data=result, last_update=last_update)
+    return TrainingCachedPayload(
+        cached=result is not None, data=result, last_update=last_update
+    )
 
 
 @app.post("/api/v1/train/run-now")
-def trigger_training() -> dict[str, str]:
+@limiter.limit("1/hour")
+def trigger_training(admin_key: str = Depends(require_admin_key)) -> dict[str, str]:
     global _training_running
     with _training_lock:
         if _training_running:
-            return {"status": "already_running", "message": "El entrenamiento ya está en progreso."}
+            return {
+                "status": "already_running",
+                "message": "El entrenamiento ya está en progreso.",
+            }
         _training_running = True
 
     n_jobs = os.getenv("N_JOBS", "2")
@@ -376,7 +415,11 @@ def trigger_training() -> dict[str, str]:
     def _run() -> None:
         global _training_running
         try:
-            _logger.info("Iniciando entrenamiento: days=%s leagues=%s", train_days, predict_leagues)
+            _logger.info(
+                "Iniciando entrenamiento: days=%s leagues=%s",
+                train_days,
+                predict_leagues,
+            )
             subprocess.run(
                 ["python3", "scripts/orchestrator_cli.py", "cleanup"],
                 cwd=str(_BACKEND_DIR),
@@ -409,4 +452,7 @@ def trigger_training() -> dict[str, str]:
                 _training_running = False
 
     threading.Thread(target=_run, daemon=True).start()
-    return {"status": "started", "message": "Entrenamiento iniciado dentro del contenedor."}
+    return {
+        "status": "started",
+        "message": "Entrenamiento iniciado dentro del contenedor.",
+    }

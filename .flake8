@@ -1,4 +1,4 @@
 [flake8]
 exclude = backend/venv,.venv,venv,__pycache__,.git
-max-line-length = 79
+max-line-length = 88
 

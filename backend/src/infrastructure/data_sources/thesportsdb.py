@@ -7,13 +7,14 @@ league info, and basic match data.
 API Documentation: https://www.thesportsdb.com/api/v1/json/3/
 """
 
-import os
 import logging
-import httpx
-from typing import Optional
+import os
 from dataclasses import dataclass
 from datetime import datetime
-from src.domain.entities.entities import Team, League, Match
+from typing import Optional
+
+import httpx
+from src.domain.entities.entities import League, Match, Team
 
 logger = logging.getLogger(__name__)
 

@@ -10,12 +10,12 @@ Endpoints:
 """
 
 import logging
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-import httpx
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
-from src.domain.entities.entities import Match, Team, League
+import httpx
+from src.domain.entities.entities import League, Match, Team
 from src.domain.services.team_service import TeamService
 
 logger = logging.getLogger(__name__)

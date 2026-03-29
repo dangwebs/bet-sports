@@ -1,6 +1,7 @@
-import os
-import logging
 import asyncio
+import logging
+import os
+
 from dotenv import load_dotenv
 
 # Load env variables before importing local modules that might rely on them
@@ -11,8 +12,11 @@ from src.scheduler import BotScheduler
 from src.utils.time_utils import get_current_time
 
 # Configure basic logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 async def run_worker():
     logger.info("🚀 Starting Football ML Training Worker...")
@@ -30,7 +34,10 @@ async def run_worker():
                 await scheduler.run_daily_orchestrated_job()
                 mongo_repo.save_training_result(
                     "worker_run",
-                    {"status": "success", "message": "Orchestrated job completed successfully."},
+                    {
+                        "status": "success",
+                        "message": "Orchestrated job completed successfully.",
+                    },
                 )
             except Exception as e:
                 logger.error(f"❌ Error during training cycle: {e}")
@@ -39,7 +46,9 @@ async def run_worker():
                     {"status": "error", "error_message": str(e)},
                 )
 
-            logger.info(f"💤 Sleeping for {check_interval_seconds} seconds before next cycle...")
+            logger.info(
+                f"💤 Sleeping for {check_interval_seconds} seconds before next cycle..."
+            )
             await asyncio.sleep(check_interval_seconds)
         return
 
@@ -51,6 +60,7 @@ async def run_worker():
         await asyncio.Event().wait()
     finally:
         scheduler.shutdown()
+
 
 if __name__ == "__main__":
     try:

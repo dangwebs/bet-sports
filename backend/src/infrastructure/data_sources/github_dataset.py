@@ -8,12 +8,13 @@ Contains ~226k matches with stats, odds, and Elo ratings.
 Path: src/infrastructure/data_sources/local_data/matches_github.csv
 """
 
-import os
 import csv
 import logging
-from typing import List, Optional
+import os
 from datetime import datetime
-from src.domain.entities.entities import Match, Team, League
+from typing import List, Optional
+
+from src.domain.entities.entities import League, Match, Team
 
 logger = logging.getLogger(__name__)
 

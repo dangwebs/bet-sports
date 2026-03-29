@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 # /backend/src/core/paths.py

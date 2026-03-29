@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 23.12.0
+    hooks:
+      - id: black
+        args: ["--line-length=88"]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ["--profile=black"]
+
+  # Ruff hook (use local system-installed ruff to avoid pre-commit remote rev issues)
+
+  # Frontend linting is handled by local npm commands to avoid remote mirror issues.
+  # Use the local hooks below which run `npm run --prefix frontend lint` and `npx prettier`.
+
+  - repo: local
+    hooks:
+      - id: npm-install-frontend
+        name: Install frontend deps (ad-hoc)
+        entry: bash -c "(cd frontend && npm ci)"
+        language: system
+        stages: [manual]
+
+      - id: eslint-frontend-local
+        name: Frontend ESLint (local)
+        entry: npm run --prefix frontend lint
+        language: system
+        files: ^frontend/.*
+      - id: ruff-local
+        name: Ruff (local)
+        entry: .venv/bin/ruff check --fix
+        language: system
+        files: \.(py)$

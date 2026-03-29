@@ -8,18 +8,16 @@ API Documentation: https://www.football-data.org/documentation/api
 Free tier: 10 requests/minute
 """
 
-import os
+import asyncio
 import json
+import logging
+import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
-from dataclasses import dataclass
-import logging
-import asyncio
 
 import httpx
-
-from src.domain.entities.entities import Match, Team, League
-
+from src.domain.entities.entities import League, Match, Team
 
 logger = logging.getLogger(__name__)
 
@@ -177,12 +175,16 @@ class FootballDataOrgSource:
 
                     if response.status_code == 429:
                         if attempt < max_retries:
-                            retry_after = int(response.headers.get("Retry-After", backoff))
+                            retry_after = int(
+                                response.headers.get("Retry-After", backoff)
+                            )
                             logger.warning(
-                                "429 Too Many Requests. Blocking all requests for %s s...",
+                                "429 Too Many Requests — sleeping %s s",
                                 retry_after,
                             )
-                            self._blocked_until = datetime.utcnow() + timedelta(seconds=retry_after)
+                            self._blocked_until = datetime.utcnow() + timedelta(
+                                seconds=retry_after
+                            )
                             await asyncio.sleep(retry_after)
                             continue
                         return None
@@ -217,7 +219,10 @@ class FootballDataOrgSource:
             return []
 
         comp_code = COMPETITION_CODE_MAPPING[league_code]
-        data = await self._make_request(f"/competitions/{comp_code}/teams", ttl_seconds=604800)
+        data = await self._make_request(
+            f"/competitions/{comp_code}/teams",
+            ttl_seconds=604800,
+        )
 
         if not data or not data.get("teams"):
             return []
@@ -247,7 +252,11 @@ class FootballDataOrgSource:
         if matchday:
             params["matchday"] = matchday
 
-        data = await self._make_request(f"/competitions/{comp_code}/matches", params, ttl_seconds=3600)
+        data = await self._make_request(
+            f"/competitions/{comp_code}/matches",
+            params,
+            ttl_seconds=3600,
+        )
         if not data or not data.get("matches"):
             return []
 
@@ -285,7 +294,11 @@ class FootballDataOrgSource:
         if status:
             params["status"] = status
 
-        data = await self._make_request(f"/competitions/{comp_code}/matches", params, ttl_seconds=3600)
+        data = await self._make_request(
+            f"/competitions/{comp_code}/matches",
+            params,
+            ttl_seconds=3600,
+        )
         if not data or not data.get("matches"):
             return []
 
@@ -366,7 +379,11 @@ class FootballDataOrgSource:
 
         comp_filter = None
         if league_codes:
-            comp_codes = [COMPETITION_CODE_MAPPING[lc] for lc in league_codes if lc in COMPETITION_CODE_MAPPING]
+            comp_codes = [
+                COMPETITION_CODE_MAPPING[lc]
+                for lc in league_codes
+                if lc in COMPETITION_CODE_MAPPING
+            ]
             if comp_codes:
                 comp_filter = ",".join(comp_codes)
 
@@ -478,7 +495,11 @@ class FootballDataOrgSource:
         if not team_id:
             team_id = search_data["teams"][0]["id"]
 
-        data = await self._make_request(f"/teams/{team_id}/matches", {"status": "FINISHED", "limit": limit})
+        params = {"status": "FINISHED", "limit": limit}
+        data = await self._make_request(
+            f"/teams/{team_id}/matches",
+            params,
+        )
         if not data or not data.get("matches"):
             return []
 
