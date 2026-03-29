@@ -1,4 +1,7 @@
-"""Seguridad de la API: autenticación por API key y dependencia para endpoints administrativos."""
+"""Seguridad de la API: autenticación por API key.
+
+Provee dependencia para endpoints administrativos.
+"""
 
 import os
 from typing import Optional
