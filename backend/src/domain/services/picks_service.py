@@ -177,7 +177,8 @@ class PicksService:
             return None
 
         try:
-            # Note: We trust this local file as it is part of our internal training pipeline
+            # Note: We trust this local file as it is part of our internal training
+            # pipeline
             model = joblib.load(model_path)
             logger.info(f"ML Model loaded successfully from {model_path}")
             return model
@@ -265,7 +266,8 @@ class PicksService:
 
         # Let's go with the prompt's request:
         # "tengan un peso del 60% sobre el promedio histórico (40%)"
-        # Since we don't have explicit "Recent Goals", we use the Form Modifier as a proxy for "Recent Performance Ratio".
+        # Since we don't have explicit "Recent Goals", we use the Form Modifier as a
+        # proxy for "Recent Performance Ratio".
         # We'll treat 'form_modifier' as the "Recent Strength Ratio" (approx).
 
         weighted_strength = (raw_strength * 0.4) + (raw_strength * form_modifier * 0.6)
@@ -453,7 +455,8 @@ class PicksService:
         if used_odds <= 1.0:
             used_odds = (1.0 / display_prob) * 0.95  # 5% margin
 
-        # Recalculate EV with synthetic odds if needed for ranking (though usually we prefer real odds for EV)
+        # Recalculate EV with synthetic odds if needed for ranking (though usually we
+        # prefer real odds for EV)
         # But if we have no odds, EV is 0 unless we use synthetic.
         # User implies we should use it for internal value estimation.
         if ev == 0.0 and odds <= 1.0:
@@ -530,7 +533,8 @@ class PicksService:
                 h2h_stats.team_b_id == match.home_team.name
                 and h2h_stats.team_b_wins > h2h_stats.team_a_wins
             ):
-                # Logic for when H2H struct might have team_a/b swapped relative to match home/away?
+                # Logic for when H2H struct might have team_a/b swapped relative to
+                # match home/away?
                 # Assuming strict matching above in finding stats.
                 # Usually StatisticsService returns Team A as requested first argument.
                 pass
@@ -569,7 +573,8 @@ class PicksService:
                 has_prediction_data = True  # NOW we have data
 
             # Recalculate probabilities based on new expectations using Skellam/Poisson
-            # (Simplified: approximated win probs not updated here to strictly follow "don't break learning.py API",
+            # (Simplified: approximated win probs not updated here to strictly follow
+            # "don't break learning.py API",
             # but we use new goals for GOALS picks).
 
         # Check if this is a low-scoring context
@@ -580,9 +585,12 @@ class PicksService:
             )
 
         # --- MODIFIED: Corners & Cards (Totals) ---
-        # 100% REAL DATA: Combined totals (Match Corners, Match Cards) require BOTH teams.
-        # 100% REAL DATA: Combined totals (Match Corners, Match Cards) require BOTH teams.
-        # NOW RELAXED: If we have predictions (which use league avg fallback), we can generate picks too.
+        # 100% REAL DATA: Combined totals (Match Corners, Match Cards) require BOTH
+        # teams.
+        # 100% REAL DATA: Combined totals (Match Corners, Match Cards) require BOTH
+        # teams.
+        # NOW RELAXED: If we have predictions (which use league avg fallback), we can
+        # generate picks too.
         if (
             home_stats is not None and home_stats.matches_played > 0
         ) or has_prediction_data:
@@ -611,8 +619,10 @@ class PicksService:
             for pick in cards_picks:
                 picks.add_pick(pick)
 
-            # Generate TEAM Specific Corners/Cards (RELAXED: Use predictions if stats missing)
-            # We check if objects exist, ignoring the strict 'matches_played >= 4' check (has_home_stats)
+            # Generate TEAM Specific Corners/Cards (RELAXED: Use predictions if stats
+            # missing)
+            # We check if objects exist, ignoring the strict 'matches_played >= 4' check
+            # (has_home_stats)
             if home_stats and away_stats:
                 team_corners = self._generate_team_corners_picks(
                     home_stats,
@@ -672,8 +682,10 @@ class PicksService:
             for pick in dnb_picks:
                 picks.add_pick(pick)
 
-        # 5. Goal/BTTS/Team Goals picks (Consistently generated if we have any stats or prediction)
-        # 100% REAL DATA: NO fallback to league averages for goals if no prediction data.
+        # 5. Goal/BTTS/Team Goals picks (Consistently generated if we have any stats or
+        # prediction)
+        # 100% REAL DATA: NO fallback to league averages for goals if no prediction
+        # data.
         # This prevents "invented" Over 2.5/BTTS picks.
         if has_prediction_data or (has_home_stats and has_away_stats):
             # Generate handicap picks (needs win prob AND prediction)
@@ -710,7 +722,8 @@ class PicksService:
                 picks.add_pick(pick)
 
             # Generate Team Goals (Relaxed: Use prediction data if stats are partial)
-            # We only need team names and predicted goals, which we have if has_prediction_data is True
+            # We only need team names and predicted goals, which we have if
+            # has_prediction_data is True
             if has_prediction_data:
                 tg_picks = self._generate_team_goals_picks(
                     home_stats, away_stats, predicted_home_goals, predicted_away_goals
@@ -747,7 +760,8 @@ class PicksService:
                 picks.add_pick(p)
 
         # 7. Apply ML Refinement (Dynamic or Global)
-        # Use the injected model (league-specific) if available, otherwise global fallback
+        # Use the injected model (league-specific) if available, otherwise global
+        # fallback
         target_model = ml_model if ml_model else self.ml_model
 
         if target_model:
@@ -842,20 +856,26 @@ class PicksService:
 
                 # Predict probability of this pick being correct (Class 1)
                 # Assumes Binary Classifier (0=Incorrect, 1=Correct) or similar logic
-                # For Outcome Classifier (0=Draw, 1=Home, 2=Away), this logic needs adjustment if we are refining non-outcome picks.
-                # BUT: The current ML model trained in 'train_model_optimized' is 'clf_outcome' (Home/Draw/Away).
-                # Wait: 'MLFeatureExtractor.extract_features(pick)' implies we are predicting per-PICK success?
+                # For Outcome Classifier (0=Draw, 1=Home, 2=Away), this logic needs
+                # adjustment if we are refining non-outcome picks.
+                # BUT: The current ML model trained in 'train_model_optimized' is
+                # 'clf_outcome' (Home/Draw/Away).
+                # Wait: 'MLFeatureExtractor.extract_features(pick)' implies we are
+                # predicting per-PICK success?
                 # Let's check 'process_match_task' in train script.
                 # NO. 'process_match_task' trains:
                 # 1. Corners Regressor
                 # 2. Cards Regressor
                 # 3. Outcome Classifier (Home/Draw/Away)
 
-                # The 'pick' feature extraction usually expects a generic pick and returns features relevant to THAT pick?
+                # The 'pick' feature extraction usually expects a generic pick and
+                # returns features relevant to THAT pick?
                 # OR it returns match features?
                 # Looking at 'train_model_optimized.py':
-                # features = _feature_extractor.extract_features(dummy_pick, match, home_stats, away_stats)
-                # It sends a DUMMY pick. The features are Match-Centric (Recent Form, Goals, etc).
+                # features = _feature_extractor.extract_features(dummy_pick, match,
+                # home_stats, away_stats)
+                # It sends a DUMMY pick. The features are Match-Centric (Recent Form,
+                # Goals, etc).
 
                 # So the Outcome Classifier predicts Match Result.
                 # If 'pick' is "Home Win", we check index 1.
@@ -884,11 +904,15 @@ class PicksService:
                     elif "Draw" in pick.market_label or "Empate" in pick.market_label:
                         ml_confidence = ml_probs[0]  # Draw
 
-                # If it's NOT a result pick (e.g. Over 2.5), the Outcome Classifier isn't directly applicable for "Correct/Incorrect".
+                # If it's NOT a result pick (e.g. Over 2.5), the Outcome Classifier
+                # isn't directly applicable for "Correct/Incorrect".
                 # It acts as a context signal.
-                # HOWEVER, legacy logic seemed to assume a "Pick Classifier" (Correct/Incorrect).
-                # Since we are now injecting 'clf_outcome', we should only refine Result picks OR accept that
-                # we don't have a "Pick Classifier" anymore, just an "Outcome Classifier".
+                # HOWEVER, legacy logic seemed to assume a "Pick Classifier"
+                # (Correct/Incorrect).
+                # Since we are now injecting 'clf_outcome', we should only refine Result
+                # picks OR accept that
+                # we don't have a "Pick Classifier" anymore, just an "Outcome
+                # Classifier".
 
                 if ml_confidence == 0.0:
                     continue
@@ -1187,7 +1211,10 @@ class PicksService:
                     MarketType.DOUBLE_CHANCE_1X,
                     f"{match.home_team.name} o Empate",
                     prob_1x,
-                    f"Alta probabilidad combinada ({prob_1x:.0%}) de que {match.home_team.name} no pierda en casa.",
+                    (
+                        f"Alta probabilidad combinada ({prob_1x:.0%}) de que "
+                        f"{match.home_team.name} no pierda en casa."
+                    ),
                 )
             )
 
@@ -1199,7 +1226,10 @@ class PicksService:
                     MarketType.DOUBLE_CHANCE_X2,
                     f"Empate o {match.away_team.name}",
                     prob_x2,
-                    f"Alta probabilidad combinada ({prob_x2:.0%}) de que {match.away_team.name} sume puntos.",
+                    (
+                        f"Alta probabilidad combinada ({prob_x2:.0%}) de que "
+                        f"{match.away_team.name} sume puntos."
+                    ),
                 )
             )
 
@@ -1263,7 +1293,8 @@ class PicksService:
             base_threshold = PicksConfig.WINNER_VOLATILE_THRESHOLD
 
         # Odds fetching (assuming standard keys)
-        # Note: We don't have explicit 'market_odds' passed here in original method signature,
+        # Note: We don't have explicit 'market_odds' passed here in original method
+        # signature,
         # but 'match' object has them!
 
         selection_prob = max_prob
@@ -1304,7 +1335,8 @@ class PicksService:
             reasoning += " (Alta volatilidad)."
 
         # Final gate: Must pass base threshold OR have high EV
-        # RELAXED: During early season/training, we lower this to 0.3 to ensure we always have a candidate
+        # RELAXED: During early season/training, we lower this to 0.3 to ensure we
+        # always have a candidate
         if selection_prob < base_threshold and ev < 0.05:
             return None
         # Construct Pick
@@ -1394,7 +1426,8 @@ class PicksService:
                 mrkt_over = MarketType.GOALS_OVER_3_5
                 mrkt_under = MarketType.GOALS_UNDER_3_5
             elif line == 4.5:
-                # We don't have separate enum for 4.5 yet, but we can reuse GOALS_OVER/UNDER
+                # We don't have separate enum for 4.5 yet, but we can reuse
+                # GOALS_OVER/UNDER
                 # OR we should add them to MarketType if we want strictness.
                 # Let's use GOALS_OVER/UNDER as fallback for now or add them.
                 mrkt_over = MarketType.GOALS_OVER
@@ -1472,11 +1505,13 @@ class PicksService:
     @staticmethod
     @functools.lru_cache(maxsize=1024)
     def _poisson_over_probability(expected: float, threshold: float) -> float:
-        """Calculate probability of over threshold using Poisson distribution (Optimized)."""
+        """Calculate probability of over threshold using Poisson distribution
+        (Optimized)."""
         if expected <= 0:
             return 0.0
 
-        # Optimization: Calculate Poisson iteratively to avoid expensive factorial/pow calls
+        # Optimization: Calculate Poisson iteratively to avoid expensive factorial/pow
+        # calls
         # P(k) = (lambda^k * e^-lambda) / k!
         # P(k) = P(k-1) * lambda / k
         p_k = math.exp(-expected)  # Probability for k=0
@@ -1603,13 +1638,18 @@ class PicksService:
 
         if probability > 0.01:
             confidence = SuggestedPick.get_confidence_level(probability)
+            trend_text = (
+                "tendencia a expulsiones" if total_avg > 0.2 else "baja probabilidad"
+            )
             return SuggestedPick(
                 market_type=MarketType.RED_CARDS,
                 market_label="Tarjeta Roja en el Partido",
                 probability=round(probability, 3),
                 confidence_level=confidence,
-                reasoning=f"Promedio combinado: {total_avg:.2f} rojas/partido. "
-                f"Historial reciente indica {'tendencia a expulsiones' if total_avg > 0.2 else 'baja probabilidad'}.",
+                reasoning=(
+                    f"Promedio combinado: {total_avg:.2f} rojas/partido. "
+                    f"Historial reciente indica {trend_text}."
+                ),
                 risk_level=5,  # Red cards are always high risk
                 is_recommended=False,  # Never recommend due to rarity
                 priority_score=probability * 0.5,  # Low priority
@@ -1625,8 +1665,8 @@ class PicksService:
         home_win_prob: float,
         away_win_prob: float,
     ) -> list[SuggestedPick]:
-        """
-        Generate DYNAMIC Asian Handicap picks (positive and negative) based on match data.
+        """Generate DYNAMIC Asian Handicap picks (positive and negative)
+        based on match data.
         """
         picks = []
 
@@ -1682,7 +1722,7 @@ class PicksService:
         }
 
         # Test handicaps for the FAVORITE (e.g., -0.5, -1.0)
-        for handicap in sorted(list(set(h for h in handicaps_to_test["fav"] if h < 0))):
+        for handicap in sorted({h for h in handicaps_to_test["fav"] if h < 0}):
             prob_fav_covers = self._calculate_handicap_probability(
                 goal_diff, handicap, total_expected_goals
             )
@@ -1699,7 +1739,7 @@ class PicksService:
                 )
 
         # Test handicaps for the UNDERDOG (e.g., +0.5, +1.0)
-        for handicap in sorted(list(set(h for h in handicaps_to_test["und"] if h > 0))):
+        for handicap in sorted({h for h in handicaps_to_test["und"] if h > 0}):
             # For underdog, the goal_diff perspective is negative
             prob_und_covers = self._calculate_handicap_probability(
                 -goal_diff, handicap, total_expected_goals
@@ -1727,9 +1767,16 @@ class PicksService:
 
         # Adjust reasoning based on handicap type
         if handicap < 0:
-            reason = f"{team_name} es favorito. Se espera que gane por un margen de ~{goal_diff:.2f} goles."
+            reason = (
+                f"{team_name} es favorito. Se espera que gane por un margen de ~"
+                f"{goal_diff:.2f} goles."
+            )
         else:
-            reason = f"Margen de seguridad para {team_name}. Se espera que no pierda por más de {handicap-0.5} goles."
+            reason = (
+                f"Margen de seguridad para "
+                f"{team_name}. Se espera que no pierda por más de "
+                f"{handicap-0.5} goles."
+            )
 
         adj_prob = min(0.95, probability)  # Cap probability
         adj_prob = max(0.55, adj_prob)
@@ -1977,8 +2024,11 @@ class PicksService:
                         market_type=MarketType.CORRECT_SCORE,
                         market_label=f"Marcador Exacto: {h}-{a}",
                         probability=round(prob, 3),
-                        confidence_level=ConfidenceLevel.LOW,  # Always low conf for exact scores
-                        reasoning=f"Proyección matemática más probable ({prob*100:.1f}%).",
+                        # Always low conf for exact scores
+                        confidence_level=ConfidenceLevel.LOW,
+                        reasoning=(
+                            f"Proyección matemática más probable ({prob*100:.1f}%)."
+                        ),
                         risk_level=4,  # High risk
                         is_recommended=False,
                         priority_score=prob * 0.5,
@@ -1996,7 +2046,8 @@ class PicksService:
     ) -> list[SuggestedPick]:
         """Generate Team Total Goals picks."""
         picks = []
-        # Fallback for names if stats objects are None (rare but possible with relaxed logic)
+        # Fallback for names if stats objects are None (rare but possible with relaxed
+        # logic)
         h_id = home_stats.team_id if home_stats else "Local"
         a_id = away_stats.team_id if away_stats else "Visitante"
 

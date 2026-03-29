@@ -21,3 +21,6 @@ line-length = 88
 select = ["E", "F", "W", "C", "N"]
 ignore = ["E203"]
 exclude = ["backend/ml_models", ".venv", "dev-dist"]
+
+[tool.ruff.per-file-ignores]
+"backend/src/domain/services/picks_service.py" = ["C901"]
