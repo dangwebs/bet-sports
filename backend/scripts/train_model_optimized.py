@@ -46,7 +46,11 @@ _resolution_service = None
 
 def init_worker(weights):
     """Initialize services in the worker process"""
-    global _prediction_service, _picks_service, _statistics_service, _feature_extractor, _resolution_service
+    global _prediction_service
+    global _picks_service
+    global _statistics_service
+    global _feature_extractor
+    global _resolution_service
 
     _statistics_service = StatisticsService()
     _prediction_service = (
@@ -63,12 +67,23 @@ def process_match_task(task_data):
     """
     Pure function to process a single match task.
     Args:
-        task_data: tuple(match, home_stats_dict, away_stats_dict, league_avgs, global_avgs, learning_weights)
+        task_data: tuple(
+            match,
+            home_stats_dict,
+            away_stats_dict,
+            league_avgs,
+            global_avgs,
+            learning_weights,
+        )
 
     Returns:
         tuple: (features, targets_dict)
     """
-    global _prediction_service, _picks_service, _statistics_service, _feature_extractor, _resolution_service
+    global _prediction_service
+    global _picks_service
+    global _statistics_service
+    global _feature_extractor
+    global _resolution_service
 
     match, raw_home, raw_away, league_avgs, global_avgs, weights = task_data
 
@@ -212,7 +227,9 @@ async def main():
                 return []
 
             logger.info(
-                f"   🔮 Generating predictions for {len(upcoming)} upcoming matches using TRAINED MODELS..."
+                "🔮 Generating predictions for %d upcoming matches "
+                "using TRAINED MODELS...",
+                len(upcoming),
             )
 
             batch_data = []
@@ -392,7 +409,9 @@ async def main():
     for league_id, league_matches in matches_by_league.items():
         if len(league_matches) < 50:
             logger.warning(
-                f"⚠️ Skipping league {league_id}: Not enough data ({len(league_matches)} matches)"
+                "⚠️ Skipping league %s: Not enough data (%d matches)",
+                league_id,
+                len(league_matches),
             )
             continue
 
@@ -476,7 +495,8 @@ async def main():
 
         # 1. Corners Regressor
         logger.info(f"   📐 Training Corners Regressor ({league_id})...")
-        # TUNING UPDATE: Increased complexity (depth=25, leaf=2) to capture high-variance games
+        # TUNING UPDATE: Increased complexity (depth=25, leaf=2) to capture high-
+        # variance games
         reg_corners = RandomForestRegressor(
             n_estimators=150,
             max_depth=25,
@@ -498,17 +518,20 @@ async def main():
         max_dominance = np.max(counts) / len(preds) if len(preds) > 0 else 0
 
         logger.info(
-            f"      - Distribution: StdDev={std_dev:.3f}, MaxDominance={max_dominance:.2%}"
+            f"      - Distribution: StdDev={std_dev:.3f}, "
+            f"MaxDominance={max_dominance:.2%}"
         )
 
         if max_dominance > 0.90:
             logger.error(
-                f"      ❌ MODE COLLAPSE DETECTED in Corners Model for {league_id}! (90% same value). Skipping save."
+                f"      ❌ MODE COLLAPSE DETECTED in Corners Model for {league_id}! "
+                f"(90% same value). Skipping save."
             )
         elif std_dev < 0.5:
             # Just warning, allow save but log it
             logger.warning(
-                f"      ⚠️ Low Variance in Corners Model for {league_id} (StdDev < 0.5). Model might be too conservative."
+                f"      ⚠️ Low Variance in Corners Model for {league_id} "
+                f"(StdDev < 0.5). Model might be too conservative."
             )
             joblib.dump(reg_corners, f"ml_models/{league_id}_corners.joblib")
         else:
@@ -536,7 +559,8 @@ async def main():
 
         if max_dom_c > 0.90:
             logger.error(
-                f"      ❌ MODE COLLAPSE DETECTED in Cards Model for {league_id}! Skipping save."
+                f"      ❌ MODE COLLAPSE DETECTED in Cards Model for {league_id}! "
+                f"Skipping save."
             )
         else:
             joblib.dump(reg_cards, f"ml_models/{league_id}_cards.joblib")
