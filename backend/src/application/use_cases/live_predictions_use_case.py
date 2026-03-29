@@ -53,7 +53,10 @@ class GetLivePredictionsUseCase:
     while using caching to optimize response times.
     """
 
-    PROCESSING_MESSAGE = "Estamos procesando la información para darte las probabilidades con mayor precisión"
+    PROCESSING_MESSAGE = (
+        "Estamos procesando la información para darte "
+        "las probabilidades con mayor precisión"
+    )
 
     def __init__(
         self,
@@ -194,15 +197,19 @@ class GetLivePredictionsUseCase:
                                 **pre_calculated_data
                             )
                             logger.info(
-                                f"✓ Using pre-calculated data from DB for match {match.id}"
+                                "✓ Using pre-calculated data from DB for match %s",
+                                match.id,
                             )
                         except Exception as parse_e:
                             logger.warning(
-                                f"Failed to parse pre-calculated data for {match.id}: {parse_e}"
+                                "Failed to parse pre-calculated data for %s: %s",
+                                match.id,
+                                parse_e,
                             )
 
                 if pre_calculated_dto:
-                    # Update potentially stale live data (score, minute) while keeping AI prediction
+                    # Update potentially stale live data (score, minute) while keeping
+                    # AI prediction
                     pre_calculated_dto.match.home_goals = match.home_goals
                     pre_calculated_dto.match.away_goals = match.away_goals
                     pre_calculated_dto.match.status = match.status
@@ -221,7 +228,9 @@ class GetLivePredictionsUseCase:
                     time.time() - start_time > 20.0
                 ):  # 20s Soft Timeout (leaving buffer for response)
                     logger.warning(
-                        f"⏳ Time limit reached (20s). Skipping ML for {match.id} to avoid API timeout."
+                        "⏳ Time limit reached (20s). Skipping ML for %s "
+                        "to avoid API timeout.",
+                        match.id,
                     )
                     results.append(
                         MatchPredictionDTO(
@@ -232,7 +241,8 @@ class GetLivePredictionsUseCase:
                     continue
 
                 logger.warning(
-                    f"⚠ Cache/DB miss for {match.id}. Running emergency real-time inference..."
+                    "⚠ Cache/DB miss for %s. Running emergency real-time inference...",
+                    match.id,
                 )
                 prediction_dto = await self._generate_prediction(match, bulk_history)
                 match_dto = self._match_to_dto(match)
@@ -270,7 +280,9 @@ class GetLivePredictionsUseCase:
         # Cache results
         self.cache_service.set_live_matches(filtered_results, cache_key)
         logger.info(
-            f"Generated {len(filtered_results)} live match predictions (after filtering {len(results) - len(filtered_results)} matches)"
+            "%d live match predictions (after filtering %d matches)",
+            len(filtered_results),
+            len(results) - len(filtered_results),
         )
 
         # 3. Persistence: Index calculated live matches for the Explorer
@@ -287,7 +299,8 @@ class GetLivePredictionsUseCase:
                 ]
                 self.persistence_repository.bulk_save_predictions(prediction_batch)
                 logger.info(
-                    f"Indexed {len(filtered_results)} live prediction matches in Explorer DB"
+                    "Indexed %d live prediction matches in Explorer DB",
+                    len(filtered_results),
                 )
             except Exception as e:
                 logger.warning(f"Failed to index live predictions: {e}")
@@ -388,7 +401,8 @@ class GetLivePredictionsUseCase:
             if historical_matches:
                 data_sources_used.append("Aggregated History")
         else:
-            # We used deep stats, but maybe we still want league averages from recent data?
+            # We used deep stats, but maybe we still want league averages from recent
+            # data?
             historical_matches = await self._get_aggregated_history(match, bulk_history)
             league_averages = (
                 self.statistics_service.calculate_league_averages(historical_matches)
@@ -438,7 +452,9 @@ class GetLivePredictionsUseCase:
         internal_league_code = self._get_internal_league_code(match)
 
         logger.info(
-            f"Aggregating live prediction data for {match.home_team.name} vs {match.away_team.name}"
+            "Aggregating live prediction data for %s vs %s",
+            match.home_team.name,
+            match.away_team.name,
         )
 
         tasks = []
@@ -515,10 +531,12 @@ class GetLivePredictionsUseCase:
                 found_bulk = True
 
             if found_bulk:
-                # logger.debug(f"Using bulk history for {match.home_team.name}/{match.away_team.name}")
+                # logger.debug(f"Using bulk history for
+                # {match.home_team.name}/{match.away_team.name}")
                 return team_matches
 
-        # Aumentamos el límite para mejorar la significancia estadística (Ley de los Grandes Números)
+        # Aumentamos el límite para mejorar la significancia estadística (Ley de los
+        # Grandes Números)
         HISTORY_LIMIT = 25
 
         # Strategy B: Football-Data.org
@@ -548,7 +566,8 @@ class GetLivePredictionsUseCase:
                 unique_map[key] = m
             else:
                 existing = unique_map[key]
-                # Priorizamos datos con estadísticas más ricas para mejorar la precisión del modelo
+                # Priorizamos datos con estadísticas más ricas para mejorar la precisión
+                # del modelo
                 current_score = 0
                 existing_score = 0
 
@@ -576,7 +595,8 @@ class GetLivePredictionsUseCase:
     def _get_internal_league_code(self, match: Match) -> Optional[str]:
         """Map Football-Data.org competition code to internal code."""
         try:
-            # Match objects from Football-Data.org already have internal league id if parsed via _parse_match
+            # Match objects from Football-Data.org already have internal league id if
+            # parsed via _parse_match
             # but for safety we can check mapping
             for internal_code, org_code in COMPETITION_CODE_MAPPING.items():
                 if internal_code == match.league.id:
