@@ -79,7 +79,9 @@ class MLTrainingOrchestrator:
         Executes the full training pipeline and returns a TrainingResult.
         """
         logger.info(
-            f"Starting ML Training Pipeline (leagues={league_ids}, days_back={days_back})"
+            "Starting ML Training Pipeline (leagues=%s, days_back=%s)",
+            league_ids,
+            days_back,
         )
 
         # 1. Initialize logic-dependant services
