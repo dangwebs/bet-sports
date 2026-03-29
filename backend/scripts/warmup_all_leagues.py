@@ -36,7 +36,8 @@ async def main():
 
     await warmup_service.warm_up_predictions(all_leagues)
 
-    logger.info("✅ Massive warmup complete. All picks are now persisted in PostgreSQL.")
+    logger.info("✅ Massive warmup complete.")
+    logger.info("All picks are now persisted in PostgreSQL.")
 
 
 if __name__ == "__main__":
