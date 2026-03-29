@@ -1,8 +1,8 @@
 """
 Domain Entities Module
 
-This module contains the core domain entities for the football betting prediction system.
-These entities represent the core business concepts and are independent of any infrastructure.
+Core domain entities for the football betting prediction system.
+These represent business concepts and are independent of infrastructure.
 """
 
 from dataclasses import dataclass, field
@@ -141,7 +141,8 @@ class Match:
             current_total = self.away_total_shots or 0
             self.away_total_shots = max(current_total, self.away_shots_on_target)
 
-        # 3. Corners must be at least 0 if goals are present (logical, but ensure it's not None if goals exist and it's a live match)
+        # 3. Corners must be at least 0 if goals are present (logical, but ensure it's
+        # not None if goals exist and it's a live match)
         # Actually, let's keep it simple for now and only focus on Shots.
 
     @property
@@ -252,7 +253,8 @@ class Prediction:
                 raise ValueError(f"Probability must be between 0 and 1, got {prob}")
 
         # Probabilities should sum to approximately 1
-        # Exception: Allow sum of 0 if all are 0 (indicates no prediction possible due to lack of data)
+        # Exception: Allow sum of 0 if all are 0 (indicates no prediction possible due
+        # to lack of data)
         total = sum(probs)
         if total == 0:
             return
