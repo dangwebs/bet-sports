@@ -96,13 +96,18 @@ class TrainingDataService:
 
                     if days_lag > 3:
                         logger.warning(
-                            f"CSV data for {lid} is stale ({days_lag} days lag). Triggering backfill..."
+                            "CSV data for %s is stale (%d days lag). "
+                            "Triggering backfill...",
+                            lid,
+                            days_lag,
                         )
                         start_backfill = last_match_date + timedelta(days=1)
                         gap_matches = await self._backfill_gap(lid, start_backfill, now)
                         if gap_matches:
                             logger.info(
-                                f"Backfilled {len(gap_matches)} matches for {lid}"
+                                "Backfilled %d matches for %s",
+                                len(gap_matches),
+                                lid,
                             )
                             matches.extend(gap_matches)
                 return matches
@@ -213,7 +218,10 @@ class TrainingDataService:
         try:
             if self.data_sources.football_data_org.is_configured:
                 logger.info(
-                    f"Backfilling {league_code} via Football-Data.org from {start_date.date()} to {end_date.date()}..."
+                    "Backfilling %s via Football-Data.org from %s to %s...",
+                    league_code,
+                    start_date.date(),
+                    end_date.date(),
                 )
                 fd_matches = (
                     await self.data_sources.football_data_org.get_finished_matches(
@@ -225,7 +233,9 @@ class TrainingDataService:
                 if fd_matches:
                     backfilled_matches.extend(fd_matches)
                     logger.info(
-                        f"✓ Found {len(fd_matches)} backfill matches in Football-Data.org for {league_code}"
+                        "✓ Found %d backfill matches in Football-Data.org for %s",
+                        len(fd_matches),
+                        league_code,
                     )
                     return backfilled_matches  # Return early if successful
                 else:
@@ -261,7 +271,8 @@ class TrainingDataService:
                     # Ensure timezone awareness for comparison
                     m_date = m.match_date
                     if m_date.tzinfo is None:
-                        # Assume same TZ as start_date/end_date if they are offset-aware, or naive comparison
+                        # Assume same TZ as start_date/end_date if they are offset-
+                        # aware, or naive comparison
                         # Best to make m_date offset aware if start_date is
                         if start_date.tzinfo:
                             from src.utils.time_utils import COLOMBIA_TZ
@@ -274,7 +285,9 @@ class TrainingDataService:
                 if relevant_matches:
                     backfilled_matches.extend(relevant_matches)
                     logger.info(
-                        f"✓ Found {len(relevant_matches)} backfill matches in OpenFootball for {league_code}"
+                        "✓ Found %d backfill matches in OpenFootball for %s",
+                        len(relevant_matches),
+                        league_code,
                     )
 
         except Exception as e:
