@@ -11,11 +11,6 @@ import numpy as np
 sys.path.append(os.path.join(os.getcwd(), "backend"))  # To find 'src' as a module
 sys.path.append(os.getcwd())
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("TrainPerLeague")
 
 from src.application.dtos.dtos import (
     LeagueDTO,
@@ -35,6 +30,12 @@ from src.domain.services.statistics_service import StatisticsService
 from src.domain.services.team_service import TeamService
 
 # Import Services
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("TrainPerLeague")
 
 # Global Service Instances (for worker processes)
 _prediction_service = None
@@ -136,7 +137,7 @@ def process_match_task(task_data):
     return features, targets
 
 
-async def main():
+async def main():  # noqa: C901
     logger.info("🚀 Starting Per-League ML Training Pipeline...")
     start_time = time.time()
 
@@ -463,7 +464,7 @@ async def main():
         if not training_tasks:
             continue
 
-        X = []
+        x = []
         y_corners = []
         y_cards = []
         y_outcome = []  # 0=Draw, 1=Home, 2=Away
@@ -474,7 +475,7 @@ async def main():
             )
 
             for feats, targets in results:
-                X.append(feats)
+                x.append(feats)
                 y_corners.append(targets["total_corners"])
                 y_cards.append(targets["total_cards"])
 
@@ -509,10 +510,10 @@ async def main():
         tscv = TimeSeriesSplit(n_splits=3)
 
         # Train
-        reg_corners.fit(X, y_corners)
+        reg_corners.fit(x, y_corners)
 
         # SANITY CHECK: Mode Collapse Detection
-        preds = reg_corners.predict(X)
+        preds = reg_corners.predict(x)
         std_dev = np.std(preds)
         unique, counts = np.unique(np.round(preds), return_counts=True)
         max_dominance = np.max(counts) / len(preds) if len(preds) > 0 else 0
@@ -547,10 +548,10 @@ async def main():
             n_jobs=args.n_jobs,
             random_state=42,
         )
-        reg_cards.fit(X, y_cards)
+        reg_cards.fit(x, y_cards)
 
         # SANITY CHECK (Cards)
-        preds_c = reg_cards.predict(X)
+        preds_c = reg_cards.predict(x)
         max_dom_c = (
             (np.unique(np.round(preds_c), return_counts=True)[1].max() / len(preds_c))
             if len(preds_c) > 0
@@ -576,11 +577,11 @@ async def main():
             random_state=42,
         )
         scores_acc = cross_val_score(
-            clf_outcome, X, y_outcome, cv=tscv, scoring="accuracy"
+            clf_outcome, x, y_outcome, cv=tscv, scoring="accuracy"
         )
         logger.info(f"      - Accuracy: {np.mean(scores_acc):.2%}")
 
-        clf_outcome.fit(X, y_outcome)
+        clf_outcome.fit(x, y_outcome)
         joblib.dump(clf_outcome, f"ml_models/{league_id}_winner.joblib")
 
         # --- 4. PREDICT UPCOMING FIXTURES ---

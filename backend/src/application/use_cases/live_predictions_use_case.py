@@ -9,7 +9,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pytz import timezone
 from src.application.dtos.dtos import (
@@ -21,7 +21,7 @@ from src.application.dtos.dtos import (
     TeamDTO,
 )
 from src.application.use_cases.use_cases import DataSources
-from src.domain.entities.entities import Match, Prediction, TeamStatistics
+from src.domain.entities.entities import League, Match, Prediction, TeamStatistics
 from src.domain.services.picks_service import PicksService
 from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
@@ -65,7 +65,7 @@ class GetLivePredictionsUseCase:
         statistics_service: StatisticsService,
         cache_service: CacheService,
         picks_service: PicksService,
-        persistence_repository: Optional[PersistenceRepository] = None,
+        persistence_repository: Optional[Any] = None,
     ):
         self.data_sources = data_sources
         self.prediction_service = prediction_service
@@ -74,7 +74,7 @@ class GetLivePredictionsUseCase:
         self.picks_service = picks_service
         self.persistence_repository = persistence_repository
 
-    async def execute(
+    async def execute(  # noqa: C901
         self,
         filter_target_leagues: bool = True,
     ) -> List[MatchPredictionDTO]:
@@ -126,7 +126,7 @@ class GetLivePredictionsUseCase:
                     COMPETITION_CODE_MAPPING,
                 )
 
-                internal_to_comp = {k: v for k, v in COMPETITION_CODE_MAPPING.items()}
+                internal_to_comp = dict(COMPETITION_CODE_MAPPING)
 
                 for m in matches:
                     # Try to find internal league code
@@ -307,7 +307,7 @@ class GetLivePredictionsUseCase:
 
         return filtered_results
 
-    async def _generate_prediction(
+    async def _generate_prediction(  # noqa: C901
         self, match: Match, bulk_history: dict = None
     ) -> PredictionDTO:
         """
@@ -535,18 +535,18 @@ class GetLivePredictionsUseCase:
                 # {match.home_team.name}/{match.away_team.name}")
                 return team_matches
 
-        # Aumentamos el límite para mejorar la significancia estadística (Ley de los
-        # Grandes Números)
-        HISTORY_LIMIT = 25
+            # Aumentamos el límite para mejorar la significancia estadística (Ley de los
+            # Grandes Números)
+            history_limit = 25
 
         # Strategy B: Football-Data.org
         if self.data_sources.football_data_org.is_configured:
             try:
                 h_hist = await self.data_sources.football_data_org.get_team_history(
-                    match.home_team.name, limit=HISTORY_LIMIT
+                    match.home_team.name, limit=history_limit
                 )
                 a_hist = await self.data_sources.football_data_org.get_team_history(
-                    match.away_team.name, limit=HISTORY_LIMIT
+                    match.away_team.name, limit=history_limit
                 )
                 team_matches.extend(h_hist + a_hist)
             except Exception as exc:
@@ -697,8 +697,8 @@ class GetLivePredictionsUseCase:
             )
 
         # Top ML Picks = All picks with probability >= 75% (ML High Confidence tier)
-        TOP_ML_THRESHOLD = 0.75
-        top_ml_picks = [p for p in picks_dtos if p.probability >= TOP_ML_THRESHOLD]
+        top_ml_threshold = 0.75
+        top_ml_picks = [p for p in picks_dtos if p.probability >= top_ml_threshold]
         # Sort by probability descending
         top_ml_picks.sort(key=lambda x: x.probability, reverse=True)
 
@@ -715,7 +715,7 @@ class GetLivePredictionsUseCase:
             data_sources=prediction.data_sources,
             recommended_bet=prediction.recommended_bet,
             over_under_recommendation=prediction.over_under_recommendation,
-            suggested_picks=pick_dtos,
+            suggested_picks=picks_dtos,
             top_ml_picks=top_ml_picks,
             created_at=prediction.created_at,
         )

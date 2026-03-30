@@ -6,36 +6,6 @@ import os
 import sys
 import warnings
 
-# Suprimir warnings de sklearn (versión inconsistente del modelo)
-warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
-warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
-
-# Import tqdm with fallback
-try:
-    from tqdm import tqdm
-except ImportError:
-    # Fallback: Simple iterator without progress bar
-    class tqdm:
-        def __init__(self, iterable=None, **kwargs):
-            self.iterable = iterable
-            self.total = kwargs.get("total", len(iterable) if iterable else 0)
-
-        def __iter__(self):
-            return iter(self.iterable) if self.iterable else iter([])
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            pass
-
-        def update(self, n=1):
-            pass
-
-        def set_postfix_str(self, s):
-            pass
-
-
 # Load environment variables from .env file FIRST
 from dotenv import load_dotenv
 
@@ -46,9 +16,6 @@ load_dotenv(env_path)
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
-
-from src.core.constants import DEFAULT_LEAGUES
-from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
 
 # Configure Logging
 logging.basicConfig(
@@ -63,6 +30,36 @@ logger = logging.getLogger("OrchestratorCLI")
 # Detectar número de CPUs disponibles
 CPU_COUNT = int(os.getenv("N_JOBS", multiprocessing.cpu_count()))
 logger.info(f"🚀 Running with {CPU_COUNT} CPU cores")
+
+# Suprimir warnings de sklearn (versión inconsistente del modelo)
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
+
+try:
+    from tqdm import tqdm
+except Exception:
+    # Fallback: Simple iterator without progress bar (minimal API used)
+    class Tqdm:
+        def __init__(self, iterable=None, **kwargs):
+            self.iterable = iterable
+            self.total = kwargs.get("total", len(iterable) if iterable else 0)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def __iter__(self):
+            return iter(self.iterable) if self.iterable else iter([])
+
+        def update(self, n=1):
+            pass
+
+        def set_postfix_str(self, s):
+            pass
+
+    tqdm = Tqdm
 
 
 async def cmd_train(
@@ -102,11 +99,14 @@ async def cmd_train(
         except Exception as cleanup_err:
             logger.warning(f"⚠️ Cleanup parcial (no fatal): {cleanup_err}")
 
-    leagues = (
-        [league.strip() for league in leagues_str.split(",") if league.strip()]
-        if leagues_str
-        else DEFAULT_LEAGUES
-    )
+    if leagues_str:
+        leagues = [
+            league.strip() for league in leagues_str.split(",") if league.strip()
+        ]
+    else:
+        from src.core.constants import DEFAULT_LEAGUES
+
+        leagues = DEFAULT_LEAGUES
     logger.info(f"Targeting Leagues: {leagues}")
 
     try:
@@ -166,6 +166,8 @@ async def process_league_async(
     """
     Helper para procesar una liga de manera asíncrona.
     """
+    from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
+
     if league_id not in LEAGUES_METADATA:
         logger.warning(f"⚠️  Skipping unknown league: {league_id}")
         return None
@@ -187,11 +189,13 @@ async def process_league_async(
         return league_id, False
 
 
-async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = False):
+async def cmd_predict(  # noqa: C901
+    leagues_str: str, parallel: bool = True, force: bool = False
+):
     """
     Step 2: Massive Inference for specific leagues with parallel processing.
     """
-    leagues = [l.strip() for l in leagues_str.split(",") if l.strip()]
+    leagues = [league.strip() for league in leagues_str.split(",") if league.strip()]
     logger.info(f"CMD: PREDICT. Target Leagues: {leagues}, Parallel: {parallel}")
 
     from src.application.use_cases.use_cases import GetPredictionsUseCase
@@ -307,11 +311,14 @@ async def cmd_top_picks(limit: int = 50, leagues_str: str = None):
     """
     Step 3: Synthesize and persist top ML picks for all or specific leagues.
     """
-    leagues = (
-        [l.strip() for l in leagues_str.split(",") if l.strip()]
-        if leagues_str
-        else DEFAULT_LEAGUES
-    )
+    if leagues_str:
+        leagues = [
+            league.strip() for league in leagues_str.split(",") if league.strip()
+        ]
+    else:
+        from src.core.constants import DEFAULT_LEAGUES
+
+        leagues = DEFAULT_LEAGUES
     logger.info(f"CMD: TOP-PICKS. Limit: {limit}, Target Leagues: {leagues}")
 
     from src.application.use_cases.suggested_picks_use_case import GetTopMLPicksUseCase
