@@ -48,7 +48,6 @@ class FakeGetPredictionsUseCase:
 
 
 fake_uc_mod.GetPredictionsUseCase = FakeGetPredictionsUseCase
-sys.modules["src.application.use_cases.use_cases"] = fake_uc_mod
 
 # Minimal LEAGUES_METADATA expected by process_league_async
 fake_fd_mod = types.ModuleType("src.infrastructure.data_sources.football_data_uk")
@@ -60,10 +59,22 @@ spec.loader.exec_module(mod)
 
 
 def test_prepare_services_returns_use_case_and_repo():
-    use_case, repo = mod.prepare_services()
-    assert repo == "FAKE_REPO"
-    assert hasattr(use_case, "_args")
-    assert use_case._args[0] == "FAKE_DS"
+    # Temporarily inject the fake use case module for this test only
+    _orig = sys.modules.get("src.application.use_cases.use_cases")
+    sys.modules["src.application.use_cases.use_cases"] = fake_uc_mod
+    try:
+        use_case, repo = mod.prepare_services()
+        assert repo == "FAKE_REPO"
+        assert hasattr(use_case, "_args")
+        assert use_case._args[0] == "FAKE_DS"
+    finally:
+        if _orig is not None:
+            sys.modules["src.application.use_cases.use_cases"] = _orig
+        else:
+            try:
+                del sys.modules["src.application.use_cases.use_cases"]
+            except KeyError:
+                pass
 
 
 def test_generate_predictions_for_league_success():
