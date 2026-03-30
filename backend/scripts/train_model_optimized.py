@@ -113,6 +113,84 @@ def group_matches_by_league(matches: List[Any]) -> Dict[str, List[Any]]:
     return matches_by_league
 
 
+def build_training_tasks(
+    league_matches: List[Any],
+    stats_service: StatisticsService,
+    learning_service: LearningService,
+    league_avgs: Any,
+) -> (Dict[str, Any], List[Any]):
+    """Build rolling team stats cache and training tasks list for a league."""
+    team_stats_cache: Dict[str, Any] = {}
+    empty_stats = stats_service.create_empty_stats_dict()
+    training_tasks: List[Any] = []
+
+    weights = learning_service.get_learning_weights()
+
+    for match in league_matches:
+        if match.home_goals is None or match.away_goals is None:
+            continue
+
+        h_name = stats_service.normalize_team_name(match.home_team.name)
+        a_name = stats_service.normalize_team_name(match.away_team.name)
+
+        # Snapshot state BEFORE match
+        raw_home = team_stats_cache.get(h_name, empty_stats).copy()
+        raw_away = team_stats_cache.get(a_name, empty_stats).copy()
+
+        # Init if new
+        if h_name not in team_stats_cache:
+            team_stats_cache[h_name] = raw_home
+        if a_name not in team_stats_cache:
+            team_stats_cache[a_name] = raw_away
+
+        # Warmup check (> 3 matches)
+        if raw_home["matches_played"] >= 3 and raw_away["matches_played"] >= 3:
+            training_tasks.append(
+                (match, raw_home, raw_away, league_avgs, None, weights)
+            )
+
+        # Update State
+        stats_service.update_team_stats_dict(
+            team_stats_cache[h_name], match, is_home=True
+        )
+        stats_service.update_team_stats_dict(
+            team_stats_cache[a_name], match, is_home=False
+        )
+
+    return team_stats_cache, training_tasks
+
+
+def extract_features_from_tasks(training_tasks: List[Any], args: Any):
+    """Run feature extraction in parallel and return feature/target arrays."""
+    x = []
+    y_corners = []
+    y_cards = []
+    y_outcome = []  # 0=Draw, 1=Home, 2=Away
+
+    try:
+        results = joblib.Parallel(n_jobs=args.n_jobs, batch_size=50)(
+            joblib.delayed(process_match_task)(task) for task in training_tasks
+        )
+
+        for feats, targets in results:
+            x.append(feats)
+            y_corners.append(targets["total_corners"])
+            y_cards.append(targets["total_cards"])
+
+            outcome = 0
+            if targets["home_win"]:
+                outcome = 1
+            elif targets["away_win"]:
+                outcome = 2
+            y_outcome.append(outcome)
+
+    except Exception as e:
+        logger.error(f"Feature extraction failed: {e}")
+        return [], [], [], []
+
+    return x, y_corners, y_cards, y_outcome
+
+
 async def generate_league_predictions(
     league_id: str,
     league_matches: List[Any],
@@ -338,20 +416,14 @@ async def train_for_league(
     league_avgs = stats_service.calculate_league_averages(league_matches)
 
     # Prepare Rolling Stats
-    team_stats_cache: Dict[str, Any] = {}
-        team_stats_cache, training_tasks = build_training_tasks(
-            league_matches, stats_service, learning_service, league_avgs
-        )
+    team_stats_cache, training_tasks = build_training_tasks(
+        league_matches, stats_service, learning_service, league_avgs
+    )
 
-        if not training_tasks:
-            return
-
-        x, y_corners, y_cards, y_outcome = extract_features_from_tasks(training_tasks, args)
-            y_outcome.append(outcome)
-
-    except Exception as e:
-        logger.error(f"Feature extraction failed for {league_id}: {e}")
+    if not training_tasks:
         return
+
+    x, y_corners, y_cards, y_outcome = extract_features_from_tasks(training_tasks, args)
 
     # --- TRAIN MODELS ---
     from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
