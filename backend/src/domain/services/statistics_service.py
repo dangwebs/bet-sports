@@ -4,10 +4,15 @@ Statistics Domain Service
 Handles calculation of team statistics from match history.
 """
 
+from __future__ import annotations
+
 import unicodedata
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.value_objects import LeagueAverages
 
 
 class StatisticsService:
@@ -18,10 +23,12 @@ class StatisticsService:
     - DO NOT invent statistics if history is missing.
     - If no historical data is available, returns zeros/empty objects.
 
-    CORE LOGIC PROTECTION RULE:
-    - The statistical aggregation logic in this file is verified for production.
-    - MODIFICATION OF CORE CALCULATION LOGIC IS FORBIDDEN to preserve data integrity.
-    - New metrics must be implemented by EXTENDING the logic, not changing existing formulas.
+        CORE LOGIC PROTECTION RULE:
+        - The statistical aggregation logic in this file is verified for production.
+        - MODIFICATION OF CORE CALCULATION LOGIC IS FORBIDDEN
+            to preserve data integrity.
+        - New metrics must be implemented by EXTENDING the logic,
+            not changing existing formulas.
     """
 
     @staticmethod
@@ -101,10 +108,6 @@ class StatisticsService:
             "ipswich town fc": "ipswich",
             "ipswich town": "ipswich",
             "ipswich": "ipswich",
-            "manchester city fc": "manchester city",
-            "manchester united fc": "manchester united",
-            "tottenham hotspur fc": "tottenham",
-            "wolverhampton wanderers fc": "wolverhampton",
             # Spain (La Liga)
             "alaves": "alaves",
             "deportivo alaves": "alaves",
@@ -191,7 +194,9 @@ class StatisticsService:
             "as roma": "roma",
             "juventus fc": "juventus",
             "us cremonese": "cremonese",
-            "ac pisa 1909": "pisa",  # Added based on debug output (though Pisa is Serie B usually, might be cup or promotion)
+            # Added based on debug output (though Pisa is Serie B usually,
+            # might be cup or promotion)
+            "ac pisa 1909": "pisa",
             # France
             "racing club de lens": "lens",
             "rc lens": "lens",
@@ -243,16 +248,18 @@ class StatisticsService:
             "fc arouca": "arouca",
             "gd estoril praia": "estoril",
             "cf estrela da amadora": "estrela",
-            "sporting clube de braga": "braga",
-            "sc braga": "braga",
+            "sporting clube de braga": "sp braga",  # Canonicalized to CSV form
+            "sporting braga": "sp braga",
+            "sc braga": "sp braga",
+            "braga": "sp braga",
             "cd santa clara": "santa clara",
             "gil vicente fc": "gil vicente",
             "fc famalicão": "famalicao",
             "famalicao": "famalicao",
             "casa pia ac": "casa pia",
-            "vitória sc": "guimaraes",
-            "vitoria sc": "guimaraes",
-            "vitoria guimaraes": "guimaraes",
+            "vitória sc": "vitoriaguimaraes",
+            "vitoria sc": "vitoriaguimaraes",
+            "vitoria guimaraes": "vitoriaguimaraes",
             "gd chaves": "chaves",
             "portimonense sc": "portimonense",
             "fc vizela": "vizela",
@@ -261,19 +268,9 @@ class StatisticsService:
             "cd nacional": "nacional",
             "cd tondela": "tondela",
             "sport lisboa e benfica": "benfica",
-            "sl benfica": "benfica",
-            "sporting clube de braga": "sp braga",  # CSV is Sp Braga
-            "sporting braga": "sp braga",
-            "sc braga": "sp braga",
-            "braga": "sp braga",
-            "sporting cp": "sp lisbon",  # CSV is Sp Lisbon
-            "sporting clube de portugal": "sp lisbon",
             "sporting lisboa": "sp lisbon",
             "sporting lisbon": "sp lisbon",
             "sporting": "sp lisbon",
-            "vitoria sc": "vitoriaguimaraes",
-            "vitoria guimaraes": "vitoriaguimaraes",
-            "vitória sc": "vitoriaguimaraes",
             # Belgium (Jupiler Pro League)
             "club brugge kv": "club brugge",
             "club brugge": "club brugge",
@@ -327,7 +324,6 @@ class StatisticsService:
             "pec zwolle": "zwolle",
             "psv eindhoven": "psv eindhoven",
             "psv": "psv eindhoven",  # API "PSV" -> CSV "PSV Eindhoven"
-            "sbv excelsior": "excelsior",
             "feyenoord rotterdam": "feyenoord",
             "feyenoord": "feyenoord",
             "heracles almelo": "heracles",
@@ -552,8 +548,10 @@ class StatisticsService:
                 continue
 
             # Use STRICT comparison for statistics to ensure data integrity.
-            # Fuzzy matching (_is_team_match) is only for search UIs, not for calculating historical stats.
-            # This prevents "Real Madrid" stats from being polluted by "Atletico Madrid" or "Inter Milan" by "Milan".
+            # Fuzzy matching (_is_team_match) is only for search UIs, not for
+            # calculating historical stats.
+            # This prevents "Real Madrid" stats from being polluted by "Atletico Madrid"
+            # or "Inter Milan" by "Milan".
             home_norm = StatisticsService._normalize_name(match.home_team.name)
             away_norm = StatisticsService._normalize_name(match.away_team.name)
 
@@ -628,7 +626,8 @@ class StatisticsService:
                 matches_with_shots += 1
             if sot is not None:
                 total_shots_on_target += sot
-                # matches_with_shots counter handles both usually, but let's assume they come together
+                # matches_with_shots counter handles both usually, but let's assume they
+                # come together
 
             fouls = match.home_fouls if is_home else match.away_fouls
             if fouls is not None:
