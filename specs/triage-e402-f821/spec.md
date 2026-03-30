@@ -35,3 +35,8 @@ Tareas mínimas de implementación
 1. Crear rama `fix/imports/train_model_optimized` y mover/corregir imports.
 2. Repetir para `dependencies.py` y otros archivos prioritarios.
 3. Ejecutar lints y tests localmente; abrir PRs atómicas.
+
+Estado
+------
+✅ Implementado — `backend/src/dependencies.py` corregido en commit `969e672`.
+Todos los imports movidos al tope del módulo; errores E402/F821 resueltos.
