@@ -95,10 +95,10 @@ class GetSuggestedPicksUseCase:
             # 2. Get historical matches (Aggregated: CSV + OpenFootball + APIs)
             if pre_fetched_history is not None:
                 historical_matches = pre_fetched_history
-                data_sources_used = ["Bulk Pre-fetch"]
+                _data_sources_used = ["Bulk Pre-fetch"]
             else:
                 historical_matches = await self._get_historical_matches(match)
-                data_sources_used = ["Historical Data"]
+                _data_sources_used = ["Historical Data"]
 
             # 3. Calculate team statistics
             # These will containMP=0 if no history found, but service handles it.
@@ -122,11 +122,15 @@ class GetSuggestedPicksUseCase:
             home_elo, away_elo = None, None
             try:
                 # Get real-time odds (Now integrated from Match details via ESPN)
-                # If match has odds, we use them as "rt_odds" format for the prediction service
+                # If match has odds, we use them as "rt_odds" format for the prediction
+                # service
                 if match.home_odds and match.away_odds:
-                    # Construct odds dictionary in format expected by PredictionService/PicksService
-                    # The Service expects a dictionary where keys might be bookmakers or outcomes?
-                    # The original code produced: {outcome_name: price} e.g. {"Arsenal": 1.5, "Chelsea": 4.0}
+                    # Construct odds dictionary in format expected by
+                    # PredictionService/PicksService
+                    # The Service expects a dictionary where keys might be bookmakers or
+                    # outcomes?
+                    # The original code produced: {outcome_name: price} e.g. {"Arsenal":
+                    # 1.5, "Chelsea": 4.0}
                     # To be compatible, we should use Team Names.
                     rt_odds = {
                         match.home_team.name: match.home_odds,
@@ -141,7 +145,7 @@ class GetSuggestedPicksUseCase:
                 )
 
             except Exception as e:
-                logger.warning(f"Secondary data enrichment failed: {e}")
+                logger.warning("Secondary data enrichment failed: %s", e)
 
             # Define sources used
             prediction_sources = ["Historical Data"]
@@ -190,7 +194,7 @@ class GetSuggestedPicksUseCase:
             )
 
             # Leverage existing mapping logic from live predictions for consistency
-            temp_use_case = GetLivePredictionsUseCase(
+            _temp_use_case = GetLivePredictionsUseCase(
                 self.data_sources,
                 self.prediction_service,
                 self.statistics_service,
@@ -228,7 +232,7 @@ class GetSuggestedPicksUseCase:
             # Build Prediction DTO (optional for internal consistency)
             from src.application.dtos.dtos import PredictionDTO
 
-            pred_dto = PredictionDTO(
+            _pred_dto = PredictionDTO(
                 match_id=match.id,
                 home_win_probability=prediction.home_win_probability,
                 draw_probability=prediction.draw_probability,
@@ -256,7 +260,7 @@ class GetSuggestedPicksUseCase:
             )
 
         except InsufficientDataException as e:
-            logger.info(f"Skipping prediction for {match_id}: {e}")
+            logger.info("Skipping prediction for %s: %s", match_id, e)
             from src.utils.time_utils import get_current_time
 
             return MatchSuggestedPicksDTO(
@@ -269,7 +273,10 @@ class GetSuggestedPicksUseCase:
             )
         except Exception as e:
             logger.error(
-                f"Error in suggested picks execution for {match_id}: {e}", exc_info=True
+                "Error in suggested picks execution for %s: %s",
+                match_id,
+                e,
+                exc_info=True,
             )
             # Return empty DTO instead of None to avoid 500 validation error
             from src.utils.time_utils import get_current_time
@@ -294,7 +301,8 @@ class GetSuggestedPicksUseCase:
             )
             if match:
                 return match
-        # This is vital when the account is suspended/limited but we already fetched the list
+        # This is vital when the account is suspended/limited but we already fetched the
+        # list
         try:
             from src.infrastructure.cache.cache_service import get_cache_service
 
@@ -306,7 +314,8 @@ class GetSuggestedPicksUseCase:
                     for lp in live_preds:
                         if str(lp.match.id) == str(match_id):
                             logger.info(
-                                f"✓ Found match {match_id} in live_matches cache fallback"
+                                "✓ Found match %s in live_matches cache fallback",
+                                match_id,
                             )
                             # Convert DTO back to Entity (minimal version)
                             from src.domain.entities.entities import League, Team
@@ -330,7 +339,7 @@ class GetSuggestedPicksUseCase:
                                 status=lp.match.status or "NS",
                             )
         except Exception as e:
-            logger.warning(f"Live matches cache fallback failed for {match_id}: {e}")
+            logger.warning("Live matches cache fallback failed for %s: %s", match_id, e)
 
         # Final Fallback: Reconstruct from ID if it follows our custom format
         # Format: {LeagueCode}_{YYYYMMDD}_{Home}_{Away}
@@ -363,13 +372,15 @@ class GetSuggestedPicksUseCase:
             # The Stats Service handles fuzzy matching usually.
 
             # Heuristic: Split remaining into two halves? No.
-            # Let's look at the specific ID: B1_20260207_sporting_charleroi_cercle_brugge
+            # Let's look at the specific ID:
+            # B1_20260207_sporting_charleroi_cercle_brugge
             # sporting_charleroi (2 words)
             # cercle_brugge (2 words)
 
             # We can't perfectly separate them without knowing the teams.
             # However, we can return a "Skeleton Match" and let the History Aggregator
-            # find the real teams using the fuzzy search on the Combined string or specific history fetch.
+            # find the real teams using the fuzzy search on the Combined string or
+            # specific history fetch.
 
             # Actually, let's look at how the ID was likely constructed.
             # If we assume the middle is the split... no.
@@ -409,7 +420,9 @@ class GetSuggestedPicksUseCase:
             )
 
             logger.info(
-                f"Reconstructed synthetic match from ID: {home_name} vs {away_name}"
+                "Reconstructed synthetic match from ID: %s vs %s",
+                home_name,
+                away_name,
             )
 
             return Match(
@@ -424,7 +437,7 @@ class GetSuggestedPicksUseCase:
             )
 
         except Exception as e:
-            logger.warning(f"Failed to reconstruct match from ID {match_id}: {e}")
+            logger.warning("Failed to reconstruct match from ID %s: %s", match_id, e)
             return None
 
     async def _get_historical_matches(self, match: Match) -> list[Match]:
@@ -458,7 +471,10 @@ class GetSuggestedPicksUseCase:
                 pass
 
         logger.info(
-            f"Aggregating data for {match.home_team.name} vs {match.away_team.name} (League: {internal_league_code})"
+            "Aggregating data for %s vs %s (League: %s)",
+            match.home_team.name,
+            match.away_team.name,
+            internal_league_code,
         )
 
         tasks = []
@@ -482,12 +498,14 @@ class GetSuggestedPicksUseCase:
             if isinstance(result, list):
                 all_matches.extend(result)
             elif isinstance(result, Exception):
-                logger.warning(f"Error in data source fetch: {result}")
+                logger.warning("Error in data source fetch: %s", result)
 
         # 4. Unify and Deduplicate
         unified_matches = self._deduplicate_and_merge(all_matches)
         logger.info(
-            f"Data Aggregation: {len(all_matches)} raw matches -> {len(unified_matches)} unique unified matches"
+            "Data Aggregation: %s raw matches -> %s unique unified matches",
+            len(all_matches),
+            len(unified_matches),
         )
 
         return unified_matches
@@ -529,7 +547,8 @@ class GetSuggestedPicksUseCase:
         # Strategy B: Football-Data.org
         if self.data_sources.football_data_org.is_configured:
             try:
-                # Football-Data.org uses names for history fetch in this project's implementation
+                # Football-Data.org uses names for history fetch in this project's
+                # implementation
                 h_hist = await self.data_sources.football_data_org.get_team_history(
                     match.home_team.name, limit=10
                 )
@@ -538,7 +557,7 @@ class GetSuggestedPicksUseCase:
                 )
                 team_matches.extend(h_hist + a_hist)
             except Exception as e:
-                logger.warning(f"Football-Data.org history fetch failed: {e}")
+                logger.warning("Football-Data.org history fetch failed: %s", e)
 
         return team_matches
 
@@ -721,7 +740,7 @@ class GetTopMLPicksUseCase:
             else:
                 active_preds = self.persistence_repository.get_all_active_predictions()
 
-            all_picks = []
+            _all_picks = []
 
             from src.application.dtos.dtos import SuggestedPickDTO, TopMLPicksDTO
 
@@ -748,7 +767,9 @@ class GetTopMLPicksUseCase:
                             m_date = datetime.fromisoformat(m_date)
                         except (ValueError, AttributeError) as e:
                             logger.warning(
-                                f"Could not parse date {match_date_str}: {e}"
+                                "Could not parse date %s: %s",
+                                match_date_str,
+                                e,
                             )
                             continue
                         if m_date.tzinfo is None:
@@ -777,12 +798,14 @@ class GetTopMLPicksUseCase:
                         ):
                             continue  # Skip past and finished matches
                     except Exception as e:
-                        logger.warning(f"Error parsing date {match_date_str}: {e}")
+                        logger.warning("Error parsing date %s: %s", match_date_str, e)
 
                 picks = prediction.get("suggested_picks", [])
 
-                match_label = f"{match_info.get('home_team', {}).get('name', '')} vs {match_info.get('away_team', {}).get('name', '')}"
-                match_id = match_info.get("id")
+                home_name = match_info.get("home_team", {}).get("name", "")
+                away_name = match_info.get("away_team", {}).get("name", "")
+                match_label = f"{home_name} vs {away_name}"
+                _match_id = match_info.get("id")
 
                 # Local sorting to find the best pick for THIS match
                 match_picks_objects = []
@@ -836,5 +859,5 @@ class GetTopMLPicksUseCase:
             return TopMLPicksDTO(picks=top_picks, generated_at=get_current_time())
 
         except Exception as e:
-            logger.error(f"Error generating Top ML Picks: {e}", exc_info=True)
+            logger.error("Error generating Top ML Picks: %s", e, exc_info=True)
             return None

@@ -124,7 +124,8 @@ class PredictionService:
             avg_goals_conceded = league_averages.avg_away_goals
 
             if avg_goals_scored <= 0 or avg_goals_conceded <= 0:
-                # If we have no baseline, we cannot calculate relative strength components.
+                # If we have no baseline, we cannot calculate relative strength
+                # components.
                 # Since generate_prediction already guards for insufficient data,
                 # this is a protective fallback to avoid ZeroDivisionError.
                 return TeamStrength(attack_strength=1.0, defense_strength=1.0)
@@ -133,14 +134,15 @@ class PredictionService:
             if team_stats.home_matches_played >= 3:
                 attack = team_stats.home_goals_per_match / avg_goals_scored
                 defense = team_stats.home_goals_conceded_per_match / avg_goals_conceded
-                season_avg_attack = team_stats.home_goals_per_match
-                season_avg_defense = team_stats.home_goals_conceded_per_match
+                _season_avg_attack = team_stats.home_goals_per_match
+                _season_avg_defense = team_stats.home_goals_conceded_per_match
             else:
-                # Fallback to overall stats but slightly penalized for lack of venue data
+                # Fallback to overall stats but slightly penalized for lack of venue
+                # data
                 attack = team_stats.goals_per_match / avg_goals_scored
                 defense = team_stats.goals_conceded_per_match / avg_goals_conceded
-                season_avg_attack = team_stats.goals_per_match
-                season_avg_defense = team_stats.goals_conceded_per_match
+                _season_avg_attack = team_stats.goals_per_match
+                _season_avg_defense = team_stats.goals_conceded_per_match
         else:
             # Away Attack vs League Avg Away Goals
             avg_goals_scored = league_averages.avg_away_goals
@@ -154,13 +156,13 @@ class PredictionService:
             if team_stats.away_matches_played >= 3:
                 attack = team_stats.away_goals_per_match / avg_goals_scored
                 defense = team_stats.away_goals_conceded_per_match / avg_goals_conceded
-                season_avg_attack = team_stats.away_goals_per_match
-                season_avg_defense = team_stats.away_goals_conceded_per_match
+                _season_avg_attack = team_stats.away_goals_per_match
+                _season_avg_defense = team_stats.away_goals_conceded_per_match
             else:
                 attack = team_stats.goals_per_match / avg_goals_scored
                 defense = team_stats.goals_conceded_per_match / avg_goals_conceded
-                season_avg_attack = team_stats.goals_per_match
-                season_avg_defense = team_stats.goals_conceded_per_match
+                _season_avg_attack = team_stats.goals_per_match
+                _season_avg_defense = team_stats.goals_conceded_per_match
 
         # Apply form factor adjustment based on recent performance (last 5 matches)
         # Extract goals from recent_form to analyze momentum
@@ -357,7 +359,8 @@ class PredictionService:
             home_strength: Home team's strength
             away_strength: Away team's strength
             league_averages: League average goals
-            home_lineup_factor: 0.0-1.0 factor representing squad availability (1.0 = Full Squad)
+            home_lineup_factor: 0.0-1.0 factor representing squad availability.
+                (1.0 = Full Squad)
             away_lineup_factor: 0.0-1.0 factor representing squad availability
 
         Returns:
@@ -563,7 +566,8 @@ class PredictionService:
         If odds drop, probability increases.
 
         Returns:
-            Factor to adjust probability (1.0 = Neutral, >1.0 = Market likes this outcome)
+            Factor to adjust probability (1.0 = Neutral).
+            Values >1.0 indicate the market favors this outcome.
         """
         if not current_odds or not opening_odds:
             return 1.0
@@ -671,7 +675,8 @@ class PredictionService:
                 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 
                 # Create dummy pick for context (needed by extractor signature)
-                # MUST use MarketType.WINNER to match feature hash used in training (reg_corners)
+                # MUST use MarketType.WINNER to match feature hash used in training
+                # (reg_corners)
                 dummy_pick = SuggestedPick(
                     market_type=MarketType.WINNER,
                     market_label="Generic",
@@ -814,7 +819,8 @@ class PredictionService:
                 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 
                 # Create dummy pick for context (needed by extractor signature)
-                # MUST use MarketType.WINNER to match feature hash used in training (reg_cards)
+                # MUST use MarketType.WINNER to match feature hash used in training
+                # (reg_cards)
                 dummy_pick = SuggestedPick(
                     market_type=MarketType.WINNER,
                     market_label="Generic",
@@ -1004,9 +1010,12 @@ class PredictionService:
         w_entropy = (
             0.50  # Increased from 0.40 - Trust the model's output distribution more
         )
-        w_quality = 0.25  # Decreased from 0.45 - Since we have 10y data, this is less differentiating
-        w_odds = 0.10  # Increased from 0.05 - Respect market efficiency slightly more
-        w_form = 0.15  # Increased from 0.10 - Recent form matters more in long-term avg context
+        # Decreased from 0.45 because we have 10y data (less differentiating)
+        w_quality = 0.25
+        # Increased from 0.05 to respect market efficiency slightly more
+        w_odds = 0.10
+        # Increased from 0.10: recent form matters more in long-term avg context
+        w_form = 0.15
 
         if not has_odds_data:
             # Distribute 0.10 odds weight: 0.05 to quality, 0.05 to form
@@ -1088,18 +1097,29 @@ class PredictionService:
         # STRICT RULE: NO DATA = NO PREDICTION
         if not home_stats or not away_stats:
             raise InsufficientDataException(
-                f"Missing team statistics for {match.home_team.name} vs {match.away_team.name}"
+                "Missing team statistics for %s vs %s"
+                % (match.home_team.name, match.away_team.name)
             )
 
         home_played = home_stats.matches_played
         away_played = away_stats.matches_played
 
-        # logger.debug(f"DEBUG: {match.home_team.name} ({home_played}) vs {match.away_team.name} ({away_played}) | min_matches={min_matches}")
+        # logger.debug(f"DEBUG: {match.home_team.name} ({home_played}) vs
+        # {match.away_team.name} ({away_played}) | min_matches={min_matches}")
 
         if home_played < min_matches or away_played < min_matches:
             raise InsufficientDataException(
-                f"Insufficient historical data: {match.home_team.name} ({home_played} matches) "
-                f"or {match.away_team.name} ({away_played} matches) below threshold of {min_matches}"
+                (
+                    "Insufficient historical data: %s (%s matches) or %s (%s matches) "
+                    "below threshold of %s"
+                )
+                % (
+                    match.home_team.name,
+                    home_played,
+                    match.away_team.name,
+                    away_played,
+                    min_matches,
+                )
             )
 
         # If league_averages is None, use a default global average
@@ -1114,24 +1134,24 @@ class PredictionService:
         # Baseline Confidence
         h_played = home_stats.matches_played if home_stats else 0
         a_played = away_stats.matches_played if away_stats else 0
-        avg_played = (h_played + a_played) / 2
-        base_confidence = (
+        _avg_played = (h_played + a_played) / 2
+        _base_confidence = (
             0.5  # Start with neutral 50% confidence for baseline predictions
         )
 
         # If we have odds, we'll use them as a factor later (market implied)
-        market_probs = None
+        _market_probs = None
         if match.home_odds and match.draw_odds and match.away_odds:
             odds = Odds(
                 home=match.home_odds, draw=match.draw_odds, away=match.away_odds
             )
-            market_probs = odds.to_probabilities()
+            _market_probs = odds.to_probabilities()
             if not data_sources:
                 data_sources = []
             if "Mercado de Apuestas (Odds)" not in data_sources:
                 data_sources.append("Mercado de Apuestas (Odds)")
             # Boost confidence slightly if we have market verification
-            base_confidence = 0.55
+            _base_confidence = 0.55
         # Calculate team strengths (using REAL data only)
         home_strength = self.calculate_team_strength(
             home_stats, league_averages, is_home=True
@@ -1143,7 +1163,8 @@ class PredictionService:
 
         # 1. LINEUP FACTOR: Penalize for missing players
         # Heuristic: Each missing key player reduces effectiveness by ~7%
-        # Cap at 30% reduction (0.7) to avoid over-penalizing without knowing who exactly
+        # Cap at 30% reduction (0.7) to avoid over-penalizing without knowing who
+        # exactly
         home_lineup_factor = max(0.7, 1.0 - (home_missing_players * 0.07))
         away_lineup_factor = max(0.7, 1.0 - (away_missing_players * 0.07))
 
@@ -1214,7 +1235,8 @@ class PredictionService:
                 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 
                 # Create dummy pick for context
-                # MUST use MarketType.WINNER to match feature hash used in training (clf_outcome)
+                # MUST use MarketType.WINNER to match feature hash used in training
+                # (clf_outcome)
                 dummy_pick = SuggestedPick(
                     market_type=MarketType.WINNER,
                     market_label="Generic",
@@ -1347,8 +1369,10 @@ class PredictionService:
             timestamps.append(away_stats.data_updated_at)
 
         if timestamps:
-            # Use the oldest timestamp to be conservative (data is only as fresh as its oldest component)
-            # OR use newest? Usually they are from same source/time. Let's use max (newest) as it indicates when check was done.
+            # Use the oldest timestamp to be conservative (data is only as fresh as its
+            # oldest component)
+            # OR use newest? Usually they are from same source/time. Let's use max
+            # (newest) as it indicates when check was done.
             data_updated_at = max(timestamps)
 
         return Prediction(

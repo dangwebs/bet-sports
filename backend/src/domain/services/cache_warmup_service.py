@@ -45,17 +45,20 @@ class CacheWarmupService:
             # Default priority leagues (§15.B compliant - 6 top-tier only)
             league_ids = ["E0", "SP1", "D1", "I1", "F1", "P1"]
 
-        logger.info(f"🔥 Starting Unified Cache Warmup for {len(league_ids)} leagues...")
+        logger.info(
+            "🔥 Starting Unified Cache Warmup for %s leagues...",
+            len(league_ids),
+        )
 
         # We process sequentially to avoid CPU/RAM spikes on low-resource servers
         for league_id in league_ids:
             try:
-                logger.info(f"🔥 Warming up league: {league_id}")
+                logger.info("🔥 Warming up league: %s", league_id)
                 # Execute handles Cache -> Persistence -> Real-time logic
                 await self.use_case.execute(league_id, limit=30)
                 # Small sleep to yield to other tasks
                 await asyncio.sleep(1)
             except Exception as e:
-                logger.error(f"Failed to warm up league {league_id}: {e}")
+                logger.error("Failed to warm up league %s: %s", league_id, e)
 
         logger.info("🔥 Cache Warmup Complete.")

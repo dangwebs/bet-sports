@@ -2,9 +2,10 @@
 Match Aggregator Service
 
 This domain service is responsible for:
-1. Fetching historical matches from all available data sources (UK, Org, Open) in parallel.
+1. Fetching historical matches from all available data sources
+    (UK, Org, Open) in parallel.
 2. Fetching upcoming matches from all available data sources.
-3. Merging and deduplicating match data, prioritizing richest data sources.
+3. Merging and deduplicating match data, prioritizing the richest sources.
 4. Implementing strict aggregation rules as per project standards.
 5. Enforcing Data Sanity (Refactoring Rule 13).
 """
@@ -44,9 +45,10 @@ class MatchAggregatorService:
         self, league_id: str, seasons: List[str]
     ) -> List[Match]:
         """
-        Fetch historical matches from ALL sources in parallel, merge them, and validate sanity.
+        Fetch historical matches from ALL sources in parallel, merge them,
+        and validate sanity.
         """
-        logger.info(f"Aggregating history for {league_id} from all sources...")
+        logger.info("Aggregating history for %s from all sources...", league_id)
 
         # Define parallel tasks
         tasks = []
@@ -118,9 +120,9 @@ class MatchAggregatorService:
         )
 
         if isinstance(results[0], Exception):
-            logger.warning(f"UK Source Error: {results[0]}")
+            logger.warning("UK Source Error: %s", results[0])
         if isinstance(results[2], Exception):
-            logger.warning(f"ESPN Source Error: {results[2]}")
+            logger.warning("ESPN Source Error: %s", results[2])
 
         # Merge
         merged_matches = self._merge_matches(
@@ -138,7 +140,8 @@ class MatchAggregatorService:
 
         if rejected_count > 0:
             logger.warning(
-                f"Rejected {rejected_count} matches due to Data Sanity violations (Outliers)."
+                "Rejected %s matches due to Data Sanity violations (Outliers).",
+                rejected_count,
             )
 
         return valid_matches
@@ -160,7 +163,8 @@ class MatchAggregatorService:
             return False
 
         # 3. Date sanity (Future date for finished match?)
-        # if match.status == "FT" and match.match_date > datetime.now(...) # Handled elsewhere usually
+        # if match.status == "FT" and match.match_date > datetime.now(...) # Handled
+        # elsewhere usually
 
         return True
 
@@ -173,8 +177,10 @@ class MatchAggregatorService:
     ) -> List[Match]:
         """
         Merge strategy: UK > Org > ESPN > Open.
-        CRITICAL REFACTOR: Performs Deep Merge (Enrichment) instead of simple deduplication.
-        If a match exists, we fill in missing fields (Corners, Cards, Referee) from secondary sources.
+        CRITICAL REFACTOR: Performs Deep Merge (Enrichment) instead of
+        simple deduplication.
+        If a match exists, we fill in missing fields (Corners, Cards,
+        Referee) from secondary sources.
         """
         merged = {}
         from src.domain.services.statistics_service import StatisticsService
@@ -248,7 +254,12 @@ class MatchAggregatorService:
         c_open = process_list(open_src or [], "Open")
 
         logger.info(
-            f"Merged History: UK={c_uk}, Org={c_org}, ESPN={c_espn}, Open={c_open}. Unique Total={len(merged)}"
+            "Merged History: UK=%s, Org=%s, ESPN=%s, Open=%s. Unique Total=%s",
+            c_uk,
+            c_org,
+            c_espn,
+            c_open,
+            len(merged),
         )
         return list(merged.values())
 
@@ -315,7 +326,8 @@ class MatchAggregatorService:
         for m in matches:
             # Sanity Check for Upcoming
             odds_sane = True
-            # Check odds if present (e.g. < 1.01) - Not always available in 'Match' entity here, usually later in Enrichment
+            # Check odds if present (e.g. < 1.01) - Not always available in 'Match'
+            # entity here, usually later in Enrichment
 
             m_date = m.match_date
             if m_date.tzinfo is None:

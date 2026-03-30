@@ -320,8 +320,8 @@ class GetLivePredictionsUseCase:
         if cached_pred is not None:
             return cached_pred
 
-        # Get internal league code
-        internal_code = self._get_internal_league_code(match)
+        # Get internal league code (not currently used directly)
+        _internal_code = self._get_internal_league_code(match)
 
         # 1. Try to get deep stats from Unified Cache (10 years)
         training_results = self.cache_service.get("ml_training_result_data")

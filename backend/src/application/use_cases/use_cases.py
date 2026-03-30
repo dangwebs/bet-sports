@@ -154,8 +154,10 @@ class GetPredictionsUseCase:
         # Load ML Model for Rigorous Probability Calculation
         self.ml_model = None
         try:
-            # Path relative to backend/src/application/use_cases/ -> backend/ml_picks_classifier.joblib
-            # Based on orchestrator path: backend/src/application/services/../../../ml_picks_classifier.joblib
+            # Path relative to backend/src/application/use_cases/ ->
+            # backend/ml_picks_classifier.joblib
+            # Based on orchestrator path:
+            # backend/src/application/services/../../../ml_picks_classifier.joblib
             model_path = os.path.abspath(
                 os.path.join(
                     os.path.dirname(__file__),
@@ -173,11 +175,13 @@ class GetPredictionsUseCase:
             if os.path.exists(model_path):
                 self.ml_model = joblib.load(model_path)
                 logger.info(
-                    f"✅ Loaded ML Model for rigorous probabilities from {model_path}"
+                    "✅ Loaded ML Model for rigorous probabilities from %s",
+                    model_path,
                 )
             else:
                 logger.warning(
-                    f"⚠️ ML Model not found at {model_path}. Using heuristic probabilities."
+                    "⚠️ ML Model not found at %s. Using heuristic probabilities.",
+                    model_path,
                 )
         except Exception as e:
             logger.error(f"❌ Failed to load ML model: {e}")
@@ -230,7 +234,8 @@ class GetPredictionsUseCase:
             if cached_response and db_last_updated:
                 try:
                     # Use 'generated_at' from cache or a specific 'cached_db_timestamp'
-                    # PredictionsResponseDTO.generated_at is ISO string if cached as dict
+                    # PredictionsResponseDTO.generated_at is ISO string if cached as
+                    # dict
 
                     if cached_response.get("generated_at"):
                         from datetime import datetime as dt
@@ -265,12 +270,19 @@ class GetPredictionsUseCase:
                         # Add a small buffer (e.g. 10 seconds) to avoid race conditions
                         if db_last_updated > (gen_at + timedelta(seconds=10)):
                             logger.info(
-                                f"🔄 Cache stale for {league_id} (DB: {db_last_updated} > Cache: {gen_at}). Refreshing..."
+                                "🔄 Cache stale for %s (DB: %s > Cache: %s). "
+                                "Refreshing...",
+                                league_id,
+                                db_last_updated,
+                                gen_at,
                             )
                             is_stale = True
                         else:
                             logger.info(
-                                f"✓ Cache valid for {league_id}. DB: {db_last_updated} <= Cache: {gen_at}"
+                                "✓ Cache valid for %s. DB: %s <= Cache: %s",
+                                league_id,
+                                db_last_updated,
+                                gen_at,
                             )
                 except Exception as e:
                     logger.warning(f"Error comparing cache vs db timestamp: {e}")
@@ -278,15 +290,21 @@ class GetPredictionsUseCase:
                     if db_data:
                         is_stale = True
 
-            if cached_response and not is_stale:
-                logger.info(f"Serving cached (ephemeral) predictions for {league_id}")
-                response = PredictionsResponseDTO(**cached_response)
+                if cached_response and not is_stale:
+                    logger.info(
+                        "Serving cached (ephemeral) predictions for %s",
+                        league_id,
+                    )
+                    response = PredictionsResponseDTO(**cached_response)
 
                 # STRICT DATE FILTERING (even for cache)
                 filtered = self._filter_future_matches(response.predictions)
                 if len(filtered) != len(response.predictions):
+                    diff = len(response.predictions) - len(filtered)
                     logger.info(
-                        f"Filtered {len(response.predictions) - len(filtered)} past matches from cached {league_id}"
+                        "Filtered %s past matches from cached %s",
+                        diff,
+                        league_id,
                     )
                     response.predictions = filtered
 
@@ -295,7 +313,8 @@ class GetPredictionsUseCase:
             # 0.3 Try Persistent DB (PostgreSQL fallback)
             if db_data:
                 logger.info(
-                    f"Serving persistent (PostgreSQL) predictions for {league_id}"
+                    "Serving persistent (PostgreSQL) predictions for %s",
+                    league_id,
                 )
                 # Warm up ephemeral cache for next time
                 cache_service.set(cache_key, db_data, ttl_seconds=86400)
@@ -304,8 +323,11 @@ class GetPredictionsUseCase:
                 # STRICT DATE FILTERING
                 filtered = self._filter_future_matches(response.predictions)
                 if len(filtered) != len(response.predictions):
+                    diff = len(response.predictions) - len(filtered)
                     logger.info(
-                        f"Filtered {len(response.predictions) - len(filtered)} past matches from DB {league_id}"
+                        "Filtered %s past matches from DB %s",
+                        diff,
+                        league_id,
                     )
                     response.predictions = filtered
 
@@ -406,8 +428,10 @@ class GetPredictionsUseCase:
                 m_date = m_date.astimezone(now.tzinfo)
 
             # Allow a small buffer? No, strict future.
-            # If match started 1 second ago, it's not "upcoming" for prediction purposes usually,
-            # unless we support live. But user asked to "no enviar partidos que ya se jugaron".
+            # If match started 1 second ago, it's not "upcoming" for prediction purposes
+            # usually,
+            # unless we support live. But user asked to "no enviar partidos que ya se
+            # jugaron".
             if m_date > now:
                 filtered_upcoming.append(m)
 
@@ -487,7 +511,8 @@ class GetPredictionsUseCase:
                 if self.ml_model:
                     try:
                         # Construct Pseudo-Picks for Evaluation
-                        # We evaluate 5 key outcomes: Home, Draw, Away, Over 2.5, Under 2.5
+                        # We evaluate 5 key outcomes: Home, Draw, Away, Over 2.5, Under
+                        # 2.5
                         outcomes = [
                             (
                                 MarketType.WINNER,
@@ -498,7 +523,9 @@ class GetPredictionsUseCase:
                                 MarketType.WINNER,
                                 prediction.draw_probability,
                                 "Draw",
-                            ),  # Use WINNER for 1x2/Draw as generic Outcome type unless RESULT_1X2 is preferred
+                            ),
+                            # Use WINNER for 1x2/Draw as generic Outcome type
+                            # unless RESULT_1X2 is preferred
                             (
                                 MarketType.WINNER,
                                 prediction.away_win_probability,
@@ -520,10 +547,13 @@ class GetPredictionsUseCase:
                         valid_indices = []
 
                         for idx, (m_type, heuristic_prob, label) in enumerate(outcomes):
-                            # Create a dummy pick structure required by Feature Extractor
-                            # For Away win, we usually denote it distinctively, but FeatureExtractor
+                            # Create a dummy pick structure required by Feature
+                            # Extractor
+                            # For Away win, we usually denote it distinctively, but
+                            # FeatureExtractor
                             # relies mostly on probability and match stats.
-                            # IMPORTANT: FeatureExtractor doesn't explicitly distinguish Home/Away in checking
+                            # IMPORTANT: FeatureExtractor doesn't explicitly distinguish
+                            # Home/Away in checking
                             # unless we check the label or if it handles '1', '2', 'X'.
                             # Let's construct a minimal valid pick.
 
@@ -538,15 +568,21 @@ class GetPredictionsUseCase:
                             )
 
                             # Note: FeatureExtractor uses home_stats and away_stats.
-                            # If we are evaluating AWAY win, the "probability" passed is the Away Prob.
-                            # But FeatureExtractor logic for "Shot Dominance" (Home - Away) is static.
-                            # The model likely learned that "High Home Dominance + High Home Prob = Win".
-                            # If we pass "High Home Dominance + Low Away Prob", it might be confused
+                            # If we are evaluating AWAY win, the "probability" passed is
+                            # the Away Prob.
+                            # But FeatureExtractor logic for "Shot Dominance" (Home -
+                            # Away) is static.
+                            # The model likely learned that "High Home Dominance + High
+                            # Home Prob = Win".
+                            # If we pass "High Home Dominance + Low Away Prob", it might
+                            # be confused
                             # if we just label it "WINNER".
-                            # However, checking ml_feature_extractor.py, it specifically hashes the market_type string.
+                            # However, checking ml_feature_extractor.py, it specifically
+                            # hashes the market_type string.
                             # "Victoria Local", "Empate", "Victoria Visitante".
 
-                            # Let's be precise with labels to match training data likely format
+                            # Let's be precise with labels to match training data likely
+                            # format
                             if idx == 0:
                                 p.market_label = "Victoria Local"  # Home
                             elif idx == 1:
@@ -600,11 +636,15 @@ class GetPredictionsUseCase:
                                 )
 
                             # 3. SET CONFIDENCE = Max(Raw Probabilities)
-                            # We use the raw values (un-normalized) to capture true model certainty?
+                            # We use the raw values (un-normalized) to capture true
+                            # model certainty?
                             # Or normalized?
-                            # User said: "If model says 36% for Home, confidence is 36%".
-                            # So we typically use the probability of the most likely outcome.
-                            # Let's use the MAX of the normalized probabilities we just set.
+                            # User said: "If model says 36% for Home, confidence is
+                            # 36%".
+                            # So we typically use the probability of the most likely
+                            # outcome.
+                            # Let's use the MAX of the normalized probabilities we just
+                            # set.
                             prediction.confidence = max(
                                 prediction.home_win_probability,
                                 prediction.draw_probability,
@@ -619,12 +659,15 @@ class GetPredictionsUseCase:
 
                     except Exception as ml_err:
                         logger.warning(
-                            f"ML Probability Override failed for match {match.id}: {ml_err}"
+                            "ML Probability Override failed for match %s: %s",
+                            match.id,
+                            ml_err,
                         )
 
             except InsufficientDataException:
                 logger.warning(
-                    f"Insufficient data for match {match.id}. Skipping match-level prediction."
+                    "Insufficient data for match %s. Skipping match-level prediction.",
+                    match.id,
                 )
                 # Create a "Null" prediction to hold team-specific picks if any
                 prediction = Prediction(
@@ -644,7 +687,8 @@ class GetPredictionsUseCase:
                 logger.error(f"Error generating prediction for {match.id}: {e}")
                 continue
 
-            # Match level validity check is handled during assembly to allow team-only picks
+            # Match level validity check is handled during assembly to allow team-only
+            # picks
             pass
 
             # Calculate H2H
@@ -681,12 +725,12 @@ class GetPredictionsUseCase:
                     "predicted_away_corners": prediction.predicted_away_corners
                     if prediction
                     else 0.0,
-                    "predicted_home_yellow_cards": prediction.predicted_home_yellow_cards
-                    if prediction
-                    else 0.0,
-                    "predicted_away_yellow_cards": prediction.predicted_away_yellow_cards
-                    if prediction
-                    else 0.0,
+                    "predicted_home_yellow_cards": (
+                        prediction.predicted_home_yellow_cards if prediction else 0.0
+                    ),
+                    "predicted_away_yellow_cards": (
+                        prediction.predicted_away_yellow_cards if prediction else 0.0
+                    ),
                 },
             }
             match_tasks.append(task_data)
@@ -762,17 +806,21 @@ class GetPredictionsUseCase:
                     )
 
         # Apply Risk Logic (Circuit Breakers + Portfolio)
-        # Note: apply_portfolio_constraints modifies the 'pick' objects in-place (updating reasoning, capping stake)
+        # Note: apply_portfolio_constraints modifies the 'pick' objects in-place
+        # (updating reasoning, capping stake)
         # and returns the approved list.
         # Bypassed: We approve ALL candidates directly
         # approved_items = self.risk_manager.apply_portfolio_constraints(flat_picks_map)
         approved_items = flat_picks_map
 
-        # Re-organize back to structure (picks that were NOT approved are implicitly removed?
-        # Actually risk manager caps them or flags them. If fully rejected, we should remove.)
+        # Re-organize back to structure (picks that were NOT approved are implicitly
+        # removed?
+        # Actually risk manager caps them or flags them. If fully rejected, we should
+        # remove.)
 
         # Optimization: We only keep approved picks.
-        # But we need to update the original 'SuggestedPickResult' objects attached to matches_processing_data
+        # But we need to update the original 'SuggestedPickResult' objects attached to
+        # matches_processing_data
         # because those are used below in 'Assemble Results'.
 
         # Strategy: Clear all picks first, then add back approved ones
@@ -801,7 +849,8 @@ class GetPredictionsUseCase:
             # Convert to DTOs
             match_dto = self._match_to_dto(match)
 
-            # Inject projected stats (historical averages OR prediction fallbacks) for upcoming matches
+            # Inject projected stats (historical averages OR prediction fallbacks) for
+            # upcoming matches
             if match.status in ["NS", "TIMED", "SCHEDULED"]:
                 # Default to historical averages
                 h_corners = (
@@ -836,7 +885,8 @@ class GetPredictionsUseCase:
                     else 0
                 )
 
-                # If stats are zero (e.g. OpenFootball fallback), use Prediction Service projections
+                # If stats are zero (e.g. OpenFootball fallback), use Prediction Service
+                # projections
                 if h_corners == 0 and prediction:
                     h_corners = prediction.predicted_home_corners
                 if a_corners == 0 and prediction:
@@ -891,7 +941,8 @@ class GetPredictionsUseCase:
                     cache_key, response.model_dump()
                 )
 
-                # NEW: Massive inference storage (Individual match predictions for instant access)
+                # NEW: Massive inference storage (Individual match predictions for
+                # instant access)
                 prediction_batch = [
                     {
                         "match_id": p_dto.match.id,
@@ -903,10 +954,13 @@ class GetPredictionsUseCase:
                 ]
                 self.persistence_repository.bulk_save_predictions(prediction_batch)
                 logger.info(
-                    f"✓ Massively saved {len(predictions)} pre-calculated predictions for league {league_id} in PostgreSQL"
+                    "✓ Massively saved %s pre-calculated predictions for league %s "
+                    "in PostgreSQL",
+                    len(predictions),
+                    league_id,
                 )
         except Exception as e:
-            logger.warning(f"Failed to cache league predictions: {e}")
+            logger.warning("Failed to cache league predictions: %s", e)
 
         return response
 
@@ -1119,14 +1173,16 @@ class GetMatchDetailsUseCase:
 
                 # The data is already in the shape of MatchPredictionDTO (serialized)
                 # We just need to parse it back to DTO
-                # Note: The 'data' field in DB corresponds to the full MatchPredictionDTO model dump
+                # Note: The 'data' field in DB corresponds to the full
+                # MatchPredictionDTO model dump
                 # stored in GetPredictionsUseCase.execute -> bulk_save_predictions
 
                 return MatchPredictionDTO(**pred_data)
 
         except Exception as e:
             logger.error(f"Failed to fetch optimized prediction for {match_id}: {e}")
-            # Continue to fallback (although fallback is the heavy blob we want to avoid, we might keep it as last resort or just return None)
+            # Continue to fallback (although fallback is the heavy blob we want to
+            # avoid, we might keep it as last resort or just return None)
 
         # 3. Get historical data for context (for stats) - Standard Fallback
         historical_matches = []
@@ -1162,7 +1218,8 @@ class GetMatchDetailsUseCase:
             # 2b. If no CSV data, try OpenFootball
             if not historical_matches and self.data_sources.openfootball:
                 try:
-                    # Construct a league entity with the internal ID for OpenFootball lookup
+                    # Construct a league entity with the internal ID for OpenFootball
+                    # lookup
                     # (OpenFootballSource uses league.id to find the file)
                     from src.domain.entities.entities import League
 
@@ -1189,7 +1246,8 @@ class GetMatchDetailsUseCase:
             match.away_team.name, historical_matches
         )
 
-        # Calculate league averages from history to enable fallback picks (Corners/Cards)
+        # Calculate league averages from history to enable fallback picks
+        # (Corners/Cards)
         league_averages = self.statistics_service.calculate_league_averages(
             historical_matches
         )
@@ -1207,7 +1265,8 @@ class GetMatchDetailsUseCase:
         except InsufficientDataException as e:
             logger.warning(f"Insufficient data for match details {match_id}: {e}")
             # Map exception to a clear message in the DTO or handle as None
-            # For match details, it's better to return a "Skeleton" prediction with zero probs
+            # For match details, it's better to return a "Skeleton" prediction with zero
+            # probs
             from src.utils.time_utils import get_current_time
 
             return MatchPredictionDTO(
@@ -1432,7 +1491,10 @@ class GetTeamPredictionsUseCase:
                 if internal_league_code:
                     try:
                         # Fetch history (cached by service potentially)
-                        historical_matches = await self.data_sources.football_data_uk.get_historical_matches(
+                        get_hist = (
+                            self.data_sources.football_data_uk.get_historical_matches
+                        )
+                        historical_matches = await get_hist(
                             internal_league_code,
                             seasons=["2425", "2324"],
                         )
@@ -1756,7 +1818,8 @@ class GetGlobalLiveMatchesUseCase:
                     draw_odds=match.draw_odds,
                     away_odds=match.away_odds,
                     minute=match.minute,
-                    # Extended Stats (MatchDTO validator handles consistency, but we pass them here)
+                    # Extended Stats (MatchDTO validator handles consistency, but we
+                    # pass them here)
                     home_shots_on_target=match.home_shots_on_target,
                     away_shots_on_target=match.away_shots_on_target,
                     home_total_shots=match.home_total_shots,
@@ -1792,7 +1855,9 @@ class GetGlobalLiveMatchesUseCase:
                 filtered_dtos.append(match_dto)
 
         logger.info(
-            f"Global Live Matches: {len(dtos)} -> {len(filtered_dtos)} (Filtered past matches)"
+            "Global Live Matches: %s -> %s (Filtered past matches)",
+            len(dtos),
+            len(filtered_dtos),
         )
 
         # 4. Persistence: Index live matches for the Explorer
@@ -1860,9 +1925,12 @@ class GetGlobalDailyMatchesUseCase:
             )  # Temporary fallback if no specific daily
 
         # 2. Football-Data.org (Need to implement get_matches with date range)
-        # Currently no direct 'get_daily_matches', but we can assume 'upcoming' covers today if scheduled
-        # Skipping to avoid complexity for now, relying on API-Football for strict daily list
-        # or we could add specific date query to football_data_org but it has strict rate limits.
+        # Currently no direct 'get_daily_matches', but we can assume 'upcoming' covers
+        # today if scheduled
+        # Skipping to avoid complexity for now, relying on API-Football for strict daily
+        # list
+        # or we could add specific date query to football_data_org but it has strict
+        # rate limits.
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 

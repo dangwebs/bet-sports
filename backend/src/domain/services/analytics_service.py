@@ -20,8 +20,8 @@ class AnalyticsService:
 
         Args:
             predictions: List of Prediction entities.
-                        Expected to have 'pick_type' (str) and 'status' (str) attributes.
-                        Status values expected: 'WON', 'LOST', 'VOID', 'PENDING'.
+                Expected to have 'pick_type' (str) and 'status' (str) attributes.
+                Status values expected: 'WON', 'LOST', 'VOID', 'PENDING'.
 
         Returns:
             List of dictionaries containing stats per pick type, sorted by efficiency.
@@ -55,7 +55,8 @@ class AnalyticsService:
         # Transform to list and calculate percentages
         result = []
         for p_type, data in stats.items():
-            # Efficiency = Won / (Won + Lost). Void bets are usually excluded from ROI/Strike Rate calc.
+            # Efficiency = Won / (Won + Lost). Void bets are usually excluded from
+            # ROI/Strike Rate calc.
             decisive_bets = data["won"] + data["lost"]
             efficiency = (
                 (data["won"] / decisive_bets * 100) if decisive_bets > 0 else 0.0

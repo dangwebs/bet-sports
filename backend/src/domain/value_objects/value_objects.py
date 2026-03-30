@@ -1,7 +1,8 @@
 """
 Domain Value Objects Module
 
-Value objects are immutable objects that are defined by their attributes rather than identity.
+Value objects are immutable objects that are defined by their attributes
+rather than identity.
 They encapsulate validation logic and provide type safety.
 """
 

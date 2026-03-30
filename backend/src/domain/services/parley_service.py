@@ -41,7 +41,8 @@ class ParleyService:
         parleys = self._combine_picks(eligible_picks, config)
 
         # 3. Sort/Rank parleys (e.g. by total probability or odds)
-        # We want to maximize return (odds) while respecting the min probability threshold (which is already done in filtering).
+        # We want to maximize return (odds) while respecting the min probability
+        # threshold (which is already done in filtering).
         # Let's sort by total odds descending (higher return).
         parleys.sort(key=lambda p: p.total_odds, reverse=True)
 
@@ -80,7 +81,8 @@ class ParleyService:
                 eligible_picks.append(top_ml_picks[0])
             else:
                 # 2. Fallback: Select highest probability pick (Safety net)
-                # User Requirement: "If no top ML picks, select the pick with highest probability"
+                # User Requirement: "If no top ML picks, select the pick with highest
+                # probability"
                 other_picks = [
                     p
                     for p in pred.prediction.suggested_picks
@@ -128,18 +130,24 @@ class ParleyService:
         for r in range(config.min_picks, config.max_picks + 1):
             # Generate a subset of combinations
             # To ensure we get *some* results if the pool is small, we just try all.
-            # If the pool is large, we might want to sample, but keeping pool small (25) handles this.
+            # If the pool is large, we might want to sample, but keeping pool small (25)
+            # handles this.
 
             combs = list(combinations(pool, r))
             random.shuffle(combs)  # Shuffle to give variety
 
             for combo in combs[:10]:  # Take a few from each size
-                # Validate combo: e.g. not having conflicting bets for same match (simplified here as we don't have match_id on SuggestedPick easily accessible without refactor,
-                # strictly speaking SuggestedPick should link back to Match. Assuming diverse enough pool for now).
+                # Validate combo: e.g. not having conflicting bets for same match
+                # (simplified here as we don't have match_id on SuggestedPick easily
+                # accessible without refactor,
+                # strictly speaking SuggestedPick should link back to Match. Assuming
+                # diverse enough pool for now).
 
                 # Note: In a robust system we MUST Ensure unique matches in a parley.
-                # Current SuggestedPick entity doesn't strictly enforce match_id reference.
-                # Use caution. We will skip this check for the MVP as per current entities
+                # Current SuggestedPick entity doesn't strictly enforce match_id
+                # reference.
+                # Use caution. We will skip this check for the MVP as per current
+                # entities
                 # or rely on market labels distinctness.
 
                 generated_parleys.append(Parley(picks=list(combo)))

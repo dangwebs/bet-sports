@@ -420,9 +420,7 @@ def main():
     )
 
     # Cleanup
-    parser_cleanup = subparsers.add_parser(
-        "cleanup", help="Clear ALL cached data before pipeline run"
-    )
+    subparsers.add_parser("cleanup", help="Clear ALL cached data before pipeline run")
 
     args = parser.parse_args()
 

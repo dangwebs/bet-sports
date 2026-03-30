@@ -90,7 +90,6 @@ class MLTrainingOrchestrator:
         )
 
         matches_processed = 0
-        correct_predictions = 0
         total_bets = 0
         total_staked = 0.0
         total_return = 0.0

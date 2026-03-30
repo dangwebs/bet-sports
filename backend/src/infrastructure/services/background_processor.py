@@ -23,10 +23,11 @@ def _init_worker():
     try:
         _picks_service = AIPicksService()
         logger.info(
-            f"Worker process initialized AIPicksService (PID: {multiprocessing.current_process().pid})"
+            "Worker process initialized AIPicksService (PID: %s)",
+            multiprocessing.current_process().pid,
         )
     except Exception as e:
-        logger.error(f"Failed to initialize worker PicksService: {e}")
+        logger.error("Failed to initialize worker PicksService: %s", e)
 
 
 def _process_match_task(
@@ -84,7 +85,10 @@ class BackgroundProcessor:
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=self.max_workers, initializer=_init_worker
         )
-        logger.info(f"BackgroundProcessor initialized with {self.max_workers} workers")
+        logger.info(
+            "BackgroundProcessor initialized with %s workers",
+            self.max_workers,
+        )
 
     async def process_matches_parallel(self, match_tasks: List[dict]) -> List[any]:
         """
@@ -120,7 +124,7 @@ class BackgroundProcessor:
         valid_results = []
         for r in results:
             if isinstance(r, Exception):
-                logger.error(f"Parallel execution error: {r}")
+                logger.error("Parallel execution error: %s", r)
             elif r:
                 valid_results.append(r)
 

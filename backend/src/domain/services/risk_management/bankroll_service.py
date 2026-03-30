@@ -82,7 +82,12 @@ class BankrollService:
         units = round(final_percentage * 100, 2)
         amount = round(bankroll_total * final_percentage, 2)
 
-        reasoning = f"Kelly Full: {f_star:.1%}. Fracción ({self.kelly_fraction}): {adjusted_stake_pct:.1%}."
+        f_star_pct = f"{f_star:.1%}"
+        adjusted_pct = f"{adjusted_stake_pct:.1%}"
+        reasoning = (
+            f"Kelly Full: {f_star_pct}. Fracción ({self.kelly_fraction}): "
+            f"{adjusted_pct}."
+        )
 
         if final_percentage == self.MAX_STAKE_PERCENTAGE:
             reasoning += " (Limitado por Max Stake)."

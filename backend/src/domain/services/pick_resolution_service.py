@@ -114,7 +114,8 @@ class PickResolutionService:
         """Helper to calculate payout based on result string."""
         if result == "WIN":
             # Payout is the odds (e.g., 1.95 means $1 staked returns $1.95 total)
-            # Find odds in the pick (usually pick.probability is used as a proxy for odds in some backtests,
+            # Find odds in the pick (usually pick.probability is used as a proxy for
+            # odds in some backtests,
             # but we should look for actual odds if available)
             # For backtesting, we often pass odds in a specific field or name
             return getattr(pick, "odds", 1.0)

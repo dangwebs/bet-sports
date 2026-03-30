@@ -46,10 +46,14 @@ class RiskManager:
 
             # --- CIRCUIT BREAKERS & DATA SANITY ---
             if not self._validate_financial_integrity(pick):
-                # Instead of dropping, we keep them for ACCURACY tracking but disable financial recommendation
+                # Instead of dropping, we keep them for ACCURACY tracking but disable
+                # financial recommendation
                 # This ensures we have "Stats" even if we don't have "Bets"
                 logger.info(
-                    f"Pick retained for TRACKING only (Financial Invalid): {pick.market_type} | Odds: {pick.odds}"
+                    "Pick retained for TRACKING only (Financial Invalid): %s | "
+                    "Odds: %s",
+                    pick.market_type,
+                    pick.odds,
                 )
                 pick.is_recommended = False
                 pick.suggested_stake = 0.0
@@ -64,16 +68,19 @@ class RiskManager:
             # --- EV+ VALIDATION ---
             # Rule: prob * odds > 1.0 (unless Hedging)
             # pick.probability is the calculated probability (0.0 - 1.0)
-            implied_prob = 1.0 / pick.odds if pick.odds > 0 else 0
+            _implied_prob = 1.0 / pick.odds if pick.odds > 0 else 0
             ev = (pick.probability * pick.odds) - 1.0
 
             # Strict > 0 check (floating point safe)
             if ev <= 0.0001:
-                # Same here: High confidence picks might be getting dropped due to bad odds.
+                # Same here: High confidence picks might be getting dropped due to bad
+                # odds.
                 # We keep them for tracking if probability is decent (e.g. > 50%)
                 if pick.probability > 0.50:
                     logger.info(
-                        f"Pick retained for TRACKING only (Low EV): {pick.market_type} | EV={ev:.4f}"
+                        "Pick retained for TRACKING only (Low EV): %s | EV=%0.4f",
+                        pick.market_type,
+                        ev,
                     )
                     pick.is_recommended = False
                     pick.suggested_stake = 0.0
@@ -83,7 +90,9 @@ class RiskManager:
                     continue
                 else:
                     logger.info(
-                        f"Pick rejected (Low EV & Low Prob): {pick.market_type}. EV={ev:.4f}"
+                        "Pick rejected (Low EV & Low Prob): %s. EV=%0.4f",
+                        pick.market_type,
+                        ev,
                     )
                     continue
 
@@ -175,5 +184,5 @@ class RiskManager:
 
             return True
         except Exception as e:
-            logger.error(f"Financial integrity validation failed: {e}", exc_info=True)
+            logger.error("Financial integrity validation failed: %s", e, exc_info=True)
             return False  # Fail-safe: reject bet on error

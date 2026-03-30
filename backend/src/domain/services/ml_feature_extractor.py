@@ -236,13 +236,15 @@ class MLFeatureExtractor:
             # ============================================================
             # REFEREE FEATURES (New)
             # ============================================================
-            # Placeholder: In the future, fetch actual referee stats from StatisticsService
+            # Placeholder: In the future, fetch actual referee stats from
+            # StatisticsService
             # For now, default to 4.5 (Average strictness)
             ref_strictness = 4.5
             features.append(ref_strictness)
 
         else:
-            # Padding if no stats provided (39 zeros: 35 original + 4 new efficiency/interaction features)
+            # Padding if no stats provided (39 zeros: 35 original + 4 new
+            # efficiency/interaction features)
             features.extend([0.0] * 39)
 
         return features

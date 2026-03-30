@@ -89,7 +89,7 @@ class ConfidenceCalculator:
         # Note: In a real betting bot, we look for Disagreement (Value).
         # But for "Confidence" in the prediction correctness, Agreement is safer.
 
-        market_prob = 0.0
+        _market_prob = 0.0
 
         # Extract implied probability from prediction if available
         # (Prediction service stores odds-derived probs in home_win_probability etc)

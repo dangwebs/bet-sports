@@ -19,18 +19,22 @@ class DatabaseService:
         self.db_url = db_url or os.getenv("DATABASE_URL")
 
         if not self.db_url:
-            # Fail Fast: The application must not run without a configured PostgreSQL database.
+            # Fail Fast: The application must not run without a configured PostgreSQL
+            # database.
             raise ValueError(
-                "DATABASE_URL environment variable is not set. Cannot initialize database."
+                "DATABASE_URL environment variable is not set. "
+                "Cannot initialize database."
             )
 
-        # Adjust URL for SQLAlchemy if it starts with postgres:// (old Heroku/Render format)
+        # Adjust URL for SQLAlchemy if it starts with postgres:// (old Heroku/Render
+        # format)
         if self.db_url.startswith("postgres://"):
             self.db_url = self.db_url.replace("postgres://", "postgresql://", 1)
 
         if "sqlite" in self.db_url:
             raise ValueError(
-                "SQLite is not supported. The application must use a PostgreSQL database."
+                "SQLite is not supported. The application must use a "
+                "PostgreSQL database."
             )
 
         self._initialize_engine()
@@ -53,12 +57,16 @@ class DatabaseService:
                     self.db_url.split("@")[-1] if "@" in self.db_url else "local file"
                 )
                 logger.info(
-                    f"✅ Database connection successful ({db_type}): {host_info}"
+                    "✅ Database connection successful (%s): %s",
+                    db_type,
+                    host_info,
                 )
 
         except Exception as e:
             logger.error(
-                f"FATAL: Failed to initialize DatabaseService with PostgreSQL: {self.db_url}: {e}"
+                "FATAL: Failed to initialize DatabaseService with PostgreSQL: %s: %s",
+                self.db_url,
+                e,
             )
             raise e  # Re-raise the exception to stop the application startup
 
@@ -68,7 +76,7 @@ class DatabaseService:
             Base.metadata.create_all(bind=self.engine)
             logger.info("Database tables created successfully")
         except Exception as e:
-            logger.error(f"Failed to create database tables: {e}")
+            logger.error("Failed to create database tables: %s", e)
             raise e
 
     def get_session(self):

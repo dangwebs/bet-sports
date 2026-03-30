@@ -107,7 +107,8 @@ class AIPicksService(PicksService):
         Orchestrates the generation of AI-exclusive picks.
         """
         # 0. STRICT RULE 2B: "Zero Stats" Handling
-        # If team stats are missing or predictions are zero, we MUST inject values based on League Averages.
+        # If team stats are missing or predictions are zero, we MUST inject values based
+        # on League Averages.
         # This prevents "Empty Picks" lists and ensures we always provide a baseline.
         if league_averages:
             # Fallback values (Standard averages) if league_averages is somehow empty
@@ -129,7 +130,8 @@ class AIPicksService(PicksService):
             if predicted_away_yellow_cards <= 0.1:
                 predicted_away_yellow_cards = avg_cards_away
 
-        # 1. Generate Base Candidate Picks using Statistical Models (Poisson/Dixon-Coles)
+        # 1. Generate Base Candidate Picks using Statistical Models (Poisson/Dixon-
+        # Coles)
         # We reuse the verified mathematical core of the parent class.
         candidates_container = super().generate_suggested_picks(
             match,
@@ -197,12 +199,13 @@ class AIPicksService(PicksService):
             home_stats, away_stats, pred_home, pred_away
         )
 
-        # Defensive Struggle: Low scoring AND low conversion rates or high defensive form
+        # Defensive Struggle: Low scoring AND low conversion rates or high defensive
+        # form
         if is_low_scoring and (pred_home + pred_away < 2.2):
             semantics["defensive_struggle"] = True
 
         # One-Sided: Large probability gap
-        prob_gap = (
+        _prob_gap = (
             abs(match.home_win_prob - match.away_win_prob)
             if hasattr(match, "home_win_prob")
             else 0.0
@@ -227,7 +230,8 @@ class AIPicksService(PicksService):
                 semantics["one_sided"] = True
 
         # High Volatility: High scoring expectation OR erratic form (Glass Cannon teams)
-        # If predicted total goals > 3.2 OR (Home has Wins AND Losses in recent form AND concedes > 1.5)
+        # If predicted total goals > 3.2 OR (Home has Wins AND Losses in recent form AND
+        # concedes > 1.5)
         if pred_home + pred_away > 3.2:
             semantics["high_volatility"] = True
         elif (
@@ -312,10 +316,12 @@ class AIPicksService(PicksService):
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
             # Criteria: Prob > 65%, Weight >= 1.0, ML > 75%
-            # If ML model is missing (during backtesting), use stricter statistical thresholds
+            # If ML model is missing (during backtesting), use stricter statistical
+            # thresholds
 
             # Context Compliance Check:
-            # A pick qualifies for "Lock" status ONLY if it aligns with the dominant context
+            # A pick qualifies for "Lock" status ONLY if it aligns with the dominant
+            # context
             context_aligned = True
             if context["defensive_struggle"]:
                 # In defensive games, only defensive picks can be locks
@@ -330,7 +336,8 @@ class AIPicksService(PicksService):
             min_prob = 0.65
             min_ml = 0.75
 
-            # If context is NOT aligned, we demand much higher evidence (Extraordinary Evidence)
+            # If context is NOT aligned, we demand much higher evidence (Extraordinary
+            # Evidence)
             if not context_aligned:
                 min_prob = 0.80
                 min_ml = 0.85
@@ -368,7 +375,8 @@ class AIPicksService(PicksService):
                 # Reduced discrepancy needed to catch value, BUT added probability floor
                 discrepancy = pick.probability - implied_prob
 
-                # REQUIREMENT: Must be at least >55% probable to be a "Value Pick" for general users
+                # REQUIREMENT: Must be at least >55% probable to be a "Value Pick" for
+                # general users
                 if discrepancy > 0.10 and pick.probability > 0.55:
                     # Validate with context to ensure it's not a "trap"
                     # Simple heuristic: if context agrees with pick direction
@@ -390,7 +398,8 @@ class AIPicksService(PicksService):
                         if pick.probability > 0.60:
                             pick.is_recommended = True
 
-            # FINAL FILTER: Discard picks with very low absolute probability unless they are high EV longshots (handled elsewhere)
+            # FINAL FILTER: Discard picks with very low absolute probability unless they
+            # are high EV longshots (handled elsewhere)
             # For "Quality over Quantity", we ignore "lottery tickets" < 45% even if EV+
             # RELAXED: Allow picks down to 35% if they have positive EV (Value Bets)
             if pick.probability < 0.20 and pick.expected_value <= 0:
@@ -420,7 +429,8 @@ class AIPicksService(PicksService):
             # Sort by probability descending (regla 2: mayor probabilidad primero)
             refined_picks.sort(key=lambda x: x.probability, reverse=True)
 
-            # IMPORTANTE: NO resetear is_ml_confirmed para preservar la validación de PHASE D
+            # IMPORTANTE: NO resetear is_ml_confirmed para preservar la validación de
+            # PHASE D
             # Solo resetear is_ia_confirmed para reasignar
             for p in refined_picks:
                 p.is_ia_confirmed = False

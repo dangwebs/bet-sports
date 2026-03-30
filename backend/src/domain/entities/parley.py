@@ -27,7 +27,8 @@ class Parley:
         # Simple accumulator logic: multiply probabilities
         # For odds, we assume fair odds = 1/probability if not provided,
         # but in a real scenario we'd use actual bookmaker odds.
-        # Since SuggestedPick has probability but not explicit 'odds' field yet (as per current schema),
+        # Since SuggestedPick has probability but not explicit 'odds' field yet (as per
+        # current schema),
         # we will estimate fair decimal odds as 1 / probability.
 
         prob = 1.0

@@ -77,7 +77,8 @@ class AuditService:
             stats = league_stats[league_code]
             if stats["recent"] == 0:
                 logger.warning(
-                    f"AUDIT: League {league_code} is missing or stale (0 recent matches)."
+                    "AUDIT: League %s is missing or stale (0 recent matches).",
+                    league_code,
                 )
                 missing_leagues.append(league_code)
 
@@ -104,7 +105,8 @@ class AuditService:
             if integrity_issues > 0:
                 report["status"] = "degraded"
                 logger.warning(
-                    f"AUDIT: Found {integrity_issues} integrity issues in sample."
+                    "AUDIT: Found %s integrity issues in sample.",
+                    integrity_issues,
                 )
 
         # 5. Auto-Fix Logic
@@ -116,7 +118,8 @@ class AuditService:
                 )
                 try:
                     # Run training pipeline specifically for missing leagues
-                    # We run it in a way that doesn't block the main thread (orchestrator now handles threading)
+                    # We run it in a way that doesn't block the main thread
+                    # (orchestrator now handles threading)
                     await self.orchestrator.run_training_pipeline(
                         league_ids=missing_leagues, days_back=550, force_refresh=True
                     )

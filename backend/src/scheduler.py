@@ -49,9 +49,10 @@ class BotScheduler:
 
         try:
             self._job_in_progress = True
-            today_str = get_today_str()
+            _today_str = get_today_str()
             logger.info(
-                f"ARCHITECT: Starting memory-optimized job at {datetime.now(COLOMBIA_TZ)}"
+                "ARCHITECT: Starting memory-optimized job at %s",
+                datetime.now(COLOMBIA_TZ),
             )
 
             # Dynamic imports to keep initial memory low
@@ -179,7 +180,8 @@ class BotScheduler:
                     for match_pred in predictions_dto.predictions:
                         match_key = f"forecasts:match_{match_pred.match.id}"
                         cache.set(match_key, match_pred.dict(), cache.TTL_FORECASTS)
-                        # Optional: persist individual matches? (Maybe overkill if league is persisted)
+                        # Optional: persist individual matches? (Maybe overkill if
+                        # league is persisted)
 
                     del predictions_dto
                     gc.collect()
