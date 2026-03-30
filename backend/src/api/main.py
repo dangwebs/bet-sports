@@ -398,7 +398,9 @@ def get_training_cached() -> TrainingCachedPayload:
 
 @app.post("/api/v1/train/run-now")
 @limiter.limit("1/hour")
-def trigger_training(admin_key: str = Depends(require_admin_key)) -> dict[str, str]:
+def trigger_training(
+    request: Request, admin_key: str = Depends(require_admin_key)
+) -> dict[str, str]:
     global _training_running
     with _training_lock:
         if _training_running:
