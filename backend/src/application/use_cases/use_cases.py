@@ -1,16 +1,10 @@
-"""
-Application Use Cases Module
+from __future__ import annotations
 
-Use cases represent application-specific business rules and orchestrate
-the flow of data between the domain layer and the infrastructure layer.
-"""
-
-import asyncio
 import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 import joblib
 from pytz import timezone
@@ -22,32 +16,19 @@ from src.application.dtos.dtos import (
     MatchPredictionDTO,
     PredictionDTO,
     PredictionsResponseDTO,
+    SuggestedPickDTO,
     TeamDTO,
 )
 from src.domain.entities.entities import League, Match, Prediction
-from src.domain.entities.suggested_pick import (
-    ConfidenceLevel,
-    MarketType,
-    SuggestedPick,
-)
-from src.domain.exceptions import InsufficientDataException
-from src.domain.services.ai_picks_service import AIPicksService
 from src.domain.services.match_aggregator_service import MatchAggregatorService
-from src.domain.services.ml_feature_extractor import MLFeatureExtractor
-
-# from src.domain.services.risk_management.risk_manager import RiskManager
 from src.domain.services.prediction_service import PredictionService
+from src.domain.services.statistics_service import StatisticsService
 from src.infrastructure.data_sources.club_elo import ClubEloSource
 from src.infrastructure.data_sources.espn import ESPNSource
 from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
-from src.infrastructure.data_sources.football_data_uk import (
-    LEAGUES_METADATA,
-    FootballDataUKSource,
-)
+from src.infrastructure.data_sources.football_data_uk import FootballDataUKSource
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
-from src.infrastructure.repositories.mongo_repository import MongoRepository
-from src.infrastructure.services.background_processor import BackgroundProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -64,15 +45,21 @@ class DataSources:
     club_elo: Optional[ClubEloSource] = None
 
 
+# Lightweight type aliases to satisfy linters for runtime-opaque types
+MongoRepository = Any
+BackgroundProcessor = Any
+
+
 class GetLeaguesUseCase:
     """Use case for getting available leagues."""
 
     def __init__(self, data_sources: DataSources):
         self.data_sources = data_sources
 
-    async def execute(self) -> LeaguesResponseDTO:
+    async def execute(self) -> "LeaguesResponseDTO":
         """Get all available leagues grouped by country."""
-        from src.core.constants import DEFAULT_LEAGUES
+        # Local imports to avoid module-level runtime cycles and satisfy linters
+        from src.core.constants import DEFAULT_LEAGUES, LEAGUES_METADATA
 
         # Get all default leagues using metadata
         leagues = []
@@ -120,9 +107,6 @@ class GetLeaguesUseCase:
         )
 
 
-from src.domain.services.statistics_service import StatisticsService
-
-
 class GetPredictionsUseCase:
     """Use case for getting match predictions."""
 
@@ -143,11 +127,16 @@ class GetPredictionsUseCase:
         # self.risk_manager = risk_manager
         self.persistence_repository = persistence_repository
 
-        self.picks_service = AIPicksService(
-            learning_weights=get_learning_service().get_learning_weights()
-            if "get_learning_service" in globals()
-            else {}
-        )
+        try:
+            from src.application.dependencies import get_learning_service
+
+            learning_weights = get_learning_service().get_learning_weights()
+        except Exception:
+            learning_weights = {}
+
+        from src.domain.services.ai_picks_service import AIPicksService
+
+        self.picks_service = AIPicksService(learning_weights=learning_weights)
 
         self.background_processor = background_processor
 
@@ -186,206 +175,16 @@ class GetPredictionsUseCase:
         except Exception as e:
             logger.error(f"❌ Failed to load ML model: {e}")
 
-    async def execute(
-        self, league_id: str, limit: int = 20, force_refresh: bool = False
-    ) -> PredictionsResponseDTO:
-        """
-        Get predictions for upcoming matches in a league.
-
-        Args:
-            league_id: League identifier
-            limit: Maximum matches to return
-
-        Returns:
-            Predictions response with match predictions
-        """
-        # Get league metadata
-        if league_id not in LEAGUES_METADATA:
-            raise ValueError(f"Unknown league: {league_id}")
-
-        # 0. Check Cache (Ephemeral & Persistent)
-        from src.infrastructure.cache.cache_service import get_cache_service
-
-        cache_service = get_cache_service()
-
-        # Unified Cache Key for League Forecasts
-        cache_key = f"forecasts:league_{league_id}"
-
-        if force_refresh:
-            logger.info(
-                f"🔄 Force Refresh requested for {league_id}. Skipping cache lookup."
-            )
-        else:
-            # 0.1 Check for new data in DB first (Versioning/Sync)
-            db_data, db_last_updated = (None, None)
-            if self.persistence_repository:
-                (
-                    db_data,
-                    db_last_updated,
-                ) = self.persistence_repository.get_training_result_with_timestamp(
-                    cache_key
-                )
-
-            # 0.2 Try Ephemeral Cache (Memory/Disk)
-            cached_response = cache_service.get(cache_key)
-
-            # SYNC LOGIC: If we have cached response, check if it's stale compared to DB
-            is_stale = False
-            if cached_response and db_last_updated:
-                try:
-                    # Use 'generated_at' from cache or a specific 'cached_db_timestamp'
-                    # PredictionsResponseDTO.generated_at is ISO string if cached as
-                    # dict
-
-                    if cached_response.get("generated_at"):
-                        from datetime import datetime as dt
-                        from datetime import timedelta
-                        from datetime import timezone as dt_timezone
-
-                        gen_at_val = cached_response["generated_at"]
-
-                        if isinstance(gen_at_val, dt):
-                            gen_at = gen_at_val
-                        else:
-                            # Handle Z suffix for older python versions compat
-                            if gen_at_val.endswith("Z"):
-                                gen_at_val = gen_at_val[:-1] + "+00:00"
-                            gen_at = dt.fromisoformat(gen_at_val)
-
-                        if gen_at.tzinfo is None:
-                            gen_at = gen_at.replace(tzinfo=dt_timezone.utc)
-                        else:
-                            gen_at = gen_at.astimezone(dt_timezone.utc)
-
-                        # DB Timestamp is typically naive UTC in SQLAlchemy
-                        if db_last_updated.tzinfo is None:
-                            db_last_updated = db_last_updated.replace(
-                                tzinfo=dt_timezone.utc
-                            )
-                        else:
-                            db_last_updated = db_last_updated.astimezone(
-                                dt_timezone.utc
-                            )
-
-                        # Add a small buffer (e.g. 10 seconds) to avoid race conditions
-                        if db_last_updated > (gen_at + timedelta(seconds=10)):
-                            logger.info(
-                                "🔄 Cache stale for %s (DB: %s > Cache: %s). "
-                                "Refreshing...",
-                                league_id,
-                                db_last_updated,
-                                gen_at,
-                            )
-                            is_stale = True
-                        else:
-                            logger.info(
-                                "✓ Cache valid for %s. DB: %s <= Cache: %s",
-                                league_id,
-                                db_last_updated,
-                                gen_at,
-                            )
-                except Exception as e:
-                    logger.warning(f"Error comparing cache vs db timestamp: {e}")
-                    # If error in comparison, err on side of caution if DB data exists
-                    if db_data:
-                        is_stale = True
-
-                if cached_response and not is_stale:
-                    logger.info(
-                        "Serving cached (ephemeral) predictions for %s",
-                        league_id,
-                    )
-                    response = PredictionsResponseDTO(**cached_response)
-
-                # STRICT DATE FILTERING (even for cache)
-                filtered = self._filter_future_matches(response.predictions)
-                if len(filtered) != len(response.predictions):
-                    diff = len(response.predictions) - len(filtered)
-                    logger.info(
-                        "Filtered %s past matches from cached %s",
-                        diff,
-                        league_id,
-                    )
-                    response.predictions = filtered
-
-                return response
-
-            # 0.3 Try Persistent DB (PostgreSQL fallback)
-            if db_data:
-                logger.info(
-                    "Serving persistent (PostgreSQL) predictions for %s",
-                    league_id,
-                )
-                # Warm up ephemeral cache for next time
-                cache_service.set(cache_key, db_data, ttl_seconds=86400)
-                response = PredictionsResponseDTO(**db_data)
-
-                # STRICT DATE FILTERING
-                filtered = self._filter_future_matches(response.predictions)
-                if len(filtered) != len(response.predictions):
-                    diff = len(response.predictions) - len(filtered)
-                    logger.info(
-                        "Filtered %s past matches from DB %s",
-                        diff,
-                        league_id,
-                    )
-                    response.predictions = filtered
-
-                return response
-
-        # 0.3 Check if running in API-only mode
-        import os
-
-        api_only_mode = os.getenv("API_ONLY_MODE", "false").lower() == "true"
-
-        if api_only_mode:
-            # In API-only mode, we don't compute predictions - only serve from cache/DB
-            logger.warning(
-                f"API-ONLY MODE: No cached predictions found for {league_id}"
-            )
-            logger.info(
-                "💡 Predictions will be available after GitHub Actions worker runs"
-            )
-
-            # Return empty response instead of error to avoid breaking frontend
-            meta = LEAGUES_METADATA[league_id]
-            return PredictionsResponseDTO(
-                league=LeagueDTO(
-                    id=league_id,
-                    name=meta["name"],
-                    country=meta["country"],
-                ),
-                predictions=[],
-                generated_at=datetime.now(timezone("America/Bogota")),
-            )
-
-        # If not in API-only mode, proceed with real-time computation
-        logger.info(
-            f"Cache miss for {league_id}. Computing predictions in real-time..."
-        )
-
-        meta = LEAGUES_METADATA[league_id]
-        league = League(
-            id=league_id,
-            name=meta["name"],
-            country=meta["country"],
-        )
-
-        # Get historical data
-        # 1. Dynamic Season Calculation
-        # Instead of hardcoding "2425", we calculate based on current date
+    def _compute_seasons(self) -> list:
+        """Compute current and previous season codes like '2425'."""
         now = datetime.now(timezone("America/Bogota"))
         current_year = now.year
-
-        # Football seasons usually run from July to June
         if now.month < 7:
-            # We are in the second half of a season (e.g. Feb 2025 -> 24/25)
             s1_start = current_year - 1
             s1_end = current_year
             s2_start = current_year - 2
             s2_end = current_year - 1
         else:
-            # We are in the first half of a season (e.g. Sep 2025 -> 25/26)
             s1_start = current_year
             s1_end = current_year + 1
             s2_start = current_year - 1
@@ -393,85 +192,226 @@ class GetPredictionsUseCase:
 
         current_season = f"{str(s1_start)[-2:]}{str(s1_end)[-2:]}"
         prev_season = f"{str(s2_start)[-2:]}{str(s2_end)[-2:]}"
-        seasons = [current_season, prev_season]
+        return [current_season, prev_season]
 
-        logger.info(f"Fetching data for {league_id} via Aggregator Service...")
-
-        # 1. Fetch History Aggregated
-        historical_matches = await self.match_aggregator.get_aggregated_history(
-            league_id, seasons=seasons
-        )
-
-        # 2. Fetch Upcoming Aggregated
-        upcoming_matches = await self.match_aggregator.get_upcoming_matches(
-            league_id, limit=1000  # Fetch plenty, filter later
-        )
-
-        # Calculate league averages from historical data using the service
-        league_averages = self.statistics_service.calculate_league_averages(
-            historical_matches
-        )
-
-        # Strict Date Filter: Only show matches in the future
-        # Ensure 'now' and 'match.match_date' are comparable (timezone-aware)
-        from src.utils.time_utils import get_current_time
-
-        now = get_current_time()  # Returns Bogota time
-
-        filtered_upcoming = []
+    def _filter_upcoming_matches(self, upcoming_matches: list, now: datetime) -> list:
+        """Return upcoming matches strictly in the future (timezone-aware)."""
+        filtered = []
         for m in upcoming_matches:
-            # Ensure match date is timezone aware (convert to Bogota if needed)
             m_date = m.match_date
             if m_date.tzinfo is None:
-                m_date = now.tzinfo.localize(m_date)
+                try:
+                    m_date = now.tzinfo.localize(m_date)
+                except Exception:
+                    m_date = m_date
             else:
                 m_date = m_date.astimezone(now.tzinfo)
 
-            # Allow a small buffer? No, strict future.
-            # If match started 1 second ago, it's not "upcoming" for prediction purposes
-            # usually,
-            # unless we support live. But user asked to "no enviar partidos que ya se
-            # jugaron".
             if m_date > now:
-                filtered_upcoming.append(m)
+                filtered.append(m)
+        return filtered
 
-        upcoming_matches = filtered_upcoming
+    def _determine_data_sources(self) -> list:
+        """Return a list of data source names enabled for predictions."""
+        # Local imports for data source classes used at runtime
+        from src.infrastructure.data_sources.football_data_org import (
+            FootballDataOrgSource,
+        )
+        from src.infrastructure.data_sources.football_data_uk import (
+            FootballDataUKSource,
+        )
+        from src.infrastructure.data_sources.openfootball import OpenFootballSource
 
-        if not upcoming_matches:
-            logger.info(f"No upcoming future matches found for {league_id}")
-            return PredictionsResponseDTO(
-                league=LeagueDTO(
-                    id=league_id,
-                    name=meta["name"],
-                    country=meta["country"],
-                ),
-                predictions=[],
-                generated_at=datetime.now(timezone("America/Bogota")),
-            )
-
-        # Build predictions
-        predictions = []
         data_sources_used = [FootballDataUKSource.SOURCE_NAME]
 
         if self.data_sources.football_data_org.is_configured:
             data_sources_used.append(FootballDataOrgSource.SOURCE_NAME)
         if self.data_sources.openfootball:
             data_sources_used.append(OpenFootballSource.SOURCE_NAME)
+        # Ensure ESPN is present as a fallback name
         if hasattr(self.data_sources, "espn") or "ESPN" not in data_sources_used:
             data_sources_used.append("ESPN")
 
-        # Prepare parallel tasks
-        match_tasks = []
-        matches_processing_data = []  # To keep context for post-processing
+        return data_sources_used
 
-        # Determine min_matches threshold based on league type
-        # International tournaments (UCL/UEL) have fewer matches in recent history
-        min_matches = 6
-        if league_id in ["UCL", "UEL", "UECL"]:
-            min_matches = 3
-            logger.info(
-                f"Using relaxed min_matches={min_matches} for tournament {league_id}"
+    def _build_ml_feature_batch(self, match, home_stats, away_stats, outcomes) -> list:
+        """Build features batch for ML model from outcomes and match stats."""
+        # Local imports to avoid circular dependencies and satisfy linters
+        from src.domain.entities.suggested_pick import ConfidenceLevel, SuggestedPick
+        from src.domain.services.ml_feature_extractor import MLFeatureExtractor
+
+        features_batch = []
+        for idx, (m_type, heuristic_prob, label) in enumerate(outcomes):
+            p = SuggestedPick(
+                market_type=m_type,
+                market_label=label,
+                probability=heuristic_prob,
+                expected_value=0.0,
+                risk_level=5,
+                confidence_level=ConfidenceLevel.MEDIUM,
+                reasoning="ML Eval",
             )
+
+            if idx == 0:
+                p.market_label = "Victoria Local"
+            elif idx == 1:
+                p.market_label = "Empate"
+            elif idx == 2:
+                p.market_label = "Victoria Visitante"
+            elif idx == 3:
+                p.market_label = "Más de 2.5 Goles"
+            elif idx == 4:
+                p.market_label = "Menos de 2.5 Goles"
+
+            feat = MLFeatureExtractor.extract_features(
+                p,
+                match,
+                home_stats,
+                away_stats,
+            )
+            features_batch.append(feat)
+
+        return features_batch
+
+    def _normalize_and_apply_probs(self, prediction, ml_probs: list) -> None:
+        """Normalize ML raw probabilities and apply them to the prediction."""
+        # Winner normalization
+        raw_h, raw_d, raw_a = ml_probs[0], ml_probs[1], ml_probs[2]
+        total_1x2 = raw_h + raw_d + raw_a
+        if total_1x2 > 0:
+            prediction.home_win_probability = round(raw_h / total_1x2, 4)
+            prediction.draw_probability = round(raw_d / total_1x2, 4)
+            prediction.away_win_probability = round(raw_a / total_1x2, 4)
+
+        # Over/Under normalization
+        raw_o, raw_u = ml_probs[3], ml_probs[4]
+        total_ou = raw_o + raw_u
+        if total_ou > 0:
+            prediction.over_25_probability = round(raw_o / total_ou, 4)
+            prediction.under_25_probability = round(raw_u / total_ou, 4)
+
+        # Confidence = max of normalized probabilities
+        prediction.confidence = max(
+            prediction.home_win_probability,
+            prediction.draw_probability,
+            prediction.away_win_probability,
+            prediction.over_25_probability,
+            prediction.under_25_probability,
+        )
+
+        if "Rigorous ML" not in prediction.data_sources:
+            prediction.data_sources.append("Rigorous ML")
+
+    def _apply_ml_override(self, prediction, match, home_stats, away_stats) -> None:
+        """Apply ML model probability overrides to a Prediction object in-place.
+
+        This wraps the ML feature extraction and prediction logic previously inline
+        in `execute()` so it can be tested and maintained separately.
+        """
+        if not self.ml_model:
+            return
+
+        # Local import for MarketType enum
+        from src.domain.entities.suggested_pick import MarketType
+
+        try:
+            outcomes = [
+                (MarketType.WINNER, prediction.home_win_probability, "Home"),
+                (MarketType.WINNER, prediction.draw_probability, "Draw"),
+                (MarketType.WINNER, prediction.away_win_probability, "Away"),
+                (MarketType.GOALS_OVER_2_5, prediction.over_25_probability, "Over"),
+                (MarketType.GOALS_UNDER_2_5, prediction.under_25_probability, "Under"),
+            ]
+
+            features_batch = self._build_ml_feature_batch(
+                match, home_stats, away_stats, outcomes
+            )
+
+            if features_batch:
+                probs = self.ml_model.predict_proba(features_batch)
+                ml_probs = [p[1] for p in probs]
+                # Normalize and apply ML probabilities
+                self._normalize_and_apply_probs(prediction, ml_probs)
+
+        except Exception as ml_err:
+            logger.warning(
+                "ML Probability Override failed for match %s: %s", match.id, ml_err
+            )
+
+    async def _generate_suggested_picks(self, match_tasks: list) -> list:
+        """Generate suggested picks either via background processor (parallel)
+        or synchronously via the picks service.
+        Returns a list of results aligned with `match_tasks`.
+        """
+        if self.background_processor and match_tasks:
+            logger.info(
+                f"Generating picks for {len(match_tasks)} matches in parallel..."
+            )
+            return await self.background_processor.process_matches_parallel(match_tasks)
+
+        # Fallback synchronous
+        logger.info(f"Generating picks for {len(match_tasks)} matches synchronously...")
+        results = []
+        for task in match_tasks:
+            try:
+                res = self.picks_service.generate_suggested_picks(
+                    match=task["match"],
+                    home_stats=task["home_stats"],
+                    away_stats=task["away_stats"],
+                    league_averages=task.get("league_averages"),
+                    h2h_stats=task.get("h2h_stats"),
+                    predicted_home_goals=task["prediction_data"].get(
+                        "predicted_home_goals", 0.0
+                    ),
+                    predicted_away_goals=task["prediction_data"].get(
+                        "predicted_away_goals", 0.0
+                    ),
+                    home_win_prob=task["prediction_data"].get(
+                        "home_win_probability", 0.0
+                    ),
+                    draw_prob=task["prediction_data"].get("draw_probability", 0.0),
+                    away_win_prob=task["prediction_data"].get(
+                        "away_win_probability", 0.0
+                    ),
+                    predicted_home_corners=task["prediction_data"].get(
+                        "predicted_home_corners", 0.0
+                    ),
+                    predicted_away_corners=task["prediction_data"].get(
+                        "predicted_away_corners", 0.0
+                    ),
+                    predicted_home_yellow_cards=task["prediction_data"].get(
+                        "predicted_home_yellow_cards", 0.0
+                    ),
+                    predicted_away_yellow_cards=task["prediction_data"].get(
+                        "predicted_away_yellow_cards", 0.0
+                    ),
+                )
+                results.append(res)
+            except Exception as e:
+                logger.error(f"Error generating picks sync: {e}")
+                results.append(None)
+
+        return results
+
+    def _build_match_tasks(
+        self,
+        upcoming_matches: list,
+        limit: int,
+        historical_matches: list,
+        league_averages,
+        min_matches: int,
+        data_sources_used: list,
+    ) -> tuple:
+        """Build match_tasks and matches_processing_data from upcoming matches.
+
+        Returns (match_tasks, matches_processing_data).
+        """
+        # Local imports for runtime exceptions and entities used below
+        from src.domain.entities.entities import Prediction
+        from src.domain.exceptions import InsufficientDataException
+
+        match_tasks = []
+        matches_processing_data = []
 
         for match in upcoming_matches[:limit]:
             # Get team statistics using the generic service
@@ -507,169 +447,14 @@ class GetPredictionsUseCase:
                     data_sources=data_sources_used,
                 )
 
-                # --- RIGOROUS ML PROBABILITY OVERRIDE ---
-                if self.ml_model:
-                    try:
-                        # Construct Pseudo-Picks for Evaluation
-                        # We evaluate 5 key outcomes: Home, Draw, Away, Over 2.5, Under
-                        # 2.5
-                        outcomes = [
-                            (
-                                MarketType.WINNER,
-                                prediction.home_win_probability,
-                                "Home",
-                            ),
-                            (
-                                MarketType.WINNER,
-                                prediction.draw_probability,
-                                "Draw",
-                            ),
-                            # Use WINNER for 1x2/Draw as generic Outcome type
-                            # unless RESULT_1X2 is preferred
-                            (
-                                MarketType.WINNER,
-                                prediction.away_win_probability,
-                                "Away",
-                            ),
-                            (
-                                MarketType.GOALS_OVER_2_5,
-                                prediction.over_25_probability,
-                                "Over",
-                            ),
-                            (
-                                MarketType.GOALS_UNDER_2_5,
-                                prediction.under_25_probability,
-                                "Under",
-                            ),
-                        ]
-
-                        features_batch = []
-                        valid_indices = []
-
-                        for idx, (m_type, heuristic_prob, label) in enumerate(outcomes):
-                            # Create a dummy pick structure required by Feature
-                            # Extractor
-                            # For Away win, we usually denote it distinctively, but
-                            # FeatureExtractor
-                            # relies mostly on probability and match stats.
-                            # IMPORTANT: FeatureExtractor doesn't explicitly distinguish
-                            # Home/Away in checking
-                            # unless we check the label or if it handles '1', '2', 'X'.
-                            # Let's construct a minimal valid pick.
-
-                            p = SuggestedPick(
-                                market_type=m_type,
-                                market_label=label,
-                                probability=heuristic_prob,
-                                expected_value=0.0,
-                                risk_level=5,
-                                confidence_level=ConfidenceLevel.MEDIUM,
-                                reasoning="ML Eval",
-                            )
-
-                            # Note: FeatureExtractor uses home_stats and away_stats.
-                            # If we are evaluating AWAY win, the "probability" passed is
-                            # the Away Prob.
-                            # But FeatureExtractor logic for "Shot Dominance" (Home -
-                            # Away) is static.
-                            # The model likely learned that "High Home Dominance + High
-                            # Home Prob = Win".
-                            # If we pass "High Home Dominance + Low Away Prob", it might
-                            # be confused
-                            # if we just label it "WINNER".
-                            # However, checking ml_feature_extractor.py, it specifically
-                            # hashes the market_type string.
-                            # "Victoria Local", "Empate", "Victoria Visitante".
-
-                            # Let's be precise with labels to match training data likely
-                            # format
-                            if idx == 0:
-                                p.market_label = "Victoria Local"  # Home
-                            elif idx == 1:
-                                p.market_label = "Empate"
-                            elif idx == 2:
-                                p.market_label = "Victoria Visitante"  # Away
-                            elif idx == 3:
-                                p.market_label = "Más de 2.5 Goles"
-                            elif idx == 4:
-                                p.market_label = "Menos de 2.5 Goles"
-
-                            feats = MLFeatureExtractor.extract_features(
-                                p, match, home_stats, away_stats
-                            )
-                            features_batch.append(feats)
-                            valid_indices.append(idx)
-
-                        if features_batch:
-                            # Batch Predict
-                            # Returns array of [prob_0, prob_1] for each sample
-                            probs = self.ml_model.predict_proba(features_batch)
-
-                            # Extract Prob(Class 1 = Win)
-                            ml_probs = [p[1] for p in probs]
-
-                            # 1. Update Match Winner (Normalize to sum 1.0)
-                            raw_h, raw_d, raw_a = ml_probs[0], ml_probs[1], ml_probs[2]
-                            total_1x2 = raw_h + raw_d + raw_a
-
-                            if total_1x2 > 0:
-                                prediction.home_win_probability = round(
-                                    raw_h / total_1x2, 4
-                                )
-                                prediction.draw_probability = round(
-                                    raw_d / total_1x2, 4
-                                )
-                                prediction.away_win_probability = round(
-                                    raw_a / total_1x2, 4
-                                )
-
-                            # 2. Update Over/Under (Normalize)
-                            raw_o, raw_u = ml_probs[3], ml_probs[4]
-                            total_ou = raw_o + raw_u
-
-                            if total_ou > 0:
-                                prediction.over_25_probability = round(
-                                    raw_o / total_ou, 4
-                                )
-                                prediction.under_25_probability = round(
-                                    raw_u / total_ou, 4
-                                )
-
-                            # 3. SET CONFIDENCE = Max(Raw Probabilities)
-                            # We use the raw values (un-normalized) to capture true
-                            # model certainty?
-                            # Or normalized?
-                            # User said: "If model says 36% for Home, confidence is
-                            # 36%".
-                            # So we typically use the probability of the most likely
-                            # outcome.
-                            # Let's use the MAX of the normalized probabilities we just
-                            # set.
-                            prediction.confidence = max(
-                                prediction.home_win_probability,
-                                prediction.draw_probability,
-                                prediction.away_win_probability,
-                                prediction.over_25_probability,
-                                prediction.under_25_probability,
-                            )
-
-                            # Tag as ML-derived
-                            if "Rigorous ML" not in prediction.data_sources:
-                                prediction.data_sources.append("Rigorous ML")
-
-                    except Exception as ml_err:
-                        logger.warning(
-                            "ML Probability Override failed for match %s: %s",
-                            match.id,
-                            ml_err,
-                        )
+                # Apply ML override if available
+                self._apply_ml_override(prediction, match, home_stats, away_stats)
 
             except InsufficientDataException:
                 logger.warning(
                     "Insufficient data for match %s. Skipping match-level prediction.",
                     match.id,
                 )
-                # Create a "Null" prediction to hold team-specific picks if any
                 prediction = Prediction(
                     match_id=match.id,
                     home_win_probability=0.0,
@@ -685,11 +470,8 @@ class GetPredictionsUseCase:
                 )
             except Exception as e:
                 logger.error(f"Error generating prediction for {match.id}: {e}")
+                # Skip this match on error
                 continue
-
-            # Match level validity check is handled during assembly to allow team-only
-            # picks
-            pass
 
             # Calculate H2H
             h2h_stats = self.statistics_service.calculate_h2h_statistics(
@@ -743,96 +525,82 @@ class GetPredictionsUseCase:
                 }
             )
 
-        # Execute Parallel Generation
-        suggested_picks_results = []
-        if self.background_processor and match_tasks:
+        return match_tasks, matches_processing_data
+
+    def _try_serve_cached_predictions(
+        self, league_id: str, force_refresh: bool, cache_service, cache_key: str
+    ) -> "PredictionsResponseDTO | None":
+        """Attempt to serve predictions from ephemeral or persistent cache.
+
+        Returns a PredictionsResponseDTO when available, otherwise None.
+        """
+        if force_refresh:
             logger.info(
-                f"Generating picks for {len(match_tasks)} matches in parallel..."
+                f"🔄 Force Refresh requested for {league_id}. Skipping cache lookup."
             )
-            suggested_picks_results = (
-                await self.background_processor.process_matches_parallel(match_tasks)
+            return None
+
+        # Runtime import for DTO used to construct response objects
+
+        # 0.1 Check for new data in DB first (Versioning/Sync)
+        db_data, db_last_updated = (None, None)
+        if self.persistence_repository:
+            (
+                db_data,
+                db_last_updated,
+            ) = self.persistence_repository.get_training_result_with_timestamp(
+                cache_key
             )
-        else:
-            # Fallback synchronous
-            logger.info(
-                f"Generating picks for {len(match_tasks)} matches synchronously..."
-            )
-            for task in match_tasks:
-                try:
-                    res = self.picks_service.generate_suggested_picks(
-                        match=task["match"],
-                        home_stats=task["home_stats"],
-                        away_stats=task["away_stats"],
-                        league_averages=task["league_averages"],
-                        h2h_stats=task["h2h_stats"],
-                        predicted_home_goals=task["prediction_data"][
-                            "predicted_home_goals"
-                        ],
-                        predicted_away_goals=task["prediction_data"][
-                            "predicted_away_goals"
-                        ],
-                        home_win_prob=task["prediction_data"]["home_win_probability"],
-                        draw_prob=task["prediction_data"]["draw_probability"],
-                        away_win_prob=task["prediction_data"]["away_win_probability"],
-                        predicted_home_corners=task["prediction_data"].get(
-                            "predicted_home_corners", 0.0
-                        ),
-                        predicted_away_corners=task["prediction_data"].get(
-                            "predicted_away_corners", 0.0
-                        ),
-                        predicted_home_yellow_cards=task["prediction_data"].get(
-                            "predicted_home_yellow_cards", 0.0
-                        ),
-                        predicted_away_yellow_cards=task["prediction_data"].get(
-                            "predicted_away_yellow_cards", 0.0
-                        ),
-                    )
-                    suggested_picks_results.append(res)
-                except Exception as e:
-                    logger.error(f"Error generating picks sync: {e}")
-                    suggested_picks_results.append(None)
 
-                    suggested_picks_results.append(None)
+        # 0.2 Try Ephemeral Cache (Memory/Disk)
+        cached_response = cache_service.get(cache_key)
 
-        # Apply Risk Management Constraints (Batch Optimization)
-        # Prepare list for RiskManager: [{'pick': p, 'match': m}, ...]
-        flat_picks_map = []
-        for i, res in enumerate(suggested_picks_results):
-            if res and res.suggested_picks:
-                match = matches_processing_data[i]["match"]
-                for pick in res.suggested_picks:
-                    flat_picks_map.append(
-                        {"pick": pick, "match": match, "result_obj": res}
-                    )
+        # SYNC LOGIC: If we have cached response, check if it's stale compared to DB
+        is_stale = False
+        if cached_response and db_last_updated:
+            is_stale = self._is_cached_response_stale(db_last_updated, cached_response)
 
-        # Apply Risk Logic (Circuit Breakers + Portfolio)
-        # Note: apply_portfolio_constraints modifies the 'pick' objects in-place
-        # (updating reasoning, capping stake)
-        # and returns the approved list.
-        # Bypassed: We approve ALL candidates directly
-        # approved_items = self.risk_manager.apply_portfolio_constraints(flat_picks_map)
-        approved_items = flat_picks_map
+        if cached_response and not is_stale:
+            logger.info("Serving cached (ephemeral) predictions for %s", league_id)
+            response = PredictionsResponseDTO(**cached_response)
 
-        # Re-organize back to structure (picks that were NOT approved are implicitly
-        # removed?
-        # Actually risk manager caps them or flags them. If fully rejected, we should
-        # remove.)
+            # STRICT DATE FILTERING (even for cache)
+            filtered = self._filter_future_matches(response.predictions)
+            if len(filtered) != len(response.predictions):
+                diff = len(response.predictions) - len(filtered)
+                logger.info("Filtered %s past matches from cached %s", diff, league_id)
+                response.predictions = filtered
 
-        # Optimization: We only keep approved picks.
-        # But we need to update the original 'SuggestedPickResult' objects attached to
-        # matches_processing_data
-        # because those are used below in 'Assemble Results'.
+            return response
 
-        # Strategy: Clear all picks first, then add back approved ones
-        for res in suggested_picks_results:
-            if res:
-                res.suggested_picks = []
+        # 0.3 Try Persistent DB (PostgreSQL fallback)
+        if db_data:
+            logger.info("Serving persistent (PostgreSQL) predictions for %s", league_id)
+            # Warm up ephemeral cache for next time
+            cache_service.set(cache_key, db_data, ttl_seconds=86400)
+            response = PredictionsResponseDTO(**db_data)
 
-        for item in approved_items:
-            # Add back to the result object
-            item["result_obj"].suggested_picks.append(item["pick"])
+            # STRICT DATE FILTERING
+            filtered = self._filter_future_matches(response.predictions)
+            if len(filtered) != len(response.predictions):
+                diff = len(response.predictions) - len(filtered)
+                logger.info("Filtered %s past matches from DB %s", diff, league_id)
+                response.predictions = filtered
 
-        # Assemble Results
+            return response
+
+        return None
+
+    def _assemble_predictions(
+        self,
+        matches_processing_data: list,
+        suggested_picks_results: list,
+    ) -> list:
+        """Assemble `MatchPredictionDTO` list from processing data and suggested picks results."""
+        # Local import for DTO construction at runtime
+
+        predictions = []
+
         for i, data in enumerate(matches_processing_data):
             match = data["match"]
             prediction = data["prediction"]
@@ -920,17 +688,46 @@ class GetPredictionsUseCase:
                 )
             )
 
-        response = PredictionsResponseDTO(
-            league=LeagueDTO(
-                id=league.id,
-                name=league.name,
-                country=league.country,
-            ),
-            predictions=predictions,
-            generated_at=datetime.now(timezone("America/Bogota")),
-        )
+        return predictions
 
-        # Cache the result (24 hours TTL to align with daily training schedule)
+    def _is_cached_response_stale(self, db_last_updated, cached_response) -> bool:
+        """Return True when cached_response is stale compared to db_last_updated."""
+        try:
+            from datetime import datetime as dt
+            from datetime import timedelta
+            from datetime import timezone as dt_timezone
+
+            gen_at_val = cached_response.get("generated_at")
+
+            if isinstance(gen_at_val, dt):
+                gen_at = gen_at_val
+            else:
+                if isinstance(gen_at_val, str) and gen_at_val.endswith("Z"):
+                    gen_at_val = gen_at_val[:-1] + "+00:00"
+                gen_at = dt.fromisoformat(gen_at_val)
+
+            if gen_at.tzinfo is None:
+                gen_at = gen_at.replace(tzinfo=dt_timezone.utc)
+            else:
+                gen_at = gen_at.astimezone(dt_timezone.utc)
+
+            if db_last_updated.tzinfo is None:
+                db_ts = db_last_updated.replace(tzinfo=dt_timezone.utc)
+            else:
+                db_ts = db_last_updated.astimezone(dt_timezone.utc)
+
+            return db_ts > (gen_at + timedelta(seconds=10))
+        except Exception as e:
+            logger.warning("Error comparing cache vs db timestamp: %s", e)
+            return bool(db_last_updated)
+
+    def _persist_response_and_predictions(
+        self, cache_service, cache_key: str, response, predictions: list, league_id: str
+    ) -> None:
+        """Persist response to ephemeral cache and optional persistent repository.
+
+        This consolidates caching and DB persistence logic to keep `execute()` small.
+        """
         try:
             # 1. Ephemeral Cache
             cache_service.set(cache_key, response.model_dump(), ttl_seconds=86400)
@@ -941,7 +738,7 @@ class GetPredictionsUseCase:
                     cache_key, response.model_dump()
                 )
 
-                # NEW: Massive inference storage (Individual match predictions for
+                # Massive inference storage (Individual match predictions for
                 # instant access)
                 prediction_batch = [
                     {
@@ -962,11 +759,219 @@ class GetPredictionsUseCase:
         except Exception as e:
             logger.warning("Failed to cache league predictions: %s", e)
 
+    async def _fetch_league_data(self, league_id: str, seasons: list, limit: int):
+        """Fetch historical and upcoming matches and compute league averages."""
+        logger.info(f"Fetching data for {league_id} via Aggregator Service...")
+
+        # 1. Fetch History Aggregated
+        historical_matches = await self.match_aggregator.get_aggregated_history(
+            league_id, seasons=seasons
+        )
+
+        # 2. Fetch Upcoming Aggregated
+        upcoming_matches = await self.match_aggregator.get_upcoming_matches(
+            league_id, limit=1000  # Fetch plenty, filter later
+        )
+
+        # Calculate league averages from historical data using the service
+        league_averages = self.statistics_service.calculate_league_averages(
+            historical_matches
+        )
+
+        # Strict Date Filter: Only show matches in the future
+        # Ensure 'now' and 'match.match_date' are comparable (timezone-aware)
+        from src.utils.time_utils import get_current_time
+
+        now = get_current_time()  # Returns Bogota time
+        upcoming_matches = self._filter_upcoming_matches(upcoming_matches, now)
+
+        return historical_matches, upcoming_matches, league_averages
+
+    async def execute(
+        self, league_id: str, limit: int = 20, force_refresh: bool = False
+    ) -> "PredictionsResponseDTO":
+        """
+        Get predictions for upcoming matches in a league.
+
+        Args:
+            league_id: League identifier
+            limit: Maximum matches to return
+
+        Returns:
+            Predictions response with match predictions
+        """
+        # Runtime imports for constants and DTOs used below
+        from src.core.constants import LEAGUES_METADATA
+
+        # Get league metadata
+        if league_id not in LEAGUES_METADATA:
+            raise ValueError(f"Unknown league: {league_id}")
+
+        # 0. Check Cache (Ephemeral & Persistent)
+        from src.infrastructure.cache.cache_service import get_cache_service
+
+        cache_service = get_cache_service()
+
+        # Unified Cache Key for League Forecasts
+        cache_key = f"forecasts:league_{league_id}"
+
+        cached = self._try_serve_cached_predictions(
+            league_id, force_refresh, cache_service, cache_key
+        )
+        if cached:
+            return cached
+
+        # 0.3 Check if running in API-only mode
+        import os
+
+        api_only_mode = os.getenv("API_ONLY_MODE", "false").lower() == "true"
+
+        if api_only_mode:
+            # In API-only mode, we don't compute predictions - only serve from cache/DB
+            logger.warning(
+                f"API-ONLY MODE: No cached predictions found for {league_id}"
+            )
+            logger.info(
+                "💡 Predictions will be available after GitHub Actions worker runs"
+            )
+
+            # Return empty response instead of error to avoid breaking frontend
+            meta = LEAGUES_METADATA[league_id]
+            return PredictionsResponseDTO(
+                league=LeagueDTO(
+                    id=league_id,
+                    name=meta["name"],
+                    country=meta["country"],
+                ),
+                predictions=[],
+                generated_at=datetime.now(timezone("America/Bogota")),
+            )
+
+        # If not in API-only mode, proceed with real-time computation
+        logger.info(
+            f"Cache miss for {league_id}. Computing predictions in real-time..."
+        )
+
+        meta = LEAGUES_METADATA[league_id]
+        league = League(
+            id=league_id,
+            name=meta["name"],
+            country=meta["country"],
+        )
+
+        # Get historical data
+        # 1. Dynamic Season Calculation
+        # Compute seasons using helper
+        seasons = self._compute_seasons()
+
+        (
+            historical_matches,
+            upcoming_matches,
+            league_averages,
+        ) = await self._fetch_league_data(league_id, seasons, limit)
+
+        if not upcoming_matches:
+            logger.info(f"No upcoming future matches found for {league_id}")
+            return PredictionsResponseDTO(
+                league=LeagueDTO(
+                    id=league_id,
+                    name=meta["name"],
+                    country=meta["country"],
+                ),
+                predictions=[],
+                generated_at=datetime.now(timezone("America/Bogota")),
+            )
+
+        # Build predictions
+        predictions = []
+        data_sources_used = self._determine_data_sources()
+
+        # Prepare parallel tasks
+        # Determine min_matches threshold based on league type
+        # International tournaments (UCL/UEL) have fewer matches in recent history
+        min_matches = 6
+        if league_id in ["UCL", "UEL", "UECL"]:
+            min_matches = 3
+            logger.info(
+                f"Using relaxed min_matches={min_matches} for tournament {league_id}"
+            )
+
+        # Build match tasks and processing context in a helper to reduce cognitive
+        # complexity of this method.
+        match_tasks, matches_processing_data = self._build_match_tasks(
+            upcoming_matches,
+            limit,
+            historical_matches,
+            league_averages,
+            min_matches,
+            data_sources_used,
+        )
+
+        # Execute generation (parallel via background processor or synchronous fallback)
+        suggested_picks_results = await self._generate_suggested_picks(match_tasks)
+
+        # Apply Risk Management Constraints (Batch Optimization)
+        # Prepare list for RiskManager: [{'pick': p, 'match': m}, ...]
+        flat_picks_map = []
+        for i, res in enumerate(suggested_picks_results):
+            if res and res.suggested_picks:
+                match = matches_processing_data[i]["match"]
+                for pick in res.suggested_picks:
+                    flat_picks_map.append(
+                        {"pick": pick, "match": match, "result_obj": res}
+                    )
+
+        # Apply Risk Logic (Circuit Breakers + Portfolio)
+        # Note: apply_portfolio_constraints modifies the 'pick' objects in-place
+        # (updating reasoning, capping stake)
+        # and returns the approved list.
+        # Bypassed: We approve ALL candidates directly
+        # approved_items = self.risk_manager.apply_portfolio_constraints(flat_picks_map)
+        approved_items = flat_picks_map
+
+        # Re-organize back to structure (picks that were NOT approved are implicitly
+        # removed?
+        # Actually risk manager caps them or flags them. If fully rejected, we should
+        # remove.)
+
+        # Optimization: We only keep approved picks.
+        # But we need to update the original 'SuggestedPickResult' objects attached to
+        # matches_processing_data
+        # because those are used below in 'Assemble Results'.
+
+        # Strategy: Clear all picks first, then add back approved ones
+        for res in suggested_picks_results:
+            if res:
+                res.suggested_picks = []
+
+        for item in approved_items:
+            # Add back to the result object
+            item["result_obj"].suggested_picks.append(item["pick"])
+
+        predictions = self._assemble_predictions(
+            matches_processing_data, suggested_picks_results
+        )
+
+        response = PredictionsResponseDTO(
+            league=LeagueDTO(
+                id=league.id,
+                name=league.name,
+                country=league.country,
+            ),
+            predictions=predictions,
+            generated_at=datetime.now(timezone("America/Bogota")),
+        )
+
+        # Persist results (ephemeral cache + optional persistent DB)
+        self._persist_response_and_predictions(
+            cache_service, cache_key, response, predictions, league_id
+        )
+
         return response
 
-    def _match_to_dto(self, match: Match) -> MatchDTO:
+    def _match_to_dto(self, match: "Match") -> "MatchDTO":
         # Duplicated helper for now (should be in mapper)
-        from src.application.dtos.dtos import LeagueDTO
+
         from src.domain.services.team_service import TeamService
 
         return MatchDTO(
@@ -1007,10 +1012,8 @@ class GetPredictionsUseCase:
         )
 
     def _prediction_to_dto(
-        self, prediction: Prediction, picks: list = None
-    ) -> PredictionDTO:
-        from src.application.dtos.dtos import PredictionDTO, SuggestedPickDTO
-
+        self, prediction: "Prediction", picks: list = None
+    ) -> "PredictionDTO":
         pick_dtos = []
         if picks:
             pick_dtos = [
@@ -1041,8 +1044,8 @@ class GetPredictionsUseCase:
             ]
 
         # Top ML Picks = All picks with probability >= 75% (ML High Confidence tier)
-        TOP_ML_THRESHOLD = 0.75
-        top_ml_picks = [p for p in pick_dtos if p.probability >= TOP_ML_THRESHOLD]
+        top_ml_threshold = 0.75
+        top_ml_picks = [p for p in pick_dtos if p.probability >= top_ml_threshold]
         # Sort by probability descending
         top_ml_picks.sort(key=lambda x: x.probability, reverse=True)
 
@@ -1080,9 +1083,11 @@ class GetPredictionsUseCase:
         )
 
     def _filter_future_matches(
-        self, predictions: list[MatchPredictionDTO]
-    ) -> list[MatchPredictionDTO]:
+        self, predictions: "list[MatchPredictionDTO]"
+    ) -> "list[MatchPredictionDTO]":
         """Filters out matches that have already occurred."""
+
+        # Local import for DTO types used in annotations/runtime
 
         from src.utils.time_utils import get_current_time
 
@@ -1128,13 +1133,24 @@ class GetMatchDetailsUseCase:
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
         from src.application.dependencies import get_learning_service
+        from src.domain.services.ai_picks_service import AIPicksService
 
         self.picks_service = AIPicksService(
             learning_weights=get_learning_service().get_learning_weights()
         )
 
-    async def execute(self, match_id: str) -> MatchPredictionDTO:
+    async def execute(self, match_id: str) -> "MatchPredictionDTO":
         # 1. Get match details
+
+        # Local imports for data source names and exceptions used in this flow
+        from src.domain.exceptions import InsufficientDataException
+        from src.infrastructure.data_sources.football_data_org import (
+            FootballDataOrgSource,
+        )
+        from src.infrastructure.data_sources.football_data_uk import (
+            FootballDataUKSource,
+        )
+
         match = None
 
         # Try Football-Data.org first (if configured)
@@ -1221,7 +1237,6 @@ class GetMatchDetailsUseCase:
                     # Construct a league entity with the internal ID for OpenFootball
                     # lookup
                     # (OpenFootballSource uses league.id to find the file)
-                    from src.domain.entities.entities import League
 
                     temp_league = League(
                         id=internal_league_code,
@@ -1335,8 +1350,6 @@ class GetMatchDetailsUseCase:
 
     def _match_to_dto(self, match: Match) -> MatchDTO:
         # Duplicated helper for now (should be in mapper)
-        from src.application.dtos.dtos import LeagueDTO
-
         return MatchDTO(
             id=match.id,
             home_team=TeamDTO(
@@ -1376,7 +1389,6 @@ class GetMatchDetailsUseCase:
         self, prediction: Prediction, picks: list = None
     ) -> PredictionDTO:
         # Same logic as above, but keeping it inside the class for now
-        from src.application.dtos.dtos import PredictionDTO, SuggestedPickDTO
 
         pick_dtos = []
         if picks:
@@ -1438,6 +1450,7 @@ class GetTeamPredictionsUseCase:
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
         from src.application.dependencies import get_learning_service
+        from src.domain.services.ai_picks_service import AIPicksService
 
         self.picks_service = AIPicksService(
             learning_weights=get_learning_service().get_learning_weights()
@@ -1454,6 +1467,8 @@ class GetTeamPredictionsUseCase:
             List of MatchPredictionDTOs
         """
         # 1. Get matches
+        from src.domain.exceptions import InsufficientDataException
+
         matches = await self.data_sources.football_data_org.get_team_history(
             team_name, limit=10
         )
@@ -1592,7 +1607,7 @@ class GetTeamPredictionsUseCase:
 
     def _match_to_dto(self, match: Match) -> MatchDTO:
         # Duplicated helper for now to avoid cross-cutting refactor
-        from src.application.dtos.dtos import LeagueDTO
+        from src.application.dtos.dtos import LeagueDTO, MatchDTO, TeamDTO
         from src.domain.services.team_service import TeamService
 
         return MatchDTO(
@@ -1709,13 +1724,18 @@ class GetGlobalLiveMatchesUseCase:
         self.data_sources = data_sources
         self.persistence_repository = persistence_repository
 
-    async def execute(self) -> list[MatchDTO]:
+    async def execute(self) -> "list[MatchDTO]":
         """
         Execute the use case.
 
         Returns:
             List of unique live matches from all sources.
         """
+        # Local imports for async execution and DTO construction
+        import asyncio
+
+        from src.domain.services.team_service import TeamService
+
         tasks = []
 
         # 1. Football-Data.org (Primary)
@@ -1772,8 +1792,6 @@ class GetGlobalLiveMatchesUseCase:
 
         # Convert to DTOs
         # Helper reuse (technical debt: duplication)
-        from src.application.dtos.dtos import LeagueDTO
-        from src.domain.services.team_service import TeamService
 
         dtos = []
         for match in unique_matches.values():
@@ -1914,8 +1932,13 @@ class GetGlobalDailyMatchesUseCase:
         self.data_sources = data_sources
         self.persistence_repository = persistence_repository
 
-    async def execute(self, date_str: Optional[str] = None) -> list[MatchDTO]:
+    async def execute(self, date_str: Optional[str] = None) -> "list[MatchDTO]":
         """Get daily matches combined."""
+        # Local imports for async execution and DTO mapping
+        import asyncio
+
+        from src.domain.services.team_service import TeamService
+
         tasks = []
 
         # 1. Football-Data.org
@@ -1966,9 +1989,7 @@ class GetGlobalDailyMatchesUseCase:
                 if _calculate_richness(match) > _calculate_richness(existing):
                     unique_matches[key] = match
 
-        # Map to DTOs
-        from src.application.dtos.dtos import LeagueDTO
-        from src.domain.services.team_service import TeamService  # Ensure import
+        # Map to DTOs (DTOs and TeamService imported above)
 
         dtos = []
         for match in unique_matches.values():
