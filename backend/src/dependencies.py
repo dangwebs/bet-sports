@@ -4,15 +4,24 @@ API Dependencies Module
 Provides dependency injection for FastAPI routes.
 Contains factory functions for creating use case dependencies.
 """
+from __future__ import annotations
 
 from functools import lru_cache
 
+from src.application.services.ml_training_orchestrator import (
+    MLTrainingOrchestrator,  # type: ignore
+)
 from src.application.services.training_data_service import TrainingDataService
 from src.application.use_cases.use_cases import DataSources
+from src.domain.services.ai_picks_service import AIPicksService
+from src.domain.services.audit_service import AuditService
+from src.domain.services.learning_service import LearningService
 from src.domain.services.match_aggregator_service import MatchAggregatorService
 from src.domain.services.match_enrichment_service import MatchEnrichmentService
+from src.domain.services.parley_service import ParleyService
 from src.domain.services.pick_resolution_service import PickResolutionService
 from src.domain.services.prediction_service import PredictionService
+from src.domain.services.risk_management.risk_manager import RiskManager
 from src.domain.services.statistics_service import StatisticsService
 from src.infrastructure.cache.cache_service import get_cache_service
 from src.infrastructure.data_sources.espn import ESPNSource
@@ -20,6 +29,11 @@ from src.infrastructure.data_sources.football_data_org import FootballDataOrgSou
 from src.infrastructure.data_sources.football_data_uk import FootballDataUKSource
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
+from src.infrastructure.repositories.mongo_repository import (
+    MongoRepository,
+    get_mongo_repository,
+)
+from src.infrastructure.services.background_processor import BackgroundProcessor
 
 
 @lru_cache()
@@ -90,25 +104,16 @@ def get_statistics_service() -> StatisticsService:
     return StatisticsService()
 
 
-from src.domain.services.learning_service import LearningService
-
-
 @lru_cache()
 def get_learning_service() -> LearningService:
     """Get learning service (cached)."""
     return LearningService()
 
 
-from src.domain.services.parley_service import ParleyService
-
-
 @lru_cache()
 def get_parley_service() -> ParleyService:
     """Get parley service (cached)."""
     return ParleyService()
-
-
-from src.domain.services.ai_picks_service import AIPicksService
 
 
 @lru_cache()
@@ -138,12 +143,6 @@ def get_training_data_service() -> TrainingDataService:
     )
 
 
-from src.infrastructure.repositories.mongo_repository import (
-    MongoRepository,
-    get_mongo_repository,
-)
-
-
 @lru_cache()
 def get_persistence_repository() -> MongoRepository:
     """Get the mongo repository instance (cached singleton)."""
@@ -153,6 +152,8 @@ def get_persistence_repository() -> MongoRepository:
 @lru_cache()
 def get_ml_training_orchestrator() -> "MLTrainingOrchestrator":
     """Get ML training orchestrator service (cached)."""
+    # Import inside the factory to avoid importing heavy training modules at import-time
+    # and to reduce risk of circular imports during module initialization.
     from src.application.services.ml_training_orchestrator import MLTrainingOrchestrator
 
     return MLTrainingOrchestrator(
@@ -165,25 +166,16 @@ def get_ml_training_orchestrator() -> "MLTrainingOrchestrator":
     )
 
 
-from src.domain.services.audit_service import AuditService
-
-
 @lru_cache()
 def get_audit_service() -> AuditService:
     """Get audit service (cached)."""
     return AuditService(training_orchestrator=get_ml_training_orchestrator())
 
 
-from src.infrastructure.services.background_processor import BackgroundProcessor
-
-
 @lru_cache()
 def get_background_processor() -> BackgroundProcessor:
     """Get background processor (cached singleton)."""
     return BackgroundProcessor()
-
-
-from src.domain.services.risk_management.risk_manager import RiskManager
 
 
 @lru_cache()
