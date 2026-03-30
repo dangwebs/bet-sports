@@ -172,37 +172,23 @@ async def process_league_async(
         logger.warning(f"⚠️  Skipping unknown league: {league_id}")
         return None
 
-    try:
-        logger.info(f"🔄 Processing League: {league_id}")
-
-        # 1. Generate Predictions
-        result = await use_case.execute(
-            league_id,
-            limit=50,
-            force_refresh=True if "force" in locals() and force else False,
-        )
-        logger.info(f"✅ Saved {len(result.predictions)} predictions for {league_id}")
-
-        return league_id, True
-    except Exception as e:
-        logger.error(f"❌ Failed to process {league_id}: {e}")
-        return league_id, False
+    # Delegate to the refactored generator which is easier to test
+    return await generate_predictions_for_league(
+        league_id, use_case, persistence_repository, force=force
+    )
 
 
-async def cmd_predict(  # noqa: C901
-    leagues_str: str, parallel: bool = True, force: bool = False
-):
+def prepare_services():
+    """Inicializa y devuelve el `use_case` y el `persistence_repository`.
+
+    Las importaciones se hacen en tiempo de ejecución para evitar ciclos de importación
+    y para facilitar el mocking en las pruebas unitarias.
     """
-    Step 2: Massive Inference for specific leagues with parallel processing.
-    """
-    leagues = [league.strip() for league in leagues_str.split(",") if league.strip()]
-    logger.info(f"CMD: PREDICT. Target Leagues: {leagues}, Parallel: {parallel}")
-
     from src.application.use_cases.use_cases import GetPredictionsUseCase
-    from src.dependencies import get_persistence_repository  # get_risk_manager,
     from src.dependencies import (
         get_data_sources,
         get_match_aggregator_service,
+        get_persistence_repository,
         get_prediction_service,
         get_statistics_service,
     )
@@ -214,27 +200,98 @@ async def cmd_predict(  # noqa: C901
         prediction_service=get_prediction_service(),
         statistics_service=get_statistics_service(),
         match_aggregator=get_match_aggregator_service(),
-        # risk_manager=get_risk_manager(),
         persistence_repository=repo,
     )
 
-    if parallel and len(leagues) > 1:
-        # Procesar múltiples ligas en paralelo usando asyncio.gather
-        logger.info(f"🔥 Processing {len(leagues)} leagues in parallel")
-        tasks = [
-            process_league_async(league_id, use_case, repo, force=force)
-            for league_id in leagues
-        ]
+    return use_case, repo
 
-        # Barra de progreso para el procesamiento paralelo
-        with tqdm(total=len(leagues), desc="Leagues (parallel)", unit="league") as pbar:
-            results = []
-            for coro in asyncio.as_completed(tasks):
-                result = await coro
-                pbar.update(1)
-                if result:
-                    pbar.set_postfix_str(f"Completed {result[0]}")
-                results.append(result)
+
+async def generate_predictions_for_league(
+    league_id: str, use_case, persistence_repository, force: bool = False
+):
+    """Genera predicciones para una liga y devuelve (league_id, success_bool)."""
+    logger.info(f"🔄 Processing League: {league_id}")
+    try:
+        result = await use_case.execute(
+            league_id,
+            limit=50,
+            force_refresh=True if "force" in locals() and force else False,
+        )
+
+        preds = getattr(result, "predictions", None)
+        if preds is not None:
+            logger.info(f"✅ Generated {len(preds)} predictions for {league_id}")
+        else:
+            logger.info(f"✅ No predictions returned for {league_id}")
+
+        return league_id, True
+    except Exception as e:
+        logger.error(f"❌ Failed to process {league_id}: {e}", exc_info=True)
+        return league_id, False
+
+
+def map_picks_to_dtos(picks):
+    """Mapea una lista de 'picks' a diccionarios listos para persistir.
+
+    Intenta manejar objetos con `model_dump()`, `dict()` o simples `dict`.
+    """
+    dtos = []
+    for p in picks:
+        if isinstance(p, dict):
+            dtos.append(p)
+        elif hasattr(p, "model_dump"):
+            try:
+                dtos.append(p.model_dump())
+            except Exception:
+                try:
+                    dtos.append(p.dict())
+                except Exception:
+                    dtos.append(vars(p))
+        elif hasattr(p, "dict"):
+            dtos.append(p.dict())
+        else:
+            try:
+                dtos.append(vars(p))
+            except Exception:
+                dtos.append({"value": p})
+    return dtos
+
+
+def persist_batch(repo, batch):
+    """Intenta persistir un batch usando la API conocida del repositorio.
+
+    Devuelve True si la operación parece haber sido ejecutada (no necesariamente válida
+    semánticamente), False en caso de excepción.
+    """
+    try:
+        if hasattr(repo, "bulk_save_predictions"):
+            repo.bulk_save_predictions(batch)
+        elif hasattr(repo, "save_predictions"):
+            repo.save_predictions(batch)
+        elif hasattr(repo, "save_training_result"):
+            # Fallback conservador
+            repo.save_training_result("predictions_batch", batch)
+        else:
+            logger.warning("Repository has no known bulk save method.")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to persist batch: {e}", exc_info=True)
+        return False
+
+
+async def cmd_predict(leagues_str: str, parallel: bool = True, force: bool = False):
+    """
+    Step 2: Massive Inference for specific leagues with parallel processing.
+    """
+    leagues = [league.strip() for league in leagues_str.split(",") if league.strip()]
+    logger.info(f"CMD: PREDICT. Target Leagues: {leagues}, Parallel: {parallel}")
+
+    # Inicializar servicios y repositorio (se extrae a helper para facilitar tests)
+    use_case, repo = prepare_services()
+
+    if parallel and len(leagues) > 1:
+        # Procesar múltiples ligas en paralelo usando helper
+        results = await _process_leagues_parallel(leagues, use_case, repo, force)
 
         # Analizar resultados
         failed = []
@@ -249,7 +306,7 @@ async def cmd_predict(  # noqa: C901
                 failed.append(result[0])
 
         logger.info(
-            f"📊 Results: ✅ {len(succeeded)} succeeded, " f"❌ {len(failed)} failed"
+            "📊 Results: ✅ %d succeeded, ❌ %d failed" % (len(succeeded), len(failed))
         )
 
         if failed:
@@ -258,17 +315,8 @@ async def cmd_predict(  # noqa: C901
                 logger.error("❌ All leagues failed!")
                 sys.exit(1)
     else:
-        # Procesamiento secuencial con barra de progreso
-        logger.info(f"🔄 Processing {len(leagues)} leagues sequentially")
-        failed = []
-        with tqdm(leagues, desc="Leagues", unit="league") as pbar:
-            for league_id in pbar:
-                pbar.set_postfix_str(f"Processing {league_id}")
-                result = await process_league_async(
-                    league_id, use_case, repo, force=force
-                )
-                if result and not result[1]:
-                    failed.append(result[0])
+        # Procesamiento secuencial con helper
+        failed = await _process_leagues_sequential(leagues, use_case, repo, force)
 
         if failed and len(failed) == len(leagues):
             logger.error("❌ All leagues failed!")
@@ -278,6 +326,41 @@ async def cmd_predict(  # noqa: C901
             logger.warning(f"⚠️  Some leagues failed: {failed}")
         else:
             logger.info("✨ All leagues processed successfully.")
+
+
+async def _process_leagues_parallel(leagues, use_case, repo, force: bool = False):
+    """Helper: procesa ligas en paralelo y devuelve la lista de resultados."""
+    logger.info(f"🔥 Processing {len(leagues)} leagues in parallel")
+    tasks = [
+        process_league_async(league_id, use_case, repo, force=force)
+        for league_id in leagues
+    ]
+
+    # Barra de progreso para el procesamiento paralelo
+    results = []
+    with tqdm(total=len(leagues), desc="Leagues (parallel)", unit="league") as pbar:
+        for coro in asyncio.as_completed(tasks):
+            result = await coro
+            pbar.update(1)
+            if result:
+                pbar.set_postfix_str(f"Completed {result[0]}")
+            results.append(result)
+
+    return results
+
+
+async def _process_leagues_sequential(leagues, use_case, repo, force: bool = False):
+    """Helper: procesa ligas de forma secuencial y devuelve la lista de fallos."""
+    logger.info(f"🔄 Processing {len(leagues)} leagues sequentially")
+    failed = []
+    with tqdm(leagues, desc="Leagues", unit="league") as pbar:
+        for league_id in pbar:
+            pbar.set_postfix_str(f"Processing {league_id}")
+            result = await process_league_async(league_id, use_case, repo, force=force)
+            if result and not result[1]:
+                failed.append(result[0])
+
+    return failed
 
 
 async def cmd_cleanup():
