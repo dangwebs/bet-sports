@@ -10,6 +10,9 @@ uvicorn[standard]==0.40.0
 pydantic==2.12.5
 pydantic-settings==2.12.0
 
+# Rate limiting for admin endpoints
+slowapi==0.1.9
+
 # HTTP clients (for fetching live match data)
 httpx==0.26.0
 aiohttp==3.13.2

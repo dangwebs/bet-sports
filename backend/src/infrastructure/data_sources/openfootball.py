@@ -1,17 +1,19 @@
 """
 OpenFootball Data Source
 
-This module handles downloading and parsing JSON data from the OpenFootball GitHub repository.
+This module handles downloading and parsing JSON data from the OpenFootball
+GitHub repository.
+
 Repository: https://github.com/openfootball/football.json
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
-from dataclasses import dataclass
 
 import httpx
-from src.domain.entities.entities import Match, Team, League
+from src.domain.entities.entities import League, Match, Team
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OpenFootballConfig:
     """Configuration for OpenFootball data source."""
-    base_url: str = "https://raw.githubusercontent.com/openfootball/football.json/master"
+
+    base_url: str = (
+        "https://raw.githubusercontent.com/openfootball/football.json/master"
+    )
     timeout: int = 30
 
 
@@ -62,18 +67,18 @@ class OpenFootballSource:
             else:
                 start_year = year - 1
                 end_year = year
-            
+
             return f"{start_year}-{str(end_year)[-2:]}"
-        
+
         return season
 
     async def get_matches(self, league: League) -> list[Match]:
         """
         Get all matches for a league.
-        
+
         Args:
             league: League entity
-            
+
         Returns:
             List of matches
         """
@@ -83,23 +88,23 @@ class OpenFootballSource:
 
         filename = LEAGUE_FILE_MAPPING[league.id]
         season_str = self._get_season_string(league.season)
-        
+
         # URL pattern: {base}/{season}/{filename}.json
         url = f"{self.config.base_url}/{season_str}/{filename}.json"
-        
+
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, timeout=self.config.timeout)
-                
+
                 if response.status_code == 404:
                     logger.warning(f"OpenFootball file not found: {url}")
                     return []
-                    
+
                 response.raise_for_status()
                 data = response.json()
-                
+
                 return self._parse_matches(data, league)
-                
+
         except Exception as e:
             logger.error(f"Error fetching OpenFootball data from {url}: {e}")
             return []
@@ -107,20 +112,21 @@ class OpenFootballSource:
     def _parse_matches(self, data: dict, league: League) -> list[Match]:
         """Parse JSON data into Match entities."""
         matches = []
-        
+
         # Data structure: { "name": "...", "matches": [ ... ] }
         match_list = data.get("matches", [])
-        
+
         for item in match_list:
             try:
-                # { "date": "2024-08-16", "team1": "...", "team2": "...", "score": { ... } }
+                # Example: {'date':'YYYY-MM-DD','team1':'Home','team2':'Away'}
                 date_str = item.get("date")
                 if not date_str:
                     continue
-                    
+
                 from datetime import timezone
+
                 dt = datetime.strptime(date_str, "%Y-%m-%d")
-                
+
                 # Parse time if available (format: "HH:MM" or "HH:MM:SS")
                 time_str = item.get("time")
                 if time_str:
@@ -135,50 +141,51 @@ class OpenFootballSource:
                 else:
                     # No time provided, default to 15:00 (typical afternoon kickoff)
                     dt = dt.replace(hour=15, minute=0)
-                
+
                 # Store as UTC (frontend handles display conversion)
                 match_date = dt.replace(tzinfo=timezone.utc)
 
                 home_name = item.get("team1", "Unknown")
                 away_name = item.get("team2", "Unknown")
-                
+
                 home_team = Team(
                     id=home_name.lower().replace(" ", "_"),
                     name=home_name,
-                    country=league.country
+                    country=league.country,
                 )
-                
+
                 away_team = Team(
                     id=away_name.lower().replace(" ", "_"),
                     name=away_name,
-                    country=league.country
+                    country=league.country,
                 )
-                
+
                 # Score parsing
                 score = item.get("score")
                 home_goals = None
                 away_goals = None
                 status = "NS"
-                
+
                 if score and score.get("ft"):
                     home_goals = score["ft"][0]
                     away_goals = score["ft"][1]
                     status = "FT"
-                
+
+                date_part = match_date.strftime("%Y%m%d")
                 match = Match(
-                    id=f"{league.id}_{match_date.strftime('%Y%m%d')}_{home_team.id}_{away_team.id}",
+                    id=f"{league.id}_{date_part}_{home_team.id}_{away_team.id}",
                     home_team=home_team,
                     away_team=away_team,
                     league=league,
                     match_date=match_date,
                     home_goals=home_goals,
                     away_goals=away_goals,
-                    status=status
+                    status=status,
                 )
                 matches.append(match)
-                
+
             except Exception as e:
                 logger.debug(f"Error parsing match item: {e}")
                 continue
-                
+
         return matches

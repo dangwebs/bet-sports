@@ -1,7 +1,12 @@
-# Docker Compose para desarrollo con paridad a producción
-# Uso: docker compose -f docker-compose.dev.yml up -d
+# Docker Compose local portable
+# Uso base: docker compose -f docker-compose.dev.yml up -d
+# Pipeline MLOps local: docker compose -f docker-compose.dev.yml --profile mlops run --rm mlops-pipeline
 
-version: "3.8"
+x-project-image: &project-image
+  build:
+    context: .
+    dockerfile: Dockerfile.portable
+  image: bjj-betsports-app:local
 
 services:
   mongodb:
@@ -21,26 +26,85 @@ services:
       timeout: 5s
       retries: 5
 
-  ml-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: bjj-ml-worker-dev
+  backend-api:
+    <<: *project-image
+    container_name: bjj-backend-api-dev
+    working_dir: /workspace/backend
+    command: ["python3", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - ./backend/.env
     environment:
       MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
       MONGO_DB_NAME: "bjj_betsports"
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      GITHUB_USERNAME: ${GITHUB_USERNAME:-Worker-Bot}
-      GITHUB_EMAIL: ${GITHUB_EMAIL:-worker@bjj-betsports.local}
-      GITHUB_REPO: ${GITHUB_REPO:-}
-      # Insert other env vars manually if needed via .env
-    env_file:
-      - ./backend/.env
-    volumes:
-      - ./backend:/app
+      DISABLE_ML_TRAINING: ${DISABLE_ML_TRAINING:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      N_JOBS: ${N_JOBS:-2}
+      TRAIN_DAYS: ${TRAIN_DAYS:-550}
+      PREDICT_LEAGUES: ${PREDICT_LEAGUES:-E0}
+    ports:
+      - "8000:8000"
     depends_on:
       mongodb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    <<: *project-image
+    container_name: bjj-frontend-dev
+    working_dir: /workspace/frontend
+    command: ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_API_PROXY_TARGET: http://backend-api:8000
+    ports:
+      - "5173:4173"
+    depends_on:
+      backend-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ml-worker:
+    <<: *project-image
+    container_name: bjj-ml-worker-dev
+    working_dir: /workspace/backend
+    command: ["python3", "src/worker.py"]
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
+      MONGO_DB_NAME: "bjj_betsports"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WORKER_MODE: ${WORKER_MODE:-cron}
+      WORKER_RUN_IMMEDIATE: ${WORKER_RUN_IMMEDIATE:-false}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mlops-pipeline:
+    <<: *project-image
+    container_name: bjj-mlops-pipeline-dev
+    working_dir: /workspace/backend
+    command: ["bash", "-lc", "./scripts/local_mlops_pipeline.sh"]
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
+      MONGO_DB_NAME: "bjj_betsports"
+      N_JOBS: ${N_JOBS:-4}
+      TRAIN_DAYS: ${TRAIN_DAYS:-550}
+      PREDICT_LEAGUES: ${PREDICT_LEAGUES:-E0,SP1,D1,I1,F1,P1,B1,UCL}
+      TOP_PICKS_LIMIT: ${TOP_PICKS_LIMIT:-50}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    profiles: ["mlops"]
 
 volumes:
   mongodb_data:
