@@ -1,0 +1,614 @@
+[
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 190
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/orchestrator_cli.py",
+    "fix": null,
+    "location": {
+      "column": 11,
+      "row": 190
+    },
+    "message": "`cmd_predict` is too complex (14 > 10)",
+    "noqa_row": 190,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 15,
+      "row": 139
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 11,
+      "row": 139
+    },
+    "message": "`main` is too complex (25 > 10)",
+    "noqa_row": 139,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 36,
+      "row": 71
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/services/ml_training_orchestrator.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 71
+    },
+    "message": "`run_training_pipeline` is too complex (21 > 10)",
+    "noqa_row": 71,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 48,
+      "row": 31
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/services/training_data_service.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 31
+    },
+    "message": "`fetch_comprehensive_training_data` is too complex (23 > 10)",
+    "noqa_row": 31,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 28,
+      "row": 208
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/services/training_data_service.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 208
+    },
+    "message": "`_backfill_gap` is too complex (11 > 10)",
+    "noqa_row": 208,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 77
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/live_predictions_use_case.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 77
+    },
+    "message": "`execute` is too complex (29 > 10)",
+    "noqa_row": 77,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 35,
+      "row": 310
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/live_predictions_use_case.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 310
+    },
+    "message": "`_generate_prediction` is too complex (12 > 10)",
+    "noqa_row": 310,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 62
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/suggested_picks_use_case.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 62
+    },
+    "message": "`execute` is too complex (14 > 10)",
+    "noqa_row": 62,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 724
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/suggested_picks_use_case.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 724
+    },
+    "message": "`execute` is too complex (13 > 10)",
+    "noqa_row": 724,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 189
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 189
+    },
+    "message": "`execute` is too complex (63 > 10)",
+    "noqa_row": 189,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 1136
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 1136
+    },
+    "message": "`execute` is too complex (18 > 10)",
+    "noqa_row": 1136,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 1446
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 1446
+    },
+    "message": "`execute` is too complex (13 > 10)",
+    "noqa_row": 1446,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 1712
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 1712
+    },
+    "message": "`execute` is too complex (25 > 10)",
+    "noqa_row": 1712,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 32,
+      "row": 1735
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 13,
+      "row": 1735
+    },
+    "message": "`_calculate_richness` is too complex (11 > 10)",
+    "noqa_row": 1735,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 1917
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 1917
+    },
+    "message": "`execute` is too complex (20 > 10)",
+    "noqa_row": 1917,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 26,
+      "row": 249
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/ai_picks_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 249
+    },
+    "message": "`_process_ai_logic` is too complex (35 > 10)",
+    "noqa_row": 249,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 28,
+      "row": 22
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/audit_service.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 22
+    },
+    "message": "`audit_and_fix` is too complex (16 > 10)",
+    "noqa_row": 22,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 23,
+      "row": 171
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/match_aggregator_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 171
+    },
+    "message": "`_merge_matches` is too complex (18 > 10)",
+    "noqa_row": 171,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 22,
+      "row": 60
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/match_enrichment_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 60
+    },
+    "message": "`_enrich_match` is too complex (18 > 10)",
+    "noqa_row": 60,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 21,
+      "row": 23
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/pick_resolution_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 23
+    },
+    "message": "`resolve_pick` is too complex (20 > 10)",
+    "noqa_row": 23,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 39,
+      "row": 632
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/prediction_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 632
+    },
+    "message": "`calculate_corner_probabilities` is too complex (15 > 10)",
+    "noqa_row": 632,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 37,
+      "row": 776
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/prediction_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 776
+    },
+    "message": "`calculate_card_probabilities` is too complex (15 > 10)",
+    "noqa_row": 776,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 28,
+      "row": 1059
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/prediction_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 1059
+    },
+    "message": "`generate_prediction` is too complex (26 > 10)",
+    "noqa_row": 1059,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 36,
+      "row": 33
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/risk_management/risk_manager.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 33
+    },
+    "message": "`apply_portfolio_constraints` is too complex (11 > 10)",
+    "noqa_row": 33,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 34,
+      "row": 494
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/statistics_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 494
+    },
+    "message": "`calculate_team_statistics` is too complex (17 > 10)",
+    "noqa_row": 494,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 31,
+      "row": 707
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/statistics_service.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 707
+    },
+    "message": "`update_team_stats_dict` is too complex (11 > 10)",
+    "noqa_row": 707,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 35,
+      "row": 280
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/data_sources/espn.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 280
+    },
+    "message": "`get_finished_matches` is too complex (13 > 10)",
+    "noqa_row": 280,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 28,
+      "row": 124
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/data_sources/football_data_org.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 124
+    },
+    "message": "`_make_request` is too complex (12 > 10)",
+    "noqa_row": 124,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 35,
+      "row": 365
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/data_sources/football_data_org.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 365
+    },
+    "message": "`get_finished_matches` is too complex (12 > 10)",
+    "noqa_row": 365,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 31,
+      "row": 479
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/data_sources/football_data_org.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 479
+    },
+    "message": "`get_team_history` is too complex (13 > 10)",
+    "noqa_row": 479,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 27,
+      "row": 147
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/data_sources/football_data_uk.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 147
+    },
+    "message": "`download_csv` is too complex (11 > 10)",
+    "noqa_row": 147,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 37,
+      "row": 473
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/data_sources/football_data_uk.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 473
+    },
+    "message": "`get_historical_matches` is too complex (11 > 10)",
+    "noqa_row": 473,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 35,
+      "row": 47
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/data_sources/github_dataset.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 47
+    },
+    "message": "`get_finished_matches` is too complex (13 > 10)",
+    "noqa_row": 47,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  },
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {
+      "column": 41,
+      "row": 39
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/scheduler.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 39
+    },
+    "message": "`run_daily_orchestrated_job` is too complex (11 > 10)",
+    "noqa_row": 39,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure"
+  }
+]

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel
 
@@ -68,7 +68,7 @@ class MLTrainingOrchestrator:
         self.cache_service = cache_service
         self.feature_extractor = MLFeatureExtractor()
 
-    async def run_training_pipeline(
+    async def run_training_pipeline(  # noqa: C901
         self,
         league_ids: Optional[List[str]] = None,
         days_back: int = 365,

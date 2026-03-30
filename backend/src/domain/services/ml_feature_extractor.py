@@ -5,9 +5,12 @@ Centralizes the logic for creating feature vectors for ML models.
 """
 
 import zlib
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from src.domain.entities.suggested_pick import SuggestedPick
+
+if TYPE_CHECKING:
+    from src.domain.entities.entities import Match, TeamStatistics
 
 
 class MLFeatureExtractor:
@@ -167,7 +170,7 @@ class MLFeatureExtractor:
                 # 2. Volatility (Standard Deviation)
                 try:
                     volatility = statistics.stdev(recent_list)
-                except:
+                except Exception:
                     volatility = 0.0
 
                 # 3. Momentum (Weighted Average)

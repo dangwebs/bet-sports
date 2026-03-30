@@ -5,8 +5,8 @@ Utility to wrap leading comment lines to a given width.
 Usage: python scripts/wrap_comments.py path/to/file.py [width]
 """
 import sys
-from pathlib import Path
 import textwrap
+from pathlib import Path
 
 
 def wrap_comments_in_file(path, width=88, min_width=20):
@@ -20,11 +20,16 @@ def wrap_comments_in_file(path, width=88, min_width=20):
     changed = False
     for line in lines:
         stripped = line.lstrip()
-        if stripped.startswith('#'):
+        if stripped.startswith("#"):
             indent = line[: len(line) - len(stripped)]
             low = stripped.lower()
             # Preserve special markers and URLs
-            if low.startswith('# type:') or low.startswith('# pragma:') or 'http://' in line or 'https://' in line:
+            if (
+                low.startswith("# type:")
+                or low.startswith("# pragma:")
+                or "http://" in line
+                or "https://" in line
+            ):
                 new_lines.append(line)
                 continue
             comment_text = stripped[1:].lstrip()
@@ -40,7 +45,7 @@ def wrap_comments_in_file(path, width=88, min_width=20):
                 continue
         new_lines.append(line)
     if changed:
-        p.write_text('\n'.join(new_lines) + '\n')
+        p.write_text("\n".join(new_lines) + "\n")
         print(f"wrapped: {path}")
     else:
         print(f"no-change: {path}")

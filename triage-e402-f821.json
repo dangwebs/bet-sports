@@ -1,0 +1,362 @@
+[
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 18,
+      "row": 478
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 17,
+      "row": 478
+    },
+    "message": "Undefined name `X`",
+    "noqa_row": 478,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 26,
+      "row": 513
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 25,
+      "row": 513
+    },
+    "message": "Undefined name `X`",
+    "noqa_row": 513,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 38,
+      "row": 516
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 37,
+      "row": 516
+    },
+    "message": "Undefined name `X`",
+    "noqa_row": 516,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 24,
+      "row": 551
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 23,
+      "row": 551
+    },
+    "message": "Undefined name `X`",
+    "noqa_row": 551,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 38,
+      "row": 554
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 37,
+      "row": 554
+    },
+    "message": "Undefined name `X`",
+    "noqa_row": 554,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 27,
+      "row": 580
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 26,
+      "row": 580
+    },
+    "message": "Undefined name `X`",
+    "noqa_row": 580,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 26,
+      "row": 584
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/train_model_optimized.py",
+    "fix": null,
+    "location": {
+      "column": 25,
+      "row": 584
+    },
+    "message": "Undefined name `X`",
+    "noqa_row": 584,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 47,
+      "row": 26
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/scripts/worker_config.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 26
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 26,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 73,
+      "row": 132
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/get_parleys_use_case.py",
+    "fix": null,
+    "location": {
+      "column": 60,
+      "row": 132
+    },
+    "message": "Undefined name `SuggestedPick`",
+    "noqa_row": 132,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 33,
+      "row": 726
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/suggested_picks_use_case.py",
+    "fix": null,
+    "location": {
+      "column": 20,
+      "row": 726
+    },
+    "message": "Undefined name `TopMLPicksDTO`",
+    "noqa_row": 726,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 69,
+      "row": 123
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 123
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 123,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 50,
+      "row": 147
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/application/use_cases/use_cases.py",
+    "fix": null,
+    "location": {
+      "column": 30,
+      "row": 147
+    },
+    "message": "Undefined name `get_learning_service`",
+    "noqa_row": 147,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 63,
+      "row": 27
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/domain/services/cache_warmup_service.py",
+    "fix": null,
+    "location": {
+      "column": 42,
+      "row": 27
+    },
+    "message": "Undefined name `PersistenceRepository`",
+    "noqa_row": 27,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 36,
+      "row": 14
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/infrastructure/cache/cache_service.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 14
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 14,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 82,
+      "row": 10
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/worker.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 10
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 10,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 39,
+      "row": 11
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/worker.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 11
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 11,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 50,
+      "row": 12
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/src/worker.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 12
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 12,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 2,
+      "row": 18
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/scripts/manual_warmup.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 13
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 13,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 72,
+      "row": 19
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/scripts/manual_warmup.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 19
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 19,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 69,
+      "row": 20
+    },
+    "filename": "/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/scripts/manual_warmup.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 20
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 20,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  }
+]
