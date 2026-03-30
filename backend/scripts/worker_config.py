@@ -3,7 +3,7 @@ Worker Configuration
 Configuration settings for the prediction worker script.
 """
 import os
-from typing import List
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -24,6 +24,7 @@ PREDICTION_LIMIT = int(os.getenv("PREDICTION_LIMIT", 50))  # Max predictions per
 
 # Leagues to process (from constants)
 from src.core.constants import DEFAULT_LEAGUES
+
 env_leagues = os.getenv("LEAGUES_TO_PROCESS")
 if env_leagues:
     LEAGUES_TO_PROCESS = [l.strip() for l in env_leagues.split(",")]

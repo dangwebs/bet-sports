@@ -4,10 +4,15 @@ Statistics Domain Service
 Handles calculation of team statistics from match history.
 """
 
-from typing import List, Optional
-import unicodedata
-from src.domain.entities.entities import Match, TeamStatistics, TeamH2HStatistics
+from __future__ import annotations
 
+import unicodedata
+from typing import TYPE_CHECKING, List, Optional
+
+from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.value_objects import LeagueAverages
 
 
 class StatisticsService:
@@ -17,12 +22,15 @@ class StatisticsService:
     - All calculations must be based exclusively on REAL match results.
     - DO NOT invent statistics if history is missing.
     - If no historical data is available, returns zeros/empty objects.
-    
-    CORE LOGIC PROTECTION RULE:
-    - The statistical aggregation logic in this file is verified for production.
-    - MODIFICATION OF CORE CALCULATION LOGIC IS FORBIDDEN to preserve data integrity.
-    - New metrics must be implemented by EXTENDING the logic, not changing existing formulas.
+
+        CORE LOGIC PROTECTION RULE:
+        - The statistical aggregation logic in this file is verified for production.
+        - MODIFICATION OF CORE CALCULATION LOGIC IS FORBIDDEN
+            to preserve data integrity.
+        - New metrics must be implemented by EXTENDING the logic,
+            not changing existing formulas.
     """
+
     @staticmethod
     def _resolve_alias(name: str) -> str:
         """Resolve common team name aliases."""
@@ -100,10 +108,6 @@ class StatisticsService:
             "ipswich town fc": "ipswich",
             "ipswich town": "ipswich",
             "ipswich": "ipswich",
-            "manchester city fc": "manchester city",
-            "manchester united fc": "manchester united",
-            "tottenham hotspur fc": "tottenham",
-            "wolverhampton wanderers fc": "wolverhampton",
             # Spain (La Liga)
             "alaves": "alaves",
             "deportivo alaves": "alaves",
@@ -116,12 +120,12 @@ class StatisticsService:
             "atl madrid": "atletico madrid",
             "ath madrid": "atletico madrid",
             "club atletico de madrid": "atletico madrid",
-            "club atlético de madrid": "atletico madrid", # UTF-8 catch
+            "club atlético de madrid": "atletico madrid",  # UTF-8 catch
             "barcelona": "barcelona",
             "fc barcelona": "barcelona",
             "betis": "betis",
             "real betis balompié": "betis",
-            "real betis balompie": "betis", # No accent
+            "real betis balompie": "betis",  # No accent
             "real betis": "betis",
             "celta": "celta",
             "rc celta de vigo": "celta",
@@ -143,7 +147,7 @@ class StatisticsService:
             "osasuna": "osasuna",
             "ca osasuna": "osasuna",
             "club atletico osasuna": "osasuna",
-            "club atlético osasuna": "osasuna", # UTF-8 catch
+            "club atlético osasuna": "osasuna",  # UTF-8 catch
             "oviedo": "oviedo",
             "real oviedo": "oviedo",
             "real madrid": "real madrid",
@@ -153,7 +157,7 @@ class StatisticsService:
             "sevilla fc": "sevilla",
             "sociedad": "sociedad",
             "real sociedad de fútbol": "sociedad",
-            "real sociedad de futbol": "sociedad", # No accent
+            "real sociedad de futbol": "sociedad",  # No accent
             "real sociedad": "sociedad",
             "valencia": "valencia",
             "valencia cf": "valencia",
@@ -171,7 +175,7 @@ class StatisticsService:
             "cagliari calcio": "cagliari",
             "como 1907": "como",
             "udinese calcio": "udinese",
-            "genoa cfc": "genoa", 
+            "genoa cfc": "genoa",
             "us sassuolo calcio": "sassuolo",
             "parma calcio 1913": "parma",
             "us lecce": "lecce",
@@ -190,7 +194,9 @@ class StatisticsService:
             "as roma": "roma",
             "juventus fc": "juventus",
             "us cremonese": "cremonese",
-            "ac pisa 1909": "pisa", # Added based on debug output (though Pisa is Serie B usually, might be cup or promotion)
+            # Added based on debug output (though Pisa is Serie B usually,
+            # might be cup or promotion)
+            "ac pisa 1909": "pisa",
             # France
             "racing club de lens": "lens",
             "rc lens": "lens",
@@ -227,10 +233,9 @@ class StatisticsService:
             "rc strasbourg alsace": "strasbourg",
             "angers sco": "angers",
             "aj auxerre": "auxerre",
-            "paris fc": "paris fc", # Canonical if in db
+            "paris fc": "paris fc",  # Canonical if in db
             "as saint-etienne": "st etienne",
             "as saint-étienne": "st etienne",
-
             # Portugal (Primeira Liga)
             "sl benfica": "benfica",
             "sporting cp": "sp lisbon",
@@ -243,16 +248,18 @@ class StatisticsService:
             "fc arouca": "arouca",
             "gd estoril praia": "estoril",
             "cf estrela da amadora": "estrela",
-            "sporting clube de braga": "braga",
-            "sc braga": "braga",
+            "sporting clube de braga": "sp braga",  # Canonicalized to CSV form
+            "sporting braga": "sp braga",
+            "sc braga": "sp braga",
+            "braga": "sp braga",
             "cd santa clara": "santa clara",
             "gil vicente fc": "gil vicente",
             "fc famalicão": "famalicao",
             "famalicao": "famalicao",
             "casa pia ac": "casa pia",
-            "vitória sc": "guimaraes",
-            "vitoria sc": "guimaraes",
-            "vitoria guimaraes": "guimaraes",
+            "vitória sc": "vitoriaguimaraes",
+            "vitoria sc": "vitoriaguimaraes",
+            "vitoria guimaraes": "vitoriaguimaraes",
             "gd chaves": "chaves",
             "portimonense sc": "portimonense",
             "fc vizela": "vizela",
@@ -261,20 +268,9 @@ class StatisticsService:
             "cd nacional": "nacional",
             "cd tondela": "tondela",
             "sport lisboa e benfica": "benfica",
-            "sl benfica": "benfica",
-            "sporting clube de braga": "sp braga", # CSV is Sp Braga
-            "sporting braga": "sp braga",
-            "sc braga": "sp braga",
-            "braga": "sp braga",
-            "sporting cp": "sp lisbon", # CSV is Sp Lisbon
-            "sporting clube de portugal": "sp lisbon",
             "sporting lisboa": "sp lisbon",
             "sporting lisbon": "sp lisbon",
             "sporting": "sp lisbon",
-            "vitoria sc": "vitoriaguimaraes",
-            "vitoria guimaraes": "vitoriaguimaraes",
-            "vitória sc": "vitoriaguimaraes",
-            
             # Belgium (Jupiler Pro League)
             "club brugge kv": "club brugge",
             "club brugge": "club brugge",
@@ -318,18 +314,16 @@ class StatisticsService:
             "kv oostende": "oostende",
             "zulte waregem": "waregem",
             "seraing": "seraing",
-
             # Netherlands (Eredivisie)
             "nec nicmegen": "nec",
             "nec": "nec",
             "az alkmaar": "az alkmaar",
-            "az": "az alkmaar", # API "AZ" -> CSV "AZ Alkmaar"
+            "az": "az alkmaar",  # API "AZ" -> CSV "AZ Alkmaar"
             "fc twente '65": "twente",
             "fc twente": "twente",
             "pec zwolle": "zwolle",
             "psv eindhoven": "psv eindhoven",
-            "psv": "psv eindhoven", # API "PSV" -> CSV "PSV Eindhoven"
-            "sbv excelsior": "excelsior",
+            "psv": "psv eindhoven",  # API "PSV" -> CSV "PSV Eindhoven"
             "feyenoord rotterdam": "feyenoord",
             "feyenoord": "feyenoord",
             "heracles almelo": "heracles",
@@ -346,14 +340,14 @@ class StatisticsService:
             "ajax": "ajax",
             "afc ajax": "ajax",
             "almere city fc": "almere city",
-            "fc volendam": "volendam", 
+            "fc volendam": "volendam",
             "telstar 1963": "telstar",
             "sbv excelsior": "excelsior",
             # Germany
             "bayern": "bayern munich",
             "bayern munich": "bayern munich",
             "fc bayern münchen": "bayern munich",
-            "dortmund": "borussia dortmund", 
+            "dortmund": "borussia dortmund",
             "borussia dortmund": "borussia dortmund",
             "leverkusen": "bayer leverkusen",
             "bayer leverkusen": "bayer leverkusen",
@@ -379,7 +373,7 @@ class StatisticsService:
             "sc freiburg": "freiburg",
             "fc augsburg": "augsburg",
             "rb leipzig": "leipzig",
-            "hamburger sv": "hamburg", # If relevant
+            "hamburger sv": "hamburg",  # If relevant
             "hamburg sv": "hamburg",
             "hamburg": "hamburg",
             "tsg hoffenheim": "hoffenheim",
@@ -388,21 +382,24 @@ class StatisticsService:
             "st. pauli": "st pauli",
             "holstein kiel": "holstein kiel",
         }
-        
+
         # Normalize: Lower, Strip, Remove Accents
         import unicodedata
+
         normalized = name.lower().strip()
-        nfkd_form = unicodedata.normalize('NFKD', normalized)
-        normalized_no_accents = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-        
+        nfkd_form = unicodedata.normalize("NFKD", normalized)
+        normalized_no_accents = "".join(
+            [c for c in nfkd_form if not unicodedata.combining(c)]
+        )
+
         # Check unaccented version against keys (assuming keys are unaccented)
         if normalized_no_accents in aliases:
             return aliases[normalized_no_accents]
-            
+
         # Fallback: check exact (in case some keys have accents?)
         if normalized in aliases:
             return aliases[normalized]
-            
+
         return name
 
     _normalization_cache = {}
@@ -417,28 +414,41 @@ class StatisticsService:
         """Normalize team name for comparison. Cached for performance."""
         if name in StatisticsService._normalization_cache:
             return StatisticsService._normalization_cache[name]
-            
+
         # 1. Resolve Aliases first
         original_name = name
         name = StatisticsService._resolve_alias(name)
-        
+
         # 2. Remove accents (Normalize to ASCII approximation)
-        nfkd_form = unicodedata.normalize('NFKD', name)
+        nfkd_form = unicodedata.normalize("NFKD", name)
         name = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-        
+
         # 3. Standard cleanup
         # Remove common prefixes/suffixes
-        remove = ["fc", "cf", "as", "sc", "ac", "real", "sporting", "club", "de", "le", "la", "afc"]
-        
+        remove = [
+            "fc",
+            "cf",
+            "as",
+            "sc",
+            "ac",
+            "real",
+            "sporting",
+            "club",
+            "de",
+            "le",
+            "la",
+            "afc",
+        ]
+
         cleaned = name.lower()
         for word in remove:
             # Remove isolated occurrences
             cleaned = cleaned.replace(f" {word} ", " ")
             if cleaned.startswith(f"{word} "):
-                cleaned = cleaned[len(word)+1:]
+                cleaned = cleaned[len(word) + 1 :]
             if cleaned.endswith(f" {word}"):
-                cleaned = cleaned[:-len(word)-1]
-                
+                cleaned = cleaned[: -len(word) - 1]
+
         result = cleaned.strip().replace(" ", "")
         StatisticsService._normalization_cache[original_name] = result
         return result
@@ -451,29 +461,33 @@ class StatisticsService:
         """
         if not target or not candidate:
             return False
-            
+
         # 1. Normalize (handles aliases)
         t_norm = StatisticsService._normalize_name(target)
         c_norm = StatisticsService._normalize_name(candidate)
-        
+
         # 2. Raw (fallback)
         t_raw = target.lower().strip()
         c_raw = candidate.lower().strip()
-        
+
         # Exact matches
         if t_norm == c_norm or t_raw == c_raw:
             return True
-            
+
         # Fuzzy matches (Startswith / Contains)
         # Allow short prefix matches (2+ chars) for search-as-you-type
         if len(t_norm) >= 2:
-            if c_norm.startswith(t_norm): return True
-            if len(t_norm) >= 4 and t_norm in c_norm: return True
-            
+            if c_norm.startswith(t_norm):
+                return True
+            if len(t_norm) >= 4 and t_norm in c_norm:
+                return True
+
         if len(t_raw) >= 2:
-            if c_raw.startswith(t_raw): return True
-            if len(t_raw) >= 4 and t_raw in c_raw: return True
-            
+            if c_raw.startswith(t_raw):
+                return True
+            if len(t_raw) >= 4 and t_raw in c_raw:
+                return True
+
         return False
 
     @staticmethod
@@ -483,11 +497,11 @@ class StatisticsService:
     ) -> TeamStatistics:
         """
         Calculate statistics for a team from match history.
-        
+
         Args:
             team_name: Team name
             matches: List of historical matches
-            
+
         Returns:
             TeamStatistics for the team
         """
@@ -500,101 +514,103 @@ class StatisticsService:
         goals_conceded = 0
         home_wins = 0
         away_wins = 0
-        
+
         # Granular venue stats
         home_matches_played = 0
         home_goals_scored_total = 0
         home_goals_conceded_total = 0
-        
+
         away_matches_played = 0
         away_goals_scored_total = 0
         away_goals_conceded_total = 0
-        
+
         # New stats for picks
         total_corners = 0
         total_yellow_cards = 0
         total_red_cards = 0
         matches_with_corners = 0
         matches_with_cards = 0
-        
+
         # Extended Stats
         total_shots = 0
         total_shots_on_target = 0
         total_fouls = 0
         matches_with_shots = 0
         matches_with_fouls = 0
-        
+
         recent_results = []
-        
+
         # Normalize target once for strict comparison
         target_norm = StatisticsService._normalize_name(team_name)
-        
+
         for match in matches:
             if not match.is_played:
                 continue
-            
+
             # Use STRICT comparison for statistics to ensure data integrity.
-            # Fuzzy matching (_is_team_match) is only for search UIs, not for calculating historical stats.
-            # This prevents "Real Madrid" stats from being polluted by "Atletico Madrid" or "Inter Milan" by "Milan".
+            # Fuzzy matching (_is_team_match) is only for search UIs, not for
+            # calculating historical stats.
+            # This prevents "Real Madrid" stats from being polluted by "Atletico Madrid"
+            # or "Inter Milan" by "Milan".
             home_norm = StatisticsService._normalize_name(match.home_team.name)
             away_norm = StatisticsService._normalize_name(match.away_team.name)
-            
+
             is_home = home_norm == target_norm
             is_away = away_norm == target_norm
-            
+
             if not (is_home or is_away):
                 continue
-            
+
             if team_id is None:
                 team_id = match.home_team.id if is_home else match.away_team.id
-            
+
             matches_played += 1
             if is_home:
                 home_matches_played += 1
             else:
                 away_matches_played += 1
-            
+
             # Get stats based on role
             goals_for = match.home_goals if is_home else match.away_goals
             goals_against = match.away_goals if is_home else match.home_goals
-            
+
             # Robustly handle None goals
             if goals_for is None or goals_against is None:
                 continue
-                
+
             goals_scored += goals_for
             goals_conceded += goals_against
-            
+
             if is_home:
                 home_goals_scored_total += goals_for
                 home_goals_conceded_total += goals_against
             else:
                 away_goals_scored_total += goals_for
                 away_goals_conceded_total += goals_against
-            
+
             if goals_for > goals_against:
                 wins += 1
                 if is_home:
                     home_wins += 1
                 else:
                     away_wins += 1
-                recent_results.append('W')
+                recent_results.append("W")
             elif goals_for < goals_against:
                 losses += 1
-                recent_results.append('L')
+                recent_results.append("L")
             else:
                 draws += 1
-                recent_results.append('D')
-                
+                recent_results.append("D")
+
             # Accumulate corners/cards
             if match.home_corners is not None and match.away_corners is not None:
                 total_corners += match.home_corners if is_home else match.away_corners
                 matches_with_corners += 1
-                
+
             # Accumulate cards
             y_cards = match.home_yellow_cards if is_home else match.away_yellow_cards
             r_cards = match.home_red_cards if is_home else match.away_red_cards
-            
+
             if y_cards is not None:
                 total_yellow_cards += y_cards
                 matches_with_cards += 1
@@ -604,26 +620,31 @@ class StatisticsService:
             # Accumulate Extended Stats (Shots, Fouls)
             shots = match.home_total_shots if is_home else match.away_total_shots
             sot = match.home_shots_on_target if is_home else match.away_shots_on_target
-            
+
             if shots is not None:
                 total_shots += shots
                 matches_with_shots += 1
             if sot is not None:
                 total_shots_on_target += sot
-                # matches_with_shots counter handles both usually, but let's assume they come together
-            
+                # matches_with_shots counter handles both usually, but let's assume they
+                # come together
+
             fouls = match.home_fouls if is_home else match.away_fouls
             if fouls is not None:
                 total_fouls += fouls
                 matches_with_fouls += 1
-        
+
         # Get last 5 results for form
-        recent_form = ''.join(recent_results[-5:]) if recent_results else ""
-        
+        recent_form = "".join(recent_results[-5:]) if recent_results else ""
+
         # Calculate data freshness
-        timestamps = [m.data_fetched_at for m in matches if hasattr(m, 'data_fetched_at') and m.data_fetched_at]
+        timestamps = [
+            m.data_fetched_at
+            for m in matches
+            if hasattr(m, "data_fetched_at") and m.data_fetched_at
+        ]
         last_updated = max(timestamps) if timestamps else None
-        
+
         return TeamStatistics(
             team_id=team_id or team_name.lower().replace(" ", "_"),
             matches_played=matches_played,
@@ -658,16 +679,28 @@ class StatisticsService:
     def create_empty_stats_dict() -> dict:
         """Create a dictionary for tracking stats incrementally."""
         return {
-            "matches_played": 0, "wins": 0, "draws": 0, "losses": 0,
-            "goals_scored": 0, "goals_conceded": 0,
-            "corners_for": 0, "corners_against": 0,
-            "yellow_cards": 0, "red_cards": 0,
-            "home_wins": 0, "away_wins": 0,
+            "matches_played": 0,
+            "wins": 0,
+            "draws": 0,
+            "losses": 0,
+            "goals_scored": 0,
+            "goals_conceded": 0,
+            "corners_for": 0,
+            "corners_against": 0,
+            "yellow_cards": 0,
+            "red_cards": 0,
+            "home_wins": 0,
+            "away_wins": 0,
             "matches_with_corners": 0,
             "matches_with_cards": 0,
-            "shots": 0, "shots_on_target": 0, "fouls": 0,
-            "matches_with_shots": 0, "matches_with_fouls": 0,
-            "recent_corners": [], "recent_yellow_cards": [], "recent_shots": [],
+            "shots": 0,
+            "shots_on_target": 0,
+            "fouls": 0,
+            "matches_with_shots": 0,
+            "matches_with_fouls": 0,
+            "recent_corners": [],
+            "recent_yellow_cards": [],
+            "recent_shots": [],
         }
 
     @staticmethod
@@ -675,44 +708,58 @@ class StatisticsService:
         """Update a stats dictionary with a new match result."""
         goals_for = match.home_goals if is_home else match.away_goals
         goals_against = match.away_goals if is_home else match.home_goals
-        
+
         if goals_for is None or goals_against is None:
             return
 
         stats["matches_played"] += 1
         stats["goals_scored"] += goals_for
         stats["goals_conceded"] += goals_against
-        
+
         if goals_for > goals_against:
             stats["wins"] += 1
-            if is_home: stats["home_wins"] += 1
-            else: stats["away_wins"] += 1
+            if is_home:
+                stats["home_wins"] += 1
+            else:
+                stats["away_wins"] += 1
         elif goals_for == goals_against:
             stats["draws"] += 1
         else:
             stats["losses"] += 1
-            
+
         if match.home_corners is not None and match.away_corners is not None:
-            stats["corners_for"] += match.home_corners if is_home else match.away_corners
-            stats["corners_against"] += match.away_corners if is_home else match.home_corners
+            stats["corners_for"] += (
+                match.home_corners if is_home else match.away_corners
+            )
+            stats["corners_against"] += (
+                match.away_corners if is_home else match.home_corners
+            )
             stats["matches_with_corners"] += 1
             # Rolling Corners
-            stats["recent_corners"].append(match.home_corners if is_home else match.away_corners)
-            
+            stats["recent_corners"].append(
+                match.home_corners if is_home else match.away_corners
+            )
+
         if match.home_yellow_cards is not None:
-            stats["yellow_cards"] += match.home_yellow_cards if is_home else match.away_yellow_cards
+            stats["yellow_cards"] += (
+                match.home_yellow_cards if is_home else match.away_yellow_cards
+            )
             stats["matches_with_cards"] += 1
             # Rolling Cards
-            stats["recent_yellow_cards"].append(match.home_yellow_cards if is_home else match.away_yellow_cards)
-            
+            stats["recent_yellow_cards"].append(
+                match.home_yellow_cards if is_home else match.away_yellow_cards
+            )
+
         if match.home_red_cards is not None:
-            stats["red_cards"] += match.home_red_cards if is_home else match.away_red_cards
+            stats["red_cards"] += (
+                match.home_red_cards if is_home else match.away_red_cards
+            )
 
         # Extended Stats
         shots = match.home_total_shots if is_home else match.away_total_shots
         sot = match.home_shots_on_target if is_home else match.away_shots_on_target
         fouls = match.home_fouls if is_home else match.away_fouls
-        
+
         if shots is not None:
             stats["shots"] += shots
             stats["matches_with_shots"] += 1
@@ -720,7 +767,7 @@ class StatisticsService:
             stats["recent_shots"].append(shots)
         if sot is not None:
             stats["shots_on_target"] += sot
-            
+
         if fouls is not None:
             stats["fouls"] += fouls
             stats["matches_with_fouls"] += 1
@@ -752,20 +799,20 @@ class StatisticsService:
             recent_corners=raw_stats.get("recent_corners", [])[-5:],
             recent_yellow_cards=raw_stats.get("recent_yellow_cards", [])[-5:],
             recent_shots=raw_stats.get("recent_shots", [])[-5:],
-            recent_form="" # Form is calculated from full history if needed
+            recent_form="",  # Form is calculated from full history if needed
         )
 
-    def calculate_league_averages(self, matches: List[Match]) -> 'LeagueAverages':
+    def calculate_league_averages(self, matches: List[Match]) -> "LeagueAverages":
         """
         Calculate league-wide averages from match history.
-        
+
         Args:
             matches: List of historical matches
-            
+
         Returns:
             LeagueAverages value object with computed averages
         """
-        
+
         total_home_goals = 0
         total_away_goals = 0
         total_corners = 0
@@ -773,36 +820,43 @@ class StatisticsService:
         matches_with_goals = 0
         matches_with_corners = 0
         matches_with_cards = 0
-        
+
         for match in matches:
             if not match.is_played:
                 continue
-                
+
             if match.home_goals is not None and match.away_goals is not None:
                 total_home_goals += match.home_goals
                 total_away_goals += match.away_goals
                 matches_with_goals += 1
 
             if match.home_corners is not None and match.away_corners is not None:
-                total_corners += (match.home_corners + match.away_corners)
+                total_corners += match.home_corners + match.away_corners
                 matches_with_corners += 1
 
-            if match.home_yellow_cards is not None and match.away_yellow_cards is not None:
-                total_cards += (match.home_yellow_cards + match.away_yellow_cards)
+            if (
+                match.home_yellow_cards is not None
+                and match.away_yellow_cards is not None
+            ):
+                total_cards += match.home_yellow_cards + match.away_yellow_cards
                 matches_with_cards += 1
-        
+
         # Calculate averages with fallbacks
         from src.domain.value_objects.value_objects import LeagueAverages
 
         if matches_with_goals == 0:
             return None
-            
+
         return LeagueAverages(
             avg_home_goals=total_home_goals / matches_with_goals,
             avg_away_goals=total_away_goals / matches_with_goals,
             avg_total_goals=(total_home_goals + total_away_goals) / matches_with_goals,
-            avg_corners=total_corners / matches_with_corners if matches_with_corners > 0 else 9.5,
-            avg_cards=total_cards / matches_with_cards if matches_with_cards > 0 else 4.5
+            avg_corners=total_corners / matches_with_corners
+            if matches_with_corners > 0
+            else 9.5,
+            avg_cards=total_cards / matches_with_cards
+            if matches_with_cards > 0
+            else 4.5,
         )
 
     @staticmethod
@@ -813,12 +867,12 @@ class StatisticsService:
     ) -> TeamH2HStatistics:
         """
         Calculate H2H statistics between two teams.
-        
+
         Args:
             team_a_name: Name of team A
             team_b_name: Name of team B
             matches: List of historical matches to search
-            
+
         Returns:
             TeamH2HStatistics object
         """
@@ -829,67 +883,79 @@ class StatisticsService:
         team_a_goals = 0
         team_b_goals = 0
         recent_matches = []
-        
+
         team_a_norm = StatisticsService._normalize_name(team_a_name)
         team_b_norm = StatisticsService._normalize_name(team_b_name)
-        
+
         # Sort matches by date descending (newest first)
         sorted_matches = sorted(matches, key=lambda x: x.match_date, reverse=True)
-        
+
         for match in sorted_matches:
             if not match.is_played:
                 continue
-                
+
             home_norm = StatisticsService._normalize_name(match.home_team.name)
             away_norm = StatisticsService._normalize_name(match.away_team.name)
-            
+
             # Check if this match involves both teams
             is_a_home = home_norm == team_a_norm
             is_a_away = away_norm == team_a_norm
             is_b_home = home_norm == team_b_norm
             is_b_away = away_norm == team_b_norm
-            
+
             match_found = False
             a_score = 0
             b_score = 0
-            
+
             if is_a_home and is_b_away:
                 match_found = True
                 a_score = match.home_goals or 0
                 b_score = match.away_goals or 0
                 date_str = match.match_date.strftime("%Y-%m-%d")
-                recent_matches.append({
-                    "date": date_str,
-                    "home": match.home_team.name,
-                    "away": match.away_team.name,
-                    "score": f"{a_score}-{b_score}",
-                    "winner": "A" if a_score > b_score else "B" if b_score > a_score else "Draw"
-                })
+                recent_matches.append(
+                    {
+                        "date": date_str,
+                        "home": match.home_team.name,
+                        "away": match.away_team.name,
+                        "score": f"{a_score}-{b_score}",
+                        "winner": "A"
+                        if a_score > b_score
+                        else "B"
+                        if b_score > a_score
+                        else "Draw",
+                    }
+                )
             elif is_b_home and is_a_away:
                 match_found = True
                 b_score = match.home_goals or 0
                 a_score = match.away_goals or 0
                 date_str = match.match_date.strftime("%Y-%m-%d")
-                recent_matches.append({
-                    "date": date_str,
-                    "home": match.home_team.name,
-                    "away": match.away_team.name,
-                    "score": f"{b_score}-{a_score}",
-                    "winner": "B" if b_score > a_score else "A" if a_score > b_score else "Draw"
-                })
-                
+                recent_matches.append(
+                    {
+                        "date": date_str,
+                        "home": match.home_team.name,
+                        "away": match.away_team.name,
+                        "score": f"{b_score}-{a_score}",
+                        "winner": "B"
+                        if b_score > a_score
+                        else "A"
+                        if a_score > b_score
+                        else "Draw",
+                    }
+                )
+
             if match_found:
                 matches_played += 1
                 team_a_goals += a_score
                 team_b_goals += b_score
-                
+
                 if a_score > b_score:
                     team_a_wins += 1
                 elif b_score > a_score:
                     team_b_wins += 1
                 else:
                     draws += 1
-        
+
         return TeamH2HStatistics(
             team_a_id=team_a_name,
             team_b_id=team_b_name,
@@ -899,5 +965,5 @@ class StatisticsService:
             team_b_wins=team_b_wins,
             team_a_goals=team_a_goals,
             team_b_goals=team_b_goals,
-            recent_matches=recent_matches
+            recent_matches=recent_matches,
         )

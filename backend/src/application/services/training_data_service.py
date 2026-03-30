@@ -9,89 +9,106 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from src.domain.entities.entities import Match, League
-from src.domain.services.match_enrichment_service import MatchEnrichmentService
 from src.application.use_cases.use_cases import DataSources
-from src.utils.time_utils import get_current_time, COLOMBIA_TZ
+from src.domain.entities.entities import League, Match
+from src.domain.services.match_enrichment_service import MatchEnrichmentService
+from src.utils.time_utils import COLOMBIA_TZ, get_current_time
 
 logger = logging.getLogger(__name__)
+
 
 class TrainingDataService:
     """
     Application service for orchestrating training data collection.
     """
 
-    def __init__(self, data_sources: DataSources, enrichment_service: MatchEnrichmentService):
+    def __init__(
+        self, data_sources: DataSources, enrichment_service: MatchEnrichmentService
+    ):
         self.data_sources = data_sources
         self.enrichment_service = enrichment_service
 
     async def fetch_comprehensive_training_data(
-        self, 
-        leagues: List[str], 
-        days_back: Optional[int] = None, 
+        self,
+        leagues: List[str],
+        days_back: Optional[int] = None,
         start_date: Optional[str] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
     ) -> List[Match]:
         """
         Fetch and unify data from ALL sources for training.
         """
         logger.info(f"Orchestrating comprehensive training data for leagues: {leagues}")
-        
+
         # Buckets for different sources
         csv_matches = []
         api_fb_matches = []
         gh_matches = []
         espn_matches = []
-        
+
         # 1. GitHub Dataset (Massive historical base)
         try:
-            from src.infrastructure.data_sources.github_dataset import LocalGithubDataSource
+            from src.infrastructure.data_sources.github_dataset import (
+                LocalGithubDataSource,
+            )
+
             gh_data = LocalGithubDataSource()
             gh_start_dt = None
             if start_date:
-                try: 
+                try:
                     gh_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
                 except ValueError as e:
                     logger.debug(f"GitHub date parsing skipped (invalid format): {e}")
             elif days_back:
                 gh_start_dt = get_current_time() - timedelta(days=days_back)
-            
-            gh_matches = await gh_data.get_finished_matches(league_codes=leagues, date_from=gh_start_dt)
+
+            gh_matches = await gh_data.get_finished_matches(
+                league_codes=leagues, date_from=gh_start_dt
+            )
         except Exception as e:
             logger.warning(f"GitHub Dataset fetch failed: {e}")
 
         # 2. CSV source (Rich historical stats) - PARALLELIZED for speed
         import asyncio
-        
+
         async def fetch_league_data(lid):
             try:
                 # Use dynamic seasons logic inside get_historical_matches
-                matches = await self.data_sources.football_data_uk.get_historical_matches(
-                    lid, 
-                    seasons=None, 
-                    force_refresh=force_refresh
+                matches = (
+                    await self.data_sources.football_data_uk.get_historical_matches(
+                        lid, seasons=None, force_refresh=force_refresh
+                    )
                 )
-                
+
                 # --- BACKFILL STRATEGY ---
                 # Check if CSV data is stale (older than 3 days)
                 if matches:
                     # Sort to find latest date
                     matches.sort(key=lambda x: x.match_date)
                     last_match_date = matches[-1].match_date
-                    
+
                     # Ensure timezone awareness for comparison
                     if last_match_date.tzinfo is None:
                         last_match_date = COLOMBIA_TZ.localize(last_match_date)
-                        
+
                     now = get_current_time()
                     days_lag = (now - last_match_date).days
-                    
+
                     if days_lag > 3:
-                        logger.warning(f"CSV data for {lid} is stale ({days_lag} days lag). Triggering backfill...")
+                        logger.warning(
+                            "CSV data for %s is stale (%d days lag). "
+                            "Triggering backfill...",
+                            lid,
+                            days_lag,
+                        )
                         start_backfill = last_match_date + timedelta(days=1)
                         gap_matches = await self._backfill_gap(lid, start_backfill, now)
                         if gap_matches:
-                            logger.info(f"Backfilled {len(gap_matches)} matches for {lid}")
+                            logger.info(
+                                "Backfilled %d matches for %s",
+                                len(gap_matches),
+                                lid,
+                            )
                             matches.extend(gap_matches)
                 return matches
             except Exception as e:
@@ -107,13 +124,17 @@ class TrainingDataService:
         try:
             if self.data_sources.football_data_org.is_configured:
                 start_dt = get_current_time() - timedelta(days=days_back or 550)
-                api_fb_matches = await self.data_sources.football_data_org.get_finished_matches(
-                    date_from=start_dt.strftime("%Y-%m-%d"),
-                    date_to=get_current_time().strftime("%Y-%m-%d"),
-                    league_codes=leagues
+                api_fb_matches = (
+                    await self.data_sources.football_data_org.get_finished_matches(
+                        date_from=start_dt.strftime("%Y-%m-%d"),
+                        date_to=get_current_time().strftime("%Y-%m-%d"),
+                        league_codes=leagues,
+                    )
                 )
                 if api_fb_matches:
-                    logger.info(f"Football-Data.org: loaded {len(api_fb_matches)} matches")
+                    logger.info(
+                        f"Football-Data.org: loaded {len(api_fb_matches)} matches"
+                    )
         except Exception as e:
             logger.warning(f"Football-Data.org fetch failed: {e}")
 
@@ -121,8 +142,11 @@ class TrainingDataService:
 
         try:
             from src.infrastructure.data_sources.espn import ESPNSource
+
             espn = ESPNSource()
-            espn_matches = await espn.get_finished_matches(league_codes=leagues, days_back=60)
+            espn_matches = await espn.get_finished_matches(
+                league_codes=leagues, days_back=60
+            )
         except Exception as e:
             logger.warning(f"ESPN fetch failed for training data: {e}")
 
@@ -130,13 +154,18 @@ class TrainingDataService:
         open_football_matches = []
         try:
             from src.infrastructure.data_sources.openfootball import OpenFootballSource
+
             open_fb = OpenFootballSource()
             for league_code in leagues:
-                league_entity = League(id=league_code, name=league_code, country="Europe")
+                league_entity = League(
+                    id=league_code, name=league_code, country="Europe"
+                )
                 of_matches = await open_fb.get_matches(league_entity)
                 open_football_matches.extend(of_matches)
             if open_football_matches:
-                logger.info(f"OpenFootball: loaded {len(open_football_matches)} matches")
+                logger.info(
+                    f"OpenFootball: loaded {len(open_football_matches)} matches"
+                )
         except Exception as e:
             logger.warning(f"OpenFootball fetch failed for training data: {e}")
 
@@ -145,8 +174,9 @@ class TrainingDataService:
         all_matches = self.enrichment_service.merge_matches(all_matches, csv_matches)
         all_matches = self.enrichment_service.merge_matches(all_matches, api_fb_matches)
         all_matches = self.enrichment_service.merge_matches(all_matches, espn_matches)
-        all_matches = self.enrichment_service.merge_matches(all_matches, open_football_matches)
-
+        all_matches = self.enrichment_service.merge_matches(
+            all_matches, open_football_matches
+        )
 
         # Sort by date (standardized)
         def get_sortable_date(m):
@@ -154,84 +184,115 @@ class TrainingDataService:
             return COLOMBIA_TZ.localize(dt) if dt.tzinfo is None else dt
 
         all_matches.sort(key=get_sortable_date)
-        
+
         # Final filtering
         if start_date:
             try:
-                start_dt = COLOMBIA_TZ.localize(datetime.strptime(start_date, "%Y-%m-%d"))
-                all_matches = [m for m in all_matches if get_sortable_date(m) >= start_dt]
+                start_dt = COLOMBIA_TZ.localize(
+                    datetime.strptime(start_date, "%Y-%m-%d")
+                )
+                all_matches = [
+                    m for m in all_matches if get_sortable_date(m) >= start_dt
+                ]
             except ValueError as e:
                 logger.debug(f"Start date parsing skipped (invalid format): {e}")
         elif days_back:
-            start_dt = get_current_time().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_back)
+            start_dt = get_current_time().replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) - timedelta(days=days_back)
             all_matches = [m for m in all_matches if get_sortable_date(m) >= start_dt]
 
         logger.info(f"Unification complete: {len(all_matches)} total training matches")
         return all_matches
 
-    async def _backfill_gap(self, league_code: str, start_date: datetime, end_date: datetime) -> List[Match]:
+    async def _backfill_gap(
+        self, league_code: str, start_date: datetime, end_date: datetime
+    ) -> List[Match]:
         """
-        Fetch matches from fallback sources (Football-Data.org, OpenFootball) 
+        Fetch matches from fallback sources (Football-Data.org, OpenFootball)
         to fill gap between static CSVs and today.
         """
         backfilled_matches = []
-        
+
         # 1. Try Football-Data.org (Best for recent finished matches)
         try:
             if self.data_sources.football_data_org.is_configured:
-                logger.info(f"Backfilling {league_code} via Football-Data.org from {start_date.date()} to {end_date.date()}...")
-                fd_matches = await self.data_sources.football_data_org.get_finished_matches(
-                    date_from=start_date.strftime("%Y-%m-%d"),
-                    date_to=end_date.strftime("%Y-%m-%d"),
-                    league_codes=[league_code]
+                logger.info(
+                    "Backfilling %s via Football-Data.org from %s to %s...",
+                    league_code,
+                    start_date.date(),
+                    end_date.date(),
+                )
+                fd_matches = (
+                    await self.data_sources.football_data_org.get_finished_matches(
+                        date_from=start_date.strftime("%Y-%m-%d"),
+                        date_to=end_date.strftime("%Y-%m-%d"),
+                        league_codes=[league_code],
+                    )
                 )
                 if fd_matches:
                     backfilled_matches.extend(fd_matches)
-                    logger.info(f"✓ Found {len(fd_matches)} backfill matches in Football-Data.org for {league_code}")
-                    return backfilled_matches # Return early if successful
+                    logger.info(
+                        "✓ Found %d backfill matches in Football-Data.org for %s",
+                        len(fd_matches),
+                        league_code,
+                    )
+                    return backfilled_matches  # Return early if successful
                 else:
-                    logger.info(f"No matches found in Football-Data.org for {league_code} gap.")
+                    logger.info(
+                        f"No matches found in Football-Data.org for {league_code} gap."
+                    )
         except Exception as e:
-            logger.warning(f"Backfill source Football-Data.org failed for {league_code}: {e}")
+            logger.warning(
+                f"Backfill source Football-Data.org failed for {league_code}: {e}"
+            )
 
         # 2. Try OpenFootball (Good for historical breadth or if API fails)
         try:
-             # Need to construct a League object for OpenFootball
-             # We rely on metadata from FootballDataUK for name/country
-             from src.infrastructure.data_sources.football_data_uk import LEAGUES_METADATA
-             from src.domain.entities.entities import League
-             
-             if league_code in LEAGUES_METADATA:
-                 meta = LEAGUES_METADATA[league_code]
-                 league = League(
-                     id=league_code,
-                     name=meta["name"],
-                     country=meta["country"]
-                 )
-                 
-                 of_matches = await self.data_sources.openfootball.get_matches(league)
-                 
-                 # Filter for the gap
-                 # OpenFootball returns entire season usually
-                 relevant_matches = []
-                 for m in of_matches:
-                     # Ensure timezone awareness for comparison
-                     m_date = m.match_date
-                     if m_date.tzinfo is None:
-                         # Assume same TZ as start_date/end_date if they are offset-aware, or naive comparison
-                         # Best to make m_date offset aware if start_date is
-                         if start_date.tzinfo:
-                             from src.utils.time_utils import COLOMBIA_TZ
-                             m_date = COLOMBIA_TZ.localize(m_date)
-                     
-                     if start_date <= m_date <= end_date:
-                         relevant_matches.append(m)
-                 
-                 if relevant_matches:
-                     backfilled_matches.extend(relevant_matches)
-                     logger.info(f"✓ Found {len(relevant_matches)} backfill matches in OpenFootball for {league_code}")
-                     
+            # Need to construct a League object for OpenFootball
+            # We rely on metadata from FootballDataUK for name/country
+            from src.domain.entities.entities import League
+            from src.infrastructure.data_sources.football_data_uk import (
+                LEAGUES_METADATA,
+            )
+
+            if league_code in LEAGUES_METADATA:
+                meta = LEAGUES_METADATA[league_code]
+                league = League(
+                    id=league_code, name=meta["name"], country=meta["country"]
+                )
+
+                of_matches = await self.data_sources.openfootball.get_matches(league)
+
+                # Filter for the gap
+                # OpenFootball returns entire season usually
+                relevant_matches = []
+                for m in of_matches:
+                    # Ensure timezone awareness for comparison
+                    m_date = m.match_date
+                    if m_date.tzinfo is None:
+                        # Assume same TZ as start_date/end_date if they are offset-
+                        # aware, or naive comparison
+                        # Best to make m_date offset aware if start_date is
+                        if start_date.tzinfo:
+                            from src.utils.time_utils import COLOMBIA_TZ
+
+                            m_date = COLOMBIA_TZ.localize(m_date)
+
+                    if start_date <= m_date <= end_date:
+                        relevant_matches.append(m)
+
+                if relevant_matches:
+                    backfilled_matches.extend(relevant_matches)
+                    logger.info(
+                        "✓ Found %d backfill matches in OpenFootball for %s",
+                        len(relevant_matches),
+                        league_code,
+                    )
+
         except Exception as e:
-            logger.warning(f"Backfill source OpenFootball failed for {league_code}: {e}")
+            logger.warning(
+                f"Backfill source OpenFootball failed for {league_code}: {e}"
+            )
 
         return backfilled_matches

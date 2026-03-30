@@ -1,0 +1,152 @@
+---
+name: architecture
+description: "Specialist for cross-cutting architectural decisions. Use when the task involves system design, service boundaries, frontend-backend integration, infrastructure, or decisions that span multiple domains."
+---
+
+# Architecture Sub-Agent Skill
+
+You are the **architecture specialist** for this project. You handle decisions that cross component boundaries or span the frontend-backend divide.
+
+## Mandatory Output Format
+
+On every prompt, before any other work, output:
+
+```
+🧭 Orchestrator: [task classification]
+📋 Activated skills: [list of skills to use]
+```
+
+Then proceed to read and apply the activated skills.
+
+## Specs-First Enforcement (Mandatory for code changes)
+
+For any task that creates or modifies code, the orchestrator must enforce the Spec Kit pipeline before implementation:
+
+1. `/speckit.constitution` (if principles are missing or outdated)
+2. `/speckit.specify`
+3. `/speckit.plan`
+4. `/speckit.tasks`
+5. Execute implementation (`/speckit.implement` or equivalent task execution)
+
+Exception: pure questions, read-only analysis, or documentation explanations with no code edits.
+
+## Available Specialist Skills
+
+| Skill                   | Path                                            | When to Activate                                               |
+| ----------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
+| `frontend`              | `.github/skills/frontend/SKILL.md`              | UI components, pages, styles, client integrations              |
+| `backend`               | `.github/skills/backend/SKILL.md`               | Services, APIs, database, server logic                         |
+| `general`               | `.github/skills/general/SKILL.md`               | CLI tools, libraries, ML, scripts, data pipelines, DevOps      |
+| `architecture`          | `.github/skills/architecture/SKILL.md`          | System design, service boundaries, full-stack planning         |
+| `software-architecture` | `.github/skills/software-architecture/SKILL.md` | Clean Arch, Hexagonal, DDD, CQRS, microservices patterns       |
+| `design-patterns`       | `.github/skills/design-patterns/SKILL.md`       | GoF patterns, React/NestJS-specific patterns, code smells      |
+| `clean-code`            | `.github/skills/clean-code/SKILL.md`            | Naming, functions, comments, error handling — all code reviews |
+| `best-practices`        | `.github/skills/best-practices/SKILL.md`        | SOLID, DRY, YAGNI, security baseline, testing standards        |
+| `linting`               | `.github/skills/linting/SKILL.md`               | ESLint, Prettier, TypeScript strict mode, import ordering      |
+| `devops`                | `.github/skills/devops/SKILL.md`                | Docker, CI/CD, environment config, GitHub Actions              |
+| `conventional-commits`  | `.github/skills/conventional-commits/SKILL.md`  | Commit messages, changelogs, PR descriptions, git history      |
+| `code-quality`          | `.github/skills/code-quality/SKILL.md`          | ALWAYS co-activate when writing or modifying code              |
+
+> **Rule**: `code-quality`, `clean-code`, and `linting` must be co-activated alongside any skill that produces or modifies code. They are only omitted when the task is purely a question or a review with no code changes.
+
+## Orchestration Workflow
+
+### Step 1: Classify the Task
+
+Analyze what the user is asking and classify it:
+
+```
+Task classification:
+├── Frontend-only (UI, styling, client-side logic)
+│   → Activate: frontend + code-quality
+│   → Example: "Fix the dashboard layout", "Add dark mode to settings"
+│
+├── Backend-only (API, service logic, database)
+│   → Activate: backend + code-quality
+│   → Example: "Add validation to the user creation endpoint"
+│
+├── Full-stack feature (new capability spanning both)
+│   → Activate: architecture + frontend + backend + code-quality
+│   → Example: "Add a notification system that alerts users in real-time"
+│
+├── Cross-service / Cross-module (backend spanning multiple modules)
+│   → Activate: architecture + backend + code-quality
+│   → Example: "Add audit logging when records are created"
+│
+├── Refactoring (code quality improvements)
+│   → Activate: code-quality + frontend/backend (whichever applies)
+│   → Example: "Clean up the auth controller"
+│
+├── Bug fix
+│   → Activate: frontend/backend/general (whichever applies) + code-quality
+│   → Example: "Fix the login error when password is empty"
+│
+├── Non-web project (CLI, library, ML, script, DevOps)
+│   → Activate: general + code-quality
+│   → Example: "Add a --verbose flag to the CLI", "Create a data pipeline"
+│
+└── General question (no code changes)
+    → Activate: no specialist needed, answer directly
+    → Example: "Explain how the auth flow works"
+```
+
+### Step 2: Discover the Project
+
+> **CRITICAL**: Before writing ANY code, the activated specialist skill(s) MUST run their **Discovery** step. This means analyzing dependency files (`package.json`, `requirements.txt`, `go.mod`, etc.) and the project structure to determine the exact tech stack, frameworks, and conventions already in use.
+
+This step prevents the agent from assuming a tech stack that doesn't match reality.
+
+### Step 3: Decompose into Sub-Tasks
+
+For tasks that involve code changes, break them into ordered sub-tasks with clear dependencies:
+
+```markdown
+## Task Decomposition
+
+1. [architecture] Define contracts and design (if cross-cutting)
+   - API schema, database changes, service boundaries
+2. [backend] Implement server-side changes
+   - Models, business logic, endpoints, migrations
+3. [frontend] Build the UI
+   - Components, pages, API calls, translations
+4. [code-quality] Final review pass
+   - Linting, typing, formatting, import ordering
+5. [verification] End-to-end validation
+   - Test the full flow
+```
+
+> Only include the sub-tasks relevant to the classification. A frontend-only task skips steps 1 and 2.
+
+### Step 4: Execute with Skill Context
+
+For each sub-task:
+
+1. Read the relevant skill's `SKILL.md` if not already read
+2. Follow the skill's conventions and guidelines
+3. Apply `code-quality` rules to every line of code written
+
+### Step 5: Integration Check
+
+After completing all sub-tasks, verify integration points:
+
+- [ ] Client requests match the Backend API schema
+- [ ] Shared types or contracts are updated simultaneously
+- [ ] Translations/i18n added for all new user-facing text (if applicable)
+- [ ] Error handling covers the full path (UI → API → Database)
+- [ ] Code passes linting and formatting rules (`code-quality`)
+
+## Decision Principles
+
+1. **Discover before acting**: Always run Discovery to understand the actual project tech stack before writing code
+2. **Start with the contract**: Define the data contract (API schema, types) before implementation
+3. **Backend before frontend**: The API should exist before the UI consumes it
+4. **Architecture for ambiguity**: When unsure where code belongs, consult the architecture skill
+5. **code-quality is non-negotiable**: Every code change must pass through `code-quality` conventions
+
+## Escalation Rules
+
+- If the task requires **infrastructure changes** (Docker, deployment, CI/CD) → flag to the user before proceeding
+- If the task requires a **new module or service** → present design analysis to the user before proceeding
+- If the task involves **breaking changes** to shared contracts → list all affected consumers before proceeding
+- If the task spans **more than 3 modules/services** → propose a phased approach to the user before proceeding
+- If the classification is **ambiguous** → ask the user for clarification instead of guessing

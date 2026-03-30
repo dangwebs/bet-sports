@@ -1,10 +1,15 @@
-from typing import List
+import logging
 from dataclasses import dataclass
-from datetime import datetime
-from src.domain.services.parley_service import ParleyService, ParleyConfig
+from typing import List
+
+from src.domain.services.parley_service import ParleyConfig, ParleyService
+
+from ...domain.entities.entities import League, Match, MatchPrediction, Prediction, Team
 from ...domain.entities.parley import Parley
-from ...domain.entities.entities import MatchPrediction, Match, Prediction, Team, League
 from .use_cases import GetPredictionsUseCase
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class GetParleysRequest:
@@ -12,59 +17,87 @@ class GetParleysRequest:
     min_picks: int = 3
     max_picks: int = 5
     count: int = 3
-    
+
+
 class GetParleysUseCase:
     """
     Application service to get suggested parleys.
     Orchestrates fetching predictions for multiple leagues and generating parleys.
     """
-    
-    def __init__(self, get_predictions_use_case: GetPredictionsUseCase, parley_service: ParleyService):
+
+    def __init__(
+        self,
+        get_predictions_use_case: GetPredictionsUseCase,
+        parley_service: ParleyService,
+    ):
         self.get_predictions_use_case = get_predictions_use_case
         self.parley_service = parley_service
-        
+
     async def execute(self, request: GetParleysRequest) -> List[Parley]:
         # 1. Fetch available predictions for popular leagues
-        popular_leagues = ["eng_1", "esp_1", "ita_1", "ger_1", "fra_1"] 
+        popular_leagues = ["eng_1", "esp_1", "ita_1", "ger_1", "fra_1"]
         all_match_predictions: List[MatchPrediction] = []
-        
+
         for league_id in popular_leagues:
             try:
                 # Use existing use case to fetch and generate predictions
-                response_dto = await self.get_predictions_use_case.execute(league_id, limit=10)
-                
+                response_dto = await self.get_predictions_use_case.execute(
+                    league_id, limit=10
+                )
+
                 # Convert DTOs back to Domain Entities for ParleyService
                 for pdto in response_dto.predictions:
                     match_entity = self._map_dto_to_match(pdto.match)
                     prediction_entity = self._map_dto_to_prediction(pdto.prediction)
-                    
-                    all_match_predictions.append(MatchPrediction(
-                        match=match_entity,
-                        prediction=prediction_entity
-                    ))
-            except Exception:
+
+                    all_match_predictions.append(
+                        MatchPrediction(
+                            match=match_entity, prediction=prediction_entity
+                        )
+                    )
+            except Exception as exc:
                 # Log error but continue with other leagues
+                logger.warning(
+                    "Failed to fetch predictions for league %s: %s", league_id, exc
+                )
                 continue
-            
+
         # 2. Configure Parley Generation
         config = ParleyConfig(
             min_probability=request.min_probability,
             min_picks=request.min_picks,
             max_picks=request.max_picks,
-            count=request.count
+            count=request.count,
         )
-        
+
         # 3. Generate
         parleys = self.parley_service.generate_parleys(all_match_predictions, config)
-        
+
         return parleys
 
     def _map_dto_to_match(self, dto) -> Match:
         return Match(
             id=dto.id,
-            home_team=Team(id=dto.home_team.id, name=dto.home_team.name, short_name=dto.home_team.short_name, country=dto.home_team.country, logo_url=dto.home_team.logo_url),
-            away_team=Team(id=dto.away_team.id, name=dto.away_team.name, short_name=dto.away_team.short_name, country=dto.away_team.country, logo_url=dto.away_team.logo_url),
-            league=League(id=dto.league.id, name=dto.league.name, country=dto.league.country, season=dto.league.season),
+            home_team=Team(
+                id=dto.home_team.id,
+                name=dto.home_team.name,
+                short_name=dto.home_team.short_name,
+                country=dto.home_team.country,
+                logo_url=dto.home_team.logo_url,
+            ),
+            away_team=Team(
+                id=dto.away_team.id,
+                name=dto.away_team.name,
+                short_name=dto.away_team.short_name,
+                country=dto.away_team.country,
+                logo_url=dto.away_team.logo_url,
+            ),
+            league=League(
+                id=dto.league.id,
+                name=dto.league.name,
+                country=dto.league.country,
+                season=dto.league.season,
+            ),
             match_date=dto.match_date,
             home_goals=dto.home_goals,
             away_goals=dto.away_goals,
@@ -77,7 +110,7 @@ class GetParleysUseCase:
             away_red_cards=dto.away_red_cards,
             home_odds=dto.home_odds,
             draw_odds=dto.draw_odds,
-            away_odds=dto.away_odds
+            away_odds=dto.away_odds,
         )
 
     def _map_dto_to_prediction(self, dto) -> Prediction:
@@ -93,24 +126,29 @@ class GetParleysUseCase:
             confidence=dto.confidence,
             data_sources=dto.data_sources,
             created_at=dto.created_at,
-            suggested_picks=self._map_dto_picks_to_entity(dto.suggested_picks)
+            suggested_picks=self._map_dto_picks_to_entity(dto.suggested_picks),
         )
 
     def _map_dto_picks_to_entity(self, pick_dtos) -> List["SuggestedPick"]:
-        from src.domain.entities.suggested_pick import SuggestedPick, MarketType, ConfidenceLevel
-        
+        from src.domain.entities.suggested_pick import (
+            ConfidenceLevel,
+            MarketType,
+            SuggestedPick,
+        )
+
         entities = []
         for p in pick_dtos:
-            entities.append(SuggestedPick(
-                market_type=MarketType(p.market_type),
-                market_label=p.market_label,
-                probability=p.probability,
-                confidence_level=ConfidenceLevel(p.confidence_level),
-                reasoning=p.reasoning,
-                risk_level=p.risk_level,
-                is_recommended=p.is_recommended,
-                priority_score=p.priority_score,
-                odds=0.0 # DTO might not have it or we default
-            ))
+            entities.append(
+                SuggestedPick(
+                    market_type=MarketType(p.market_type),
+                    market_label=p.market_label,
+                    probability=p.probability,
+                    confidence_level=ConfidenceLevel(p.confidence_level),
+                    reasoning=p.reasoning,
+                    risk_level=p.risk_level,
+                    is_recommended=p.is_recommended,
+                    priority_score=p.priority_score,
+                    odds=0.0,  # DTO might not have it or we default
+                )
+            )
         return entities
-

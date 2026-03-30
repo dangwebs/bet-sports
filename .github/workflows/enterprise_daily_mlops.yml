@@ -1,195 +1,33 @@
-name: Enterprise Daily MLOps
+name: Enterprise Daily MLOps (Delegated to Docker Compose)
 
 on:
-  schedule:
-    - cron: "0 6 * * *" # Every day at 06:00 UTC (01:00 Bogota)
   workflow_dispatch:
     inputs:
-      force_train:
-        description: "Force Retraining"
-        type: boolean
-        default: true
+      note:
+        description: "Optional execution note"
+        type: string
+        required: false
 
 permissions:
   contents: read
-  issues: write
-
-env:
-  PYTHON_VERSION: "3.11"
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
-  THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
-  RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-  LOG_LEVEL: INFO
-  # Configuración para aprovechar ambos cores disponibles en GitHub Actions
-  OMP_NUM_THREADS: 2
-  OPENBLAS_NUM_THREADS: 2
-  MKL_NUM_THREADS: 2
-  NUMEXPR_NUM_THREADS: 2
-  N_JOBS: 2
 
 jobs:
-  # ------------------------------------------------------------------
-  # JOB 1: MODEL TRAINING (Vertical Scaling)
-  # ------------------------------------------------------------------
-  train-model:
-    name: 🧠 Train ML Model
+  mlops-delegation-notice:
+    name: 📌 MLOps Delegation Notice
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 5
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "backend/requirements-worker.txt"
-
-      - name: 📦 Install Dependencies
+      - name: 📢 Inform execution model
         run: |
-          cd backend
-          pip install -r requirements-worker.txt
-
-      - name: 🧹 Cleanup Old Data
-        run: |
-          cd backend
-          python scripts/orchestrator_cli.py cleanup
-
-      - name: 🏋️ Run Training (Parallelized with 2 cores)
-        run: |
-          cd backend
-          python scripts/orchestrator_cli.py train --days 400 --n-jobs 2
-
-      - name: 📤 Upload Model Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ml-model
-          path: backend/ml_picks_classifier.joblib
-          retention-days: 1
-          compression-level: 9 # Compresión máxima para transferencia rápida
-
-  # ------------------------------------------------------------------
-  # JOB 2: PREDICTION MATRIX (Sequential to respect API rate limits)
-  # ------------------------------------------------------------------
-  predict-leagues:
-    name: 🔮 Predict ${{ matrix.group }}
-    needs: train-model
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    continue-on-error: true # Una falla no detiene las demás
-    strategy:
-      max-parallel: 1 # Serialized to respect football-data.org 10 req/min limit
-      fail-fast: false # No detener otros jobs si uno falla
-      matrix:
-        include:
-          # Sequential processing to avoid API rate limiting
-          # Scope restricted by RULES.md (top-tier active leagues)
-          - group: "England_Premier"
-            leagues: "E0"
-          - group: "Germany_Bundesliga"
-            leagues: "D1"
-          - group: "Spain_LaLiga"
-            leagues: "SP1"
-          - group: "Belgium_Jupiler"
-            leagues: "B1"
-          - group: "Portugal"
-            leagues: "P1"
-          - group: "Italy_SerieA"
-            leagues: "I1"
-          - group: "France_Ligue1"
-            leagues: "F1"
-          - group: "International_UCL"
-            leagues: "UCL"
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "backend/requirements-worker.txt"
-
-      - name: 📦 Install Dependencies
-        run: |
-          cd backend
-          pip install -r requirements-worker.txt
-
-      - name: 📥 Download Model
-        uses: actions/download-artifact@v4
-        with:
-          name: ml-model
-          path: backend/
-
-      - name: 🚀 Run Predictions (Parallelized)
-        run: |
-          cd backend
-          python scripts/orchestrator_cli.py predict --leagues "${{ matrix.leagues }}" --parallel
-
-  # ------------------------------------------------------------------
-  # JOB 3: AGGREGATION & REPORTING
-  # ------------------------------------------------------------------
-  finalize-process:
-    name: 🏁 Finalize & Report
-    needs: [predict-leagues]
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    if: always() # Run even if some matrix jobs failed
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "backend/requirements-worker.txt"
-
-      - name: 📦 Install Dependencies
-        run: |
-          cd backend
-          pip install -r requirements-worker.txt
-
-      - name: 🏆 Generate Top Picks
-        run: |
-          cd backend
-          python scripts/orchestrator_cli.py top-picks
-
-      - name: 🧹 Clear Render Cache
-        env:
-          RENDER_APP_URL: "https://football-prediction-api-x4pm.onrender.com"
-          ADMIN_TOKEN: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
-        run: |
-          curl -X DELETE "${RENDER_APP_URL}/cache/clear" \
-            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --fail || echo "Warning: Failed to clear cache (Service might be sleeping)"
-
-      - name: 📊 Summary Report
-        if: always()
-        run: |
-          echo "### 📈 Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### MLOps Execution Model" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Training: Completed" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔮 Predictions: ${{ strategy.job-total }} leagues processed" >> $GITHUB_STEP_SUMMARY
-          echo "- 🏆 Top Picks: Generated" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 Parallelism: 1 league at a time (rate-limit safe)" >> $GITHUB_STEP_SUMMARY
-
-      - name: 📧 Notify on Failure
-        if: contains(needs.*.result, 'failure')
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '❌ Daily MLOps Pipeline Failed',
-              body: `The pipeline failed on run #${context.runNumber}. Check logs at: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              labels: ['bug', 'automated', 'mlops']
-            })
+          echo "El entrenamiento ya no se ejecuta en GitHub Actions." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Ejecuta el pipeline local/portable con Docker Compose:" >> $GITHUB_STEP_SUMMARY
+          echo "\`./run_dev_pipeline.sh\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Comando equivalente:" >> $GITHUB_STEP_SUMMARY
+          echo "\`docker compose -f docker-compose.dev.yml --profile mlops run --rm mlops-pipeline\`" >> $GITHUB_STEP_SUMMARY

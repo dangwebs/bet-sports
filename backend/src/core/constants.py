@@ -10,7 +10,7 @@ ML_MODEL_FILENAME = "ml_picks_classifier.joblib"
 
 # Training Configuration (Auditoría v4)
 DAYS_BACK_DEFAULT = 550  # Safe for GitHub Actions (2 vCPU, 7GB RAM)
-DAYS_BACK_FULL = 3650    # 10 years - requires dedicated server or local
+DAYS_BACK_FULL = 3650  # 10 years - requires dedicated server or local
 
 # Probability Thresholds (§3 No Hardcoding)
 PROBABILITY_THRESHOLDS = {
@@ -34,9 +34,9 @@ RECOMMENDATION_THRESHOLD = 0.65
 
 # Color Codes for Frontend (Fuente Única de Verdad)
 COLOR_CODES = {
-    "high": "#10b981",    # Green (≥65%)
+    "high": "#10b981",  # Green (≥65%)
     "medium": "#f59e0b",  # Amber (35-64%)
-    "low": "#ef4444",     # Red (<35%)
+    "low": "#ef4444",  # Red (<35%)
 }
 
 # Market Priority Weights - Externalized from picks_service.py (Auditoría v4)
