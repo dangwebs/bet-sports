@@ -58,7 +58,9 @@ export const getMarketIcon = (marketType: string): string => {
   }
 };
 
-export const getUniquePicks = (picks: any[]) => {
+import { SuggestedPick } from "../types";
+
+export const getUniquePicks = (picks: SuggestedPick[] = []) => {
   if (!picks) return [];
 
   // First sort by confidence/probability descending to ensure we keep the best version

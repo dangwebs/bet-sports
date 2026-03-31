@@ -8,7 +8,7 @@
  * - Error handling and fallback
  */
 
-type StorageCallback = (data: any) => void;
+type StorageCallback = (data: unknown) => void;
 
 class LocalStorageObserver {
   private subscribers: Map<string, Set<StorageCallback>>;
@@ -61,7 +61,7 @@ class LocalStorageObserver {
    * @param key - localStorage key
    * @param data - Data to pass to callbacks
    */
-  notify(key: string, data: any): void {
+  notify(key: string, data: unknown): void {
     const callbacks = this.subscribers.get(key);
     if (callbacks) {
       callbacks.forEach((callback) => {
@@ -82,7 +82,7 @@ class LocalStorageObserver {
    */
   persist(
     key: string,
-    data: any,
+    data: unknown,
     debounceMs: number = this.DEFAULT_DEBOUNCE_MS
   ): void {
     // Clear existing timer
@@ -125,7 +125,7 @@ class LocalStorageObserver {
    * @param key - localStorage key
    * @returns Parsed data or null if not found/invalid
    */
-  get<T = any>(key: string): T | null {
+  get<T = unknown>(key: string): T | null {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
