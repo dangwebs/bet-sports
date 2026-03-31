@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from src.api.mappers.league_mapper import find_league
@@ -7,6 +8,7 @@ from src.api.mappers.prediction_mapper import normalize_prediction_document
 from src.api.schemas.predictions import MatchPredictionModel
 from src.api.utils.serializers import _serialize_timestamp
 from src.infrastructure.repositories.mongo_repository import get_mongo_repository
+from src.utils.time_utils import get_current_time
 
 
 class DataLoader:
@@ -20,6 +22,26 @@ class DataLoader:
         for document in documents:
             parsed = normalize_prediction_document(document, league)
             if parsed is not None:
+                # Sanity checks: reject matches with dates too far in the past or future
+                match_date_str = getattr(parsed.match, "match_date", None)
+                if match_date_str:
+                    try:
+                        dt = datetime.fromisoformat(
+                            match_date_str.replace("Z", "+00:00")
+                        )
+                    except Exception:
+                        try:
+                            dt = datetime.strptime(match_date_str, "%Y-%m-%d")
+                        except Exception:
+                            dt = None
+
+                    if dt:
+                        now = get_current_time()
+                        days_delta = (dt.date() - now.date()).days
+                        # Allow predictions within +/-30 days window
+                        if days_delta > 30 or days_delta < -30:
+                            continue
+
                 normalized.append(parsed)
         return normalized
 

@@ -1,6 +1,47 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.api.services.data_loader import DataLoader
+
+
+class FakeColl:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def find(self, query):
+        return self._docs
+
+
+class FakeRepo:
+    def __init__(self, docs):
+        self.match_predictions = FakeColl(docs)
+
+
+def test_data_loader_filters_out_of_range_predictions():
+    # Create a prediction with a match date far in the future (365 days)
+    future_date = (datetime.utcnow() + timedelta(days=365)).isoformat() + "Z"
+    doc = {
+        "match_id": "m_future",
+        "league_id": "E0",
+        "data": {
+            "match": {
+                "id": "m_future",
+                "match_date": future_date,
+                "home_team": {"id": "t1", "name": "Future Home"},
+                "away_team": {"id": "t2", "name": "Future Away"},
+                "status": "NS",
+            },
+            "prediction": {
+                "home_win_probability": 0.5,
+                "draw_probability": 0.3,
+                "away_win_probability": 0.2,
+            },
+        },
+    }
+
+    loader = DataLoader(repository=FakeRepo([doc]))
+    results = loader.load_predictions_for_league("E0")
+    # The out-of-range prediction should be filtered out
+    assert len(results) == 0
 
 
 class FakeCollection:

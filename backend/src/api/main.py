@@ -68,6 +68,7 @@ def health_check() -> HealthResponse:
 # Register routers
 from src.api.routers.leagues import router as leagues_router  # noqa: E402
 from src.api.routers.matches import router as matches_router  # noqa: E402
+from src.api.routers.metrics import router as metrics_router  # noqa: E402
 from src.api.routers.picks import router as picks_router  # noqa: E402
 from src.api.routers.predictions import router as predictions_router  # noqa: E402
 
@@ -75,6 +76,7 @@ app.include_router(leagues_router)
 app.include_router(predictions_router)
 app.include_router(matches_router)
 app.include_router(picks_router)
+app.include_router(metrics_router)
 
 
 @app.get("/api/v1/train/status", response_model=TrainingStatusPayload)

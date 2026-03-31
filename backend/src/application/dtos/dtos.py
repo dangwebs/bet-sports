@@ -7,7 +7,7 @@ They use Pydantic for validation and serialization.
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -182,6 +182,8 @@ class PredictionDTO(BaseModel):
     highlights_url: Optional[str] = None
     real_time_odds: Optional[dict[str, float]] = None
     created_at: datetime
+    # Model traceability metadata (version, training info, commit, etc.)
+    model_metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
 

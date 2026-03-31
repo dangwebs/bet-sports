@@ -43,6 +43,8 @@ class PredictionModel(BaseModel):
     real_time_odds: dict[str, float] | None = None
     fundamental_analysis: dict[str, bool] | None = None
     suggested_picks: list[dict[str, Any]] = Field(default_factory=list)
+    # Model traceability metadata
+    model_metadata: dict[str, Any] | None = None
 
 
 class MatchPredictionModel(BaseModel):

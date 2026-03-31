@@ -1079,6 +1079,7 @@ class GetPredictionsUseCase:
             over_under_recommendation=prediction.over_under_recommendation,
             suggested_picks=pick_dtos,
             top_ml_picks=top_ml_picks,
+            model_metadata=getattr(prediction, "model_metadata", {}),
             created_at=prediction.created_at,
         )
 

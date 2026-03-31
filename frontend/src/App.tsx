@@ -18,6 +18,7 @@ import ParleySlip from "./presentation/components/Parley/ParleySlip";
 import BotDashboard from "./presentation/components/BotDashboard/BotDashboard";
 import LiveMatchDetailsModal from "./presentation/components/MatchDetails/LiveMatchDetailsModal";
 import MainLayout from "./presentation/components/Layout/MainLayout";
+import ErrorBoundary from "./presentation/components/ErrorBoundary/ErrorBoundary";
 
 // Zustand Stores
 import { useUIStore } from "./application/stores/useUIStore";
@@ -42,8 +43,9 @@ const App: React.FC = () => {
 
   // Stores for UI State
   const { showLive } = useUIStore();
-  const { leaguesError, selectedLeague, newPredictionsAvailable } =
-    usePredictionStore() as any;
+  const leaguesError = usePredictionStore((s) => s.leaguesError);
+  const selectedLeague = usePredictionStore((s) => s.selectedLeague);
+  const newPredictionsAvailable = usePredictionStore((s) => s.newPredictionsAvailable);
   const { matches: liveMatches } = useLiveStore();
   const { isBackendAvailable } = useOfflineStore();
 
@@ -60,7 +62,8 @@ const App: React.FC = () => {
   }, [selectedLeague, liveMatches]);
 
   return (
-    <MainLayout>
+    <ErrorBoundary>
+      <MainLayout>
       <Routes>
         <Route
           path="/"
@@ -195,7 +198,8 @@ const App: React.FC = () => {
           ¡Nuevas predicciones disponibles! Los datos se han actualizado.
         </Alert>
       </Snackbar>
-    </MainLayout>
+      </MainLayout>
+    </ErrorBoundary>
   );
 };
 
