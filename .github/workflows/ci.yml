@@ -43,4 +43,4 @@ jobs:
 
       - name: Run backend tests
         run: |
-          PYTHONPATH=backend python -m pytest -q
+          PYTHONPATH=backend python -m pytest backend/tests -q
