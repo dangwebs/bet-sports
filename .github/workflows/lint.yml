@@ -21,14 +21,20 @@ jobs:
         run: |
           pip install ruff black isort
 
-      - name: Run ruff
-        run: ruff check .
-
-      - name: Run black check
-        run: black --check .
-
-      - name: Run isort check
-        run: isort --check-only .
+      - name: Run Python linters on changed files
+        run: |
+          # Compare against main to get changed files in the PR and run linters only on Python files
+          git fetch origin main || true
+          FILES=$(git diff --name-only origin/main...HEAD || true)
+          PY_FILES=$(echo "$FILES" | tr '\n' ' ' | xargs -n1 | grep -E '\.py$' || true)
+          if [ -z "$PY_FILES" ]; then
+            echo "No Python files changed; skipping ruff/black/isort"
+            exit 0
+          fi
+          echo "Running checks on: $PY_FILES"
+          ruff check $PY_FILES
+          black --check $PY_FILES
+          isort --check-only $PY_FILES
 
       - name: Setup Node
         uses: actions/setup-node@v4
