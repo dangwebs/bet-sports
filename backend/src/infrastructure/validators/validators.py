@@ -38,6 +38,8 @@ def _parse_iso(dt_str: str) -> Optional[datetime]:
                 return dt.astimezone(timezone.utc)
         except Exception:
             return None
+    # Ensure an explicit None return for all code paths
+    return None
 
 
 def normalize_timestamp_to_iso(ts: str) -> str:
@@ -101,7 +103,10 @@ def load_team_aliases() -> Dict[str, str]:
         aliases_path = repo_root / "backend" / "data" / "team_short_names.json"
         if aliases_path.exists():
             with aliases_path.open("r", encoding="utf-8") as fh:
-                return json.load(fh)
+                data = json.load(fh)
+                if isinstance(data, dict):
+                    return {str(k): str(v) for k, v in data.items()}
+                return {}
     except Exception as exc:
         logger.debug("Failed to load team aliases: %s", exc)
     return {}
