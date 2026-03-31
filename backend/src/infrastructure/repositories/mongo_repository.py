@@ -86,11 +86,7 @@ class MongoRepository:
 
     def get_match_prediction(self, match_id: str) -> Optional[dict]:
         doc = self.match_predictions.find_one({"match_id": match_id})
-        if (
-            doc
-            and doc.get("expires_at")
-            and doc["expires_at"].replace(tzinfo=None) > datetime.utcnow()
-        ):
+        if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
             return doc.get("data")
         return None
 
@@ -146,11 +142,7 @@ class MongoRepository:
         key = f"{endpoint}:{str(params)}"
         doc = self.api_cache.find_one({"key": key})
         # Check expiration - assuming get_current_time and expires_at are compatible
-        if (
-            doc
-            and doc.get("expires_at")
-            and doc["expires_at"].replace(tzinfo=None) > datetime.utcnow()
-        ):
+        if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
             return doc.get("data")
         return None
 

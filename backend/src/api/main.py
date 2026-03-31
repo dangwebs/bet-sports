@@ -22,6 +22,7 @@ from slowapi.util import get_remote_address
 from src.api.security import require_admin_key
 from src.domain.constants import LEAGUES_METADATA
 from src.infrastructure.repositories.mongo_repository import get_mongo_repository
+from src.utils.time_utils import get_current_time
 
 _logger = logging.getLogger(__name__)
 _BACKEND_DIR = Path(__file__).parent.parent.parent
@@ -190,6 +191,16 @@ def _serialize_timestamp(value: Any) -> str | None:
     return str(value)
 
 
+def _serialize_datetimes(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _serialize_datetimes(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialize_datetimes(v) for v in obj]
+    if isinstance(obj, datetime):
+        return _serialize_timestamp(obj)
+    return obj
+
+
 def _normalize_prediction_document(
     document: dict[str, Any], league: LeagueModel
 ) -> MatchPredictionModel | None:
@@ -199,6 +210,18 @@ def _normalize_prediction_document(
 
     match_payload = payload.get("match")
     prediction_payload = payload.get("prediction")
+
+    # Ensure datetime values are serialized to strings expected by Pydantic models
+    match_payload = (
+        _serialize_datetimes(match_payload)
+        if isinstance(match_payload, dict)
+        else match_payload
+    )
+    prediction_payload = (
+        _serialize_datetimes(prediction_payload)
+        if isinstance(prediction_payload, dict)
+        else prediction_payload
+    )
 
     if not isinstance(match_payload, dict) or not isinstance(prediction_payload, dict):
         return None
@@ -319,12 +342,38 @@ def get_prediction_by_match(match_id: str) -> MatchPredictionModel:
 
 @app.get("/api/v1/matches/live", response_model=list[dict[str, Any]])
 def get_live_matches() -> list[dict[str, Any]]:
-    return []
+    repository = get_mongo_repository()
+    now = get_current_time()
+    documents = repository.match_predictions.find({"expires_at": {"$gt": now}})
+    matches: list[dict[str, Any]] = []
+    for doc in documents:
+        try:
+            league = _find_league(doc.get("league_id", "E0"))
+        except HTTPException:
+            continue
+        normalized = _normalize_prediction_document(doc, league)
+        if normalized is not None:
+            matches.append(normalized.match.model_dump())
+    return matches
 
 
 @app.get("/api/v1/matches/live/with-predictions", response_model=list[dict[str, Any]])
-def get_live_matches_with_predictions() -> list[dict[str, Any]]:
-    return []
+def get_live_matches_with_predictions(
+    filter_target_leagues: bool = True,
+) -> list[dict[str, Any]]:
+    repository = get_mongo_repository()
+    now = get_current_time()
+    documents = repository.match_predictions.find({"expires_at": {"$gt": now}})
+    results: list[dict[str, Any]] = []
+    for doc in documents:
+        try:
+            league = _find_league(doc.get("league_id", "E0"))
+        except HTTPException:
+            continue
+        normalized = _normalize_prediction_document(doc, league)
+        if normalized is not None:
+            results.append(normalized.model_dump())
+    return results
 
 
 @app.get("/api/v1/matches/daily", response_model=list[dict[str, Any]])
