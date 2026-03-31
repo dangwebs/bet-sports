@@ -60,3 +60,6 @@ backend/app_persistence.db-journal
 .claude/
 
 
+
+# Diagnostic output
+backend/tmp/
