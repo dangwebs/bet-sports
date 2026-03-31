@@ -1,0 +1,29 @@
+# Override file to run a hardened labeler service (use with -f)
+services:
+  labeler:
+    container_name: bjj-labeler-dev
+    working_dir: /workspace/backend
+    command: ["python3", "/workspace/backend/scripts/labeler_service_safe.py"]
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
+      MONGO_DB_NAME: "bjj_betsports"
+      LABELER_INTERVAL_SEC: ${LABELER_INTERVAL_SEC:-300}
+      LABELER_SCRIPT_PATH: /workspace/backend/scripts/label_finished_matches.py
+      LABELER_LIMIT: ${LABELER_LIMIT:-200}
+      LABELER_RETRIES: ${LABELER_RETRIES:-3}
+      LABELER_DRY_RUN: ${LABELER_DRY_RUN:-false}
+      LABELER_TIMEOUT_SEC: ${LABELER_TIMEOUT_SEC:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - ./backend:/workspace/backend:rw
