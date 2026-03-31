@@ -19,7 +19,7 @@ interface CacheState {
   getPicks: (matchId: string) => SuggestedPick[] | null;
   prefetchMatch: (matchId: string) => Promise<void>;
   isFetching: (matchId: string) => boolean;
-  ingestPredictions: (predictions: any[]) => void;
+  ingestPredictions: (predictions: import("../../types").MatchPrediction[]) => void;
   cleanStaleCache: (ttlSeconds?: number) => void;
 }
 
