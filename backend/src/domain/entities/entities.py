@@ -8,7 +8,7 @@ These represent business concepts and are independent of infrastructure.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from src.utils.time_utils import get_current_time
 
@@ -240,6 +240,8 @@ class Prediction:
     suggested_picks: list["SuggestedPick"] = field(default_factory=list)
     highlights_url: Optional[str] = None
     real_time_odds: Optional[dict[str, float]] = None
+    # Traceability metadata for the model that generated this prediction
+    model_metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate probability values."""

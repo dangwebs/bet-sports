@@ -5,7 +5,7 @@ import { usePredictionStore } from "../application/stores/usePredictionStore";
 
 export const useAppVisibility = () => {
   const { isOnline, isBackendAvailable } = useOfflineStore();
-  const { checkTrainingStatus } = usePredictionStore() as any;
+  const checkTrainingStatus = usePredictionStore((s) => s.checkTrainingStatus);
 
   // Reconciliation: Use centralized service when connectivity restores
   useEffect(() => {

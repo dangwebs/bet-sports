@@ -12,8 +12,8 @@ export const generateFallbackPicks = (
 
   if (!prediction) return picks;
 
-  // Cast prediction to any to access potential new fields (projected stats)
-  const pred = prediction as any;
+  // Use typed prediction
+  const pred = prediction;
 
   // 1. Ganador (Winner)
   if (prediction.home_win_probability > 0.5) {
@@ -30,7 +30,7 @@ export const generateFallbackPicks = (
       priority_score: 1,
       expected_value: 0,
       is_contrarian: false,
-    } as any);
+    });
   } else if (prediction.away_win_probability > 0.5) {
     picks.push({
       market_type: "winner",
@@ -45,7 +45,7 @@ export const generateFallbackPicks = (
       priority_score: 1,
       expected_value: 0,
       is_contrarian: false,
-    } as any);
+    });
   }
 
   // 2. Doble Oportunidad (Double Chance)
@@ -65,7 +65,7 @@ export const generateFallbackPicks = (
       priority_score: 2,
       expected_value: 0,
       is_contrarian: false,
-    } as any);
+    });
   }
 
   if (probX2 > 0.75 && prediction.away_win_probability < 0.85) {
@@ -81,7 +81,7 @@ export const generateFallbackPicks = (
       priority_score: 2,
       expected_value: 0,
       is_contrarian: false,
-    } as any);
+    });
   }
 
   // 3. Goles (Over/Under 2.5)
@@ -99,7 +99,7 @@ export const generateFallbackPicks = (
       priority_score: 1,
       expected_value: 0,
       is_contrarian: false,
-    } as any);
+    });
   } else if (prediction.under_25_probability > 0.55) {
     picks.push({
       market_type: "goals_under",
@@ -114,7 +114,7 @@ export const generateFallbackPicks = (
       priority_score: 1,
       expected_value: 0,
       is_contrarian: false,
-    } as any);
+    });
   }
 
   // 4. Ambos Marcan (BTTS) - Fallback logic matching backend approximation
@@ -137,7 +137,7 @@ export const generateFallbackPicks = (
         priority_score: 1.5,
         expected_value: 0,
         is_contrarian: false,
-      } as any);
+      });
     }
   }
 
@@ -162,7 +162,7 @@ export const generateFallbackPicks = (
         priority_score: 2,
         expected_value: 0,
         is_contrarian: false,
-      } as any);
+      });
     }
   }
 
@@ -186,7 +186,7 @@ export const generateFallbackPicks = (
         priority_score: 2,
         expected_value: 0,
         is_contrarian: false,
-      } as any);
+      });
     }
   }
 
