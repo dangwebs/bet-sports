@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-03-31T04:27:12.875882+00:00",
+  "processed": 3,
+  "skipped": 0,
+  "labeled": [
+    {
+      "match_id": "m_1001",
+      "league_id": "E0",
+      "data": {
+        "match": {
+          "status": "FT",
+          "match_date": "2026-03-15T18:00:00Z",
+          "home_goals": 2,
+          "away_goals": 1
+        },
+        "prediction": {
+          "created_at": "2026-03-15T12:00:00Z",
+          "home_win_probability": 0.55
+        }
+      },
+      "label": {
+        "home_goals": 2,
+        "away_goals": 1,
+        "winner": "home",
+        "actual_home": 1,
+        "actual_draw": 0,
+        "actual_away": 0
+      },
+      "original_id": "1",
+      "labeled_at": "2026-03-31T04:27:12.874994+00:00"
+    },
+    {
+      "match_id": "m_1002",
+      "league_id": "D1",
+      "data": {
+        "match": {
+          "status": "NS",
+          "match_date": "2026-03-16T20:00:00Z",
+          "home_score": "3",
+          "away_score": "2"
+        },
+        "prediction": {
+          "created_at": "2026-03-16T15:00:00Z",
+          "home_win_probability": 0.6
+        }
+      },
+      "label": {
+        "home_goals": 3,
+        "away_goals": 2,
+        "winner": "home",
+        "actual_home": 1,
+        "actual_draw": 0,
+        "actual_away": 0
+      },
+      "original_id": "2",
+      "labeled_at": "2026-03-31T04:27:12.874994+00:00"
+    },
+    {
+      "match_id": "m_1003",
+      "league_id": "P1",
+      "data": {
+        "match": {
+          "status": "NS",
+          "match_date": "2026-03-17T16:00:00Z",
+          "score": {
+            "home": "1",
+            "away": "1"
+          }
+        },
+        "prediction": {
+          "created_at": "2026-03-17T10:00:00Z",
+          "home_win_probability": 0.45
+        }
+      },
+      "label": {
+        "home_goals": 1,
+        "away_goals": 1,
+        "winner": "draw",
+        "actual_home": 0,
+        "actual_draw": 1,
+        "actual_away": 0
+      },
+      "original_id": "3",
+      "labeled_at": "2026-03-31T04:27:12.874994+00:00"
+    }
+  ]
+}
