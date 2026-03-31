@@ -7,7 +7,7 @@ persisting changes.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.utils.metrics import get_counter
 from src.utils.time_utils import get_current_time
@@ -18,7 +18,14 @@ logger = logging.getLogger(__name__)
 _LABELED_COUNTER = get_counter("labeler_labeled_total", "Total labeled predictions")
 
 
-def _extract_scores(match_obj: Dict[str, Any]) -> tuple:
+def _to_int(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _extract_scores(match_obj: Dict[str, Any]) -> Tuple[Optional[int], Optional[int]]:
     """Try several common keys to find home/away goals as ints or numeric strings."""
     if not isinstance(match_obj, dict):
         return (None, None)
@@ -31,21 +38,24 @@ def _extract_scores(match_obj: Dict[str, Any]) -> tuple:
     for cand in candidates:
         if len(cand) == 2 and cand[0] in match_obj and cand[1] in match_obj:
             try:
-                return int(match_obj[cand[0]]), int(match_obj[cand[1]])
+                return _to_int(match_obj[cand[0]]), _to_int(match_obj[cand[1]])
             except Exception:
                 continue
-        if cand[0] == "score" and isinstance(match_obj.get("score"), dict):
-            s = match_obj.get("score")
-            try:
-                return int(s.get("home") or s.get("home_score")), int(
-                    s.get("away") or s.get("away_score")
-                )
-            except Exception:
-                continue
+        if cand[0] == "score":
+            score_obj = match_obj.get("score")
+            if isinstance(score_obj, dict):
+                s: Dict[str, Any] = score_obj
+                try:
+                    return (
+                        _to_int(s.get("home") or s.get("home_score")),
+                        _to_int(s.get("away") or s.get("away_score")),
+                    )
+                except Exception:
+                    continue
     return (None, None)
 
 
-def _decide_label(home: int, away: int) -> str:
+def _decide_label(home: Optional[int], away: Optional[int]) -> str:
     if home is None or away is None:
         return "na"
     if home > away:
@@ -56,7 +66,7 @@ def _decide_label(home: int, away: int) -> str:
 
 
 def reconcile_predictions(
-    persistence_repo, window_days: int = 90, dry_run: bool = True
+    persistence_repo: Any, window_days: int = 90, dry_run: bool = True
 ) -> Dict[str, Any]:
     """Reconcile predictions using available match data.
 
@@ -69,16 +79,18 @@ def reconcile_predictions(
 
     for doc in cursor:
         try:
+            if not isinstance(doc, dict):
+                skipped += 1
+                continue
             # Skip if already labeled
             if doc.get("labeled"):
                 skipped += 1
                 continue
 
-            match_obj = (doc.get("data") or {}).get("match") or (
-                doc.get("data") or {}
-            ).get("match_data")
-            if not match_obj:
-                # no match info; skip
+            data: Dict[str, Any] = doc.get("data") or {}
+            match_obj = data.get("match") or data.get("match_data")
+            if not match_obj or not isinstance(match_obj, dict):
+                # no match info or unexpected shape; skip
                 skipped += 1
                 continue
 
@@ -93,13 +105,12 @@ def reconcile_predictions(
             home_goal, away_goal = _extract_scores(match_obj)
             label = _decide_label(home_goal, away_goal)
 
+            prediction = data.get("prediction") or {}
             audit = {
                 "prediction_id": doc.get("_id") or doc.get("match_id"),
                 "match_id": doc.get("match_id"),
                 "matching_strategy": "match_obj_internal",
-                "confidence": (doc.get("data") or {})
-                .get("prediction", {})
-                .get("confidence"),
+                "confidence": prediction.get("confidence"),
                 "label": label,
                 "timestamp": get_current_time().isoformat(),
             }

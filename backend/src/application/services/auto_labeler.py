@@ -7,6 +7,7 @@ components (training, metrics) can use labeled data.
 """
 import logging
 import os
+from typing import Any, Dict, Optional, Tuple
 
 from src.application.services.auto_labeler_rules import derive_market_labels
 from src.utils.time_utils import get_current_time
@@ -22,7 +23,12 @@ class AutoLabeler:
     can be confidently retrieved.
     """
 
-    def __init__(self, persistence_repo, data_sources, cache_service=None):
+    def __init__(
+        self,
+        persistence_repo: Any,
+        data_sources: Any,
+        cache_service: Optional[Any] = None,
+    ) -> None:
         self.persistence_repo = persistence_repo
         self.data_sources = data_sources
         self.cache_service = cache_service
@@ -71,7 +77,7 @@ class AutoLabeler:
         logger.info("AutoLabeler labeled %d documents", labeled)
         return labeled
 
-    async def _fetch_match(self, match_id):
+    async def _fetch_match(self, match_id: str) -> Tuple[Optional[Any], Optional[str]]:
         """Attempt to fetch match details from configured datasources or cache.
 
         Returns a tuple (match, source) where source is a string describing
@@ -105,11 +111,11 @@ class AutoLabeler:
 
         return match, source
 
-    def _is_finished(self, match) -> bool:
+    def _is_finished(self, match: Any) -> bool:
         status = getattr(match, "status", "").upper()
         return status in ("FINISHED", "FT", "ENDED")
 
-    def _extract_scores(self, match):
+    def _extract_scores(self, match: Any) -> Tuple[Optional[int], Optional[int]]:
         home_goals = getattr(match, "home_goals", None) or getattr(
             match, "home_score", None
         )
@@ -118,10 +124,12 @@ class AutoLabeler:
         )
         return home_goals, away_goals
 
-    def _build_label_payload(self, doc, match, label_source: str):
+    def _build_label_payload(
+        self, doc: Any, match: Any, label_source: Optional[str]
+    ) -> Dict[str, Any]:
         home_goals, away_goals = self._extract_scores(match)
 
-        label_payload = {
+        label_payload: Dict[str, Any] = {
             "labeled": True,
             "label": {
                 "home_goals": home_goals,
@@ -131,7 +139,7 @@ class AutoLabeler:
                 "home_yellow_cards": getattr(match, "home_yellow_cards", None),
                 "away_yellow_cards": getattr(match, "away_yellow_cards", None),
             },
-            "label_source": label_source,
+            "label_source": label_source or "unknown",
             "label_metadata": {
                 "labeled_by": "auto_labeler",
                 "model_version": os.getenv("MODEL_VERSION", "unknown"),
@@ -143,7 +151,11 @@ class AutoLabeler:
         try:
             market_labels = derive_market_labels(doc, match)
             if market_labels:
-                label_payload["label"]["market_labels"] = market_labels
+                # avoid indexed-assignment typing issues by rebuilding the inner dict
+                label_payload["label"] = {
+                    **label_payload["label"],
+                    "market_labels": market_labels,
+                }
         except Exception:
             logger.exception(
                 "Failed deriving market labels for %s", doc.get("match_id")

@@ -5,6 +5,7 @@ import os
 import subprocess
 import threading
 from pathlib import Path
+from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,12 +49,12 @@ app.add_middleware(
 # Configure rate limiter for selective endpoint protection
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
 
 
 @app.exception_handler(Exception)
-async def _global_exception_handler(request: Request, exc: Exception):
+async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     _logger.exception(
         "Unhandled exception on %s %s: %s", request.method, request.url, exc
     )
@@ -85,7 +86,7 @@ app.include_router(monitor_router)
 
 
 @app.get("/_ready")
-def readiness_check() -> dict:
+def readiness_check() -> Dict[str, Any]:
     """Readiness check that attempts to validate critical dependencies.
 
     This endpoint is permissive: if the database is not configured it returns
