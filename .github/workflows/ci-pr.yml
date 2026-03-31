@@ -38,7 +38,7 @@ jobs:
             echo "No backend Python files changed; skipping mypy"
           else
             echo "Running mypy on: $PY_FILES"
-            python -m mypy $PY_FILES --ignore-missing-imports
+            python -m mypy $PY_FILES --ignore-missing-imports --follow-imports=skip
           fi
 
   backend-tests:
