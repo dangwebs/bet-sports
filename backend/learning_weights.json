@@ -1,6 +1,17 @@
 {
-  "market_performances": {},
+  "market_performances": {
+    "win": {
+      "market_type": "win",
+      "total_predictions": 3,
+      "correct_predictions": 3,
+      "success_rate": 1.0,
+      "avg_odds": 1.5,
+      "total_profit_loss": 0.0,
+      "confidence_adjustment": 1.0,
+      "last_updated": "2026-03-31T17:55:12.041502"
+    }
+  },
   "global_adjustments": {},
   "version": "1.0",
-  "last_saved": "2025-12-23T00:19:05.493875"
+  "last_saved": "2026-03-31T12:55:12.041513-05:00"
 }

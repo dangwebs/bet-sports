@@ -191,6 +191,19 @@ class BotScheduler:
                     logger.error(f"Error processing league {league_id}: {str(e)}")
                     gc.collect()
 
+            # 3.5 AUTO-LABELING: label expired predictions using finished match results
+            logger.info(
+                "Step 3.5/4: Running auto-labeler to label expired predictions..."
+            )
+            try:
+                from src.application.services.auto_labeler import AutoLabeler
+
+                auto_labeler = AutoLabeler(persistence_repo, data_sources, cache)
+                labeled = await auto_labeler.run()
+                logger.info("Auto-labeler completed: %d labeled documents", labeled)
+            except Exception as e:
+                logger.error("Auto-labeler failed: %s", e)
+
             # 4. AUDIT
             logger.info("Step 4/4: Post-execution audit...")
             try:

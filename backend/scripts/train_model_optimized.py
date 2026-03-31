@@ -357,6 +357,11 @@ async def generate_league_predictions(
                     recommended_bet=prediction.recommended_bet,
                     over_under_recommendation=prediction.over_under_recommendation,
                     suggested_picks=pick_dtos,
+                    model_metadata={
+                        "model_version": os.getenv("MODEL_VERSION", "unknown"),
+                        "training_run": os.getenv("TRAINING_RUN", "manual"),
+                        "commit": os.getenv("MODEL_COMMIT_SHA", "unknown"),
+                    },
                 )
                 # Inject projected stats
                 m_dto.home_corners = int(round(prediction.predicted_home_corners))

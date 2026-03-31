@@ -91,7 +91,7 @@ interface NormalizedMatch {
 
 // Normalize match data from either Match or LiveMatch
 const normalizeMatch = (
-  match: LiveMatch | import("../../../types").Match
+  match: any
 ): NormalizedMatch => {
   // Check if it's a LiveMatch (has league_name) or Match (has league object)
   if ("league_name" in match) {
@@ -116,7 +116,7 @@ const normalizeMatch = (
     // It's a Match or LiveMatch
     return {
       status: match.status || "LIVE",
-      leagueName: match.league?.name || (match as any).league_name || "Liga",
+      leagueName: (match && match.league && match.league.name) || match.league_name || "Liga",
       homeTeamName:
         typeof match.home_team === "string"
           ? match.home_team
@@ -125,10 +125,10 @@ const normalizeMatch = (
         typeof match.away_team === "string"
           ? match.away_team
           : match.away_team?.name || "Visitante",
-      homeScore: (match as any).home_goals ?? (match as any).home_score ?? 0,
-      awayScore: (match as any).away_goals ?? (match as any).away_score ?? 0,
-      homeTeam: (match as any).home_team_obj || match.home_team,
-      awayTeam: (match as any).away_team_obj || match.away_team,
+      homeScore: match.home_goals ?? match.home_score ?? 0,
+      awayScore: match.away_goals ?? match.away_score ?? 0,
+      homeTeam: match.home_team_obj || match.home_team,
+      awayTeam: match.away_team_obj || match.away_team,
     };
   }
 };
@@ -257,8 +257,8 @@ const LiveMatchCard: React.FC<MatchCardProps> = ({ matchData }) => {
               {"homeTeam" in match ? (
                 <Box
                   component="img"
-                  src={getTeamLogo(match.homeTeam as any)}
-                  alt={getTeamDisplayName(match.homeTeam as any)}
+                  src={getTeamLogo(match.homeTeam)}
+                  alt={getTeamDisplayName(match.homeTeam)}
                   sx={{ width: 32, height: 32, mb: 0.5, objectFit: "contain" }}
                 />
               ) : null}
@@ -303,8 +303,8 @@ const LiveMatchCard: React.FC<MatchCardProps> = ({ matchData }) => {
               {"awayTeam" in match ? (
                 <Box
                   component="img"
-                  src={getTeamLogo(match.awayTeam as any)}
-                  alt={getTeamDisplayName(match.awayTeam as any)}
+                  src={getTeamLogo(match.awayTeam)}
+                  alt={getTeamDisplayName(match.awayTeam)}
                   sx={{ width: 32, height: 32, mb: 0.5, objectFit: "contain" }}
                 />
               ) : null}

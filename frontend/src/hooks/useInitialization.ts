@@ -4,7 +4,8 @@ import { useBotStore } from "../application/stores/useBotStore";
 import { useLiveStore } from "../application/stores/useLiveStore";
 
 export const useInitialization = () => {
-  const { fetchLeagues, checkTrainingStatus } = usePredictionStore() as any;
+  const fetchLeagues = usePredictionStore((s) => s.fetchLeagues);
+  const checkTrainingStatus = usePredictionStore((s) => s.checkTrainingStatus);
   const { fetchTrainingData } = useBotStore();
   const { startPolling, stopPolling } = useLiveStore();
 

@@ -70,6 +70,21 @@ class MongoRepository:
     def save_match_prediction(
         self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400
     ):
+        # Ensure traceability metadata exists
+        try:
+            if not isinstance(data, dict):
+                data = {"payload": data}
+            data.setdefault(
+                "model_metadata",
+                {
+                    "model_version": os.getenv("MODEL_VERSION", "unknown"),
+                    "generated_by": "prediction-service",
+                },
+            )
+        except Exception:
+            # Best-effort only
+            pass
+
         expires_at = get_current_time() + timedelta(seconds=ttl_seconds)
         self.match_predictions.update_one(
             {"match_id": match_id},
@@ -86,11 +101,7 @@ class MongoRepository:
 
     def get_match_prediction(self, match_id: str) -> Optional[dict]:
         doc = self.match_predictions.find_one({"match_id": match_id})
-        if (
-            doc
-            and doc.get("expires_at")
-            and doc["expires_at"].replace(tzinfo=None) > datetime.utcnow()
-        ):
+        if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
             return doc.get("data")
         return None
 
@@ -101,6 +112,21 @@ class MongoRepository:
 
         operations = []
         for p in predictions_data:
+            # Ensure model metadata exists on each payload
+            data_payload = p.get("data") or {}
+            try:
+                if not isinstance(data_payload, dict):
+                    data_payload = {"payload": data_payload}
+                data_payload.setdefault(
+                    "model_metadata",
+                    {
+                        "model_version": os.getenv("MODEL_VERSION", "unknown"),
+                        "generated_by": "prediction-service",
+                    },
+                )
+            except Exception:
+                pass
+
             expires_at = get_current_time() + timedelta(
                 seconds=p.get("ttl_seconds", 86400)
             )
@@ -110,7 +136,7 @@ class MongoRepository:
                     {
                         "$set": {
                             "league_id": p["league_id"],
-                            "data": p["data"],
+                            "data": data_payload,
                             "expires_at": expires_at,
                             "last_updated": get_current_time(),
                         }
@@ -146,11 +172,7 @@ class MongoRepository:
         key = f"{endpoint}:{str(params)}"
         doc = self.api_cache.find_one({"key": key})
         # Check expiration - assuming get_current_time and expires_at are compatible
-        if (
-            doc
-            and doc.get("expires_at")
-            and doc["expires_at"].replace(tzinfo=None) > datetime.utcnow()
-        ):
+        if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
             return doc.get("data")
         return None
 

@@ -24,8 +24,10 @@ export const DEFAULT_TEAM_LOGO =
 /**
  * Get the team logo URL, returning default if not available
  */
-export const getTeamLogo = (team: Team): string => {
-  return team.logo_url || team.logo_url || DEFAULT_TEAM_LOGO;
+export const getTeamLogo = (team: any): string => {
+  if (!team) return DEFAULT_TEAM_LOGO;
+  if (typeof team === "string") return DEFAULT_TEAM_LOGO;
+  return team.logo_url || DEFAULT_TEAM_LOGO;
 };
 
 /**
@@ -54,7 +56,9 @@ export const cleanTeamName = (name: string): string => {
  * Priority: short_name > name
  * Cleans: "Chelsea FC" -> "Chelsea", "Arsenal AFC" -> "Arsenal"
  */
-export const getTeamDisplayName = (team: Team): string => {
+export const getTeamDisplayName = (team: any): string => {
+  if (!team) return "";
+  if (typeof team === "string") return cleanTeamName(team);
   const baseName = team.short_name || team.name;
   return cleanTeamName(baseName);
 };

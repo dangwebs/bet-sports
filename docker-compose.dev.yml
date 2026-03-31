@@ -85,6 +85,8 @@ services:
       mongodb:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - ./backend:/workspace/backend:rw
 
   mlops-pipeline:
     <<: *project-image
@@ -105,6 +107,46 @@ services:
       mongodb:
         condition: service_healthy
     profiles: ["mlops"]
+
+  labeler:
+    <<: *project-image
+    container_name: bjj-labeler-dev
+    working_dir: /workspace/backend
+    command: ["python3", "/workspace/backend/scripts/labeler_service.py"]
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
+      MONGO_DB_NAME: "bjj_betsports"
+      LABELER_INTERVAL_SEC: ${LABELER_INTERVAL_SEC:-600}
+      LABELER_SCRIPT_PATH: /workspace/backend/scripts/label_finished_matches.py
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  updater:
+    <<: *project-image
+    container_name: bjj-updater-dev
+    working_dir: /workspace/backend
+    command: ["python3", "/workspace/backend/scripts/updater_service.py"]
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
+      MONGO_DB_NAME: "bjj_betsports"
+      UPDATER_INTERVAL_SEC: ${UPDATER_INTERVAL_SEC:-600}
+      UPDATER_SCRIPT_PATH: /workspace/backend/scripts/update_predictions_with_results.py
+      UPDATER_DAYS_BACK: ${UPDATER_DAYS_BACK:-3}
+      UPDATER_DRY_RUN: ${UPDATER_DRY_RUN:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./backend:/workspace/backend:rw
 
 volumes:
   mongodb_data:

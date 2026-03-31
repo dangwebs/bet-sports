@@ -10,6 +10,7 @@ This is a pure domain service with no external dependencies.
 
 import functools
 import math
+import os
 from typing import Optional
 
 from src.domain.entities.entities import Match, Prediction, TeamStatistics
@@ -1407,4 +1408,8 @@ class PredictionService:
             data_updated_at=data_updated_at,
             highlights_url=highlights_url,
             real_time_odds=real_time_odds,
+            model_metadata={
+                "model_version": os.getenv("MODEL_VERSION", "unknown"),
+                "generated_by": os.getenv("MODEL_GENERATED_BY", "prediction-service"),
+            },
         )
