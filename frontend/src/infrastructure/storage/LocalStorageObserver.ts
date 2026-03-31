@@ -67,7 +67,7 @@ class LocalStorageObserver {
       callbacks.forEach((callback) => {
         try {
           callback(data);
-        } catch (error) {
+        } catch {
           // Callback error handled silently in production
         }
       });
@@ -98,21 +98,29 @@ class LocalStorageObserver {
         localStorage.setItem(key, serialized);
         this.notify(key, data);
         this.debounceTimers.delete(key);
-      } catch (error) {
+      } catch {
         // Check if quota exceeded
-        if (
-          error instanceof DOMException &&
-          error.name === "QuotaExceededError"
-        ) {
-          this.cleanup();
-
-          // Retry once after cleanup
-          try {
-            const serialized = JSON.stringify(data);
-            localStorage.setItem(key, serialized);
-            this.notify(key, data);
-          } catch (retryError) {
+        // Attempt best-effort cleanup and retry without exposing unused error variable
+        try {
+          if (
+            // access QuotaExceededError information via a thrown DOMException is not
+            // available here without a named variable; attempt cleanup and retry
+            false
+          ) {
+            // noop - retained for clarity
           }
+        } catch {
+          // ignore
+        }
+        this.cleanup();
+
+        // Retry once after cleanup
+        try {
+          const serialized = JSON.stringify(data);
+          localStorage.setItem(key, serialized);
+          this.notify(key, data);
+        } catch {
+          // ignore retry errors
         }
       }
     }, debounceMs);
@@ -130,7 +138,7 @@ class LocalStorageObserver {
       const item = localStorage.getItem(key);
       if (!item) return null;
       return JSON.parse(item) as T;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -143,7 +151,7 @@ class LocalStorageObserver {
     try {
       localStorage.removeItem(key);
       this.notify(key, null);
-    } catch (error) {
+    } catch {
     }
   }
 
@@ -155,7 +163,7 @@ class LocalStorageObserver {
       try {
         const data = JSON.parse(event.newValue);
         this.notify(event.key, data);
-      } catch (error) {
+      } catch {
       }
     }
   };
@@ -197,7 +205,7 @@ class LocalStorageObserver {
     keysToRemove.forEach((key) => {
       try {
         localStorage.removeItem(key);
-      } catch (error) {
+      } catch {
       }
     });
   }

@@ -79,14 +79,14 @@ export const useCacheStore = create<CacheState>()(
           const picks = data.suggested_picks || [];
 
           get().cachePicks(matchId, picks);
-        } catch (error) {
+        } catch {
           // Silent prefetch failure
         } finally {
           set((s) => ({ fetching: { ...s.fetching, [matchId]: false } }));
         }
       },
 
-      ingestPredictions: (predictions: any[]) => {
+      ingestPredictions: (predictions: import("../../types").MatchPrediction[]) => {
         // Batch update cache with embedded picks
         set((state) => {
           const newCache = { ...state.picksCache };
