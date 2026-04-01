@@ -10,7 +10,7 @@ import argparse
 import json
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def load_sample_predictions() -> List[Dict[str, Any]]:
@@ -24,28 +24,35 @@ def load_sample_predictions() -> List[Dict[str, Any]]:
     return []
 
 
-def extract_scores(match_obj: Dict[str, Any]):
+def _to_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def extract_scores(match_obj: Dict[str, Any]) -> Tuple[Optional[int], Optional[int]]:
     if not isinstance(match_obj, dict):
         return (None, None)
     # common keys
     if "home_goals" in match_obj and "away_goals" in match_obj:
-        try:
-            return int(match_obj.get("home_goals")), int(match_obj.get("away_goals"))
-        except Exception:
-            pass
+        home = _to_int(match_obj.get("home_goals"))
+        away = _to_int(match_obj.get("away_goals"))
+        if home is not None and away is not None:
+            return home, away
     if "score" in match_obj and isinstance(match_obj.get("score"), dict):
-        s = match_obj.get("score")
-        try:
-            return int(s.get("home") or s.get("home_score")), int(
-                s.get("away") or s.get("away_score")
-            )
-        except Exception:
-            pass
+        s = match_obj.get("score") or {}
+        home = _to_int(s.get("home") or s.get("home_score"))
+        away = _to_int(s.get("away") or s.get("away_score"))
+        if home is not None and away is not None:
+            return home, away
     # fallback
     return (None, None)
 
 
-def decide_label(home, away):
+def decide_label(home: Optional[int], away: Optional[int]) -> str:
     if home is None or away is None:
         return "na"
     if home > away:
@@ -55,7 +62,7 @@ def decide_label(home, away):
     return "draw"
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Labeler dry-run/persist CLI")
     parser.add_argument("--dry-run", action="store_true", help="Do not persist changes")
     parser.add_argument("--window", default="90d", help="Window (e.g. 90d)")

@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 from fastapi import APIRouter, Depends, Query
 from src.api.security import require_admin_key
 from src.application.services.labeler import reconcile_predictions
@@ -10,8 +12,8 @@ router = APIRouter(prefix="/admin/labeler", tags=["admin", "labeler"])
 def labeler_dry_run(
     window: str = Query("90d"),
     admin_key: str = Depends(require_admin_key),
-    persistence_repo=Depends(get_persistence_repository),
-):
+    persistence_repo: Any = Depends(get_persistence_repository),
+) -> Dict[str, Any]:
     # window parsing: accept '90d' -> 90
     try:
         days = int(window.rstrip("d"))
@@ -25,8 +27,8 @@ def labeler_dry_run(
 def labeler_run(
     window: str = Query("90d"),
     admin_key: str = Depends(require_admin_key),
-    persistence_repo=Depends(get_persistence_repository),
-):
+    persistence_repo: Any = Depends(get_persistence_repository),
+) -> Dict[str, Any]:
     try:
         days = int(window.rstrip("d"))
     except Exception:
