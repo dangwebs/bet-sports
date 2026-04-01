@@ -1,0 +1,10 @@
+Full npm ci log (originally saved under /tmp/npm_ci.log)
+
+npm verbose cli /Users/jhormanorozco/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/jhormanorozco/.local/state/fnm_multishells/2830_1775013763434/bin/npm
+npm info using npm@11.10.0
+npm info using node@v22.21.1
+npm verbose title npm ci
+... (truncated) ...
+
+added 685 packages in 31m
+npm info ok
