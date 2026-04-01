@@ -1,4 +1,4 @@
-import { MatchPrediction } from "../domain/entities";
+import { MatchPrediction, Prediction } from "../types";
 import { normalizeName } from "./searchUtils";
 
 export interface LiveMatchRaw {
@@ -22,7 +22,7 @@ export interface LiveMatchRaw {
   away_red_cards: number;
   home_logo_url?: string;
   away_logo_url?: string;
-  prediction?: any;
+  prediction?: Partial<Prediction>;
 }
 
 export const matchLiveWithPrediction = (
@@ -96,17 +96,17 @@ export const matchLiveWithPrediction = (
     },
     prediction:
       prediction ||
-      ({
-        id: `live-${liveMatch.id}`,
-        match_id: liveMatch.id,
-        home_win_probability: 0,
-        draw_probability: 0,
-        away_win_probability: 0,
-        confidence: 0,
-        predicted_home_goals: 0,
-        predicted_away_goals: 0,
-        created_at: new Date().toISOString(),
-      } as any),
+        ({
+          id: `live-${liveMatch.id}`,
+          match_id: liveMatch.id,
+          home_win_probability: 0,
+          draw_probability: 0,
+          away_win_probability: 0,
+          confidence: 0,
+          predicted_home_goals: 0,
+          predicted_away_goals: 0,
+          created_at: new Date().toISOString(),
+        } as Partial<Prediction>),
   };
 
   return matchPrediction;

@@ -42,7 +42,7 @@ interface BotState {
 // Clean up old localStorage to prevent quota errors during migration
 try {
   localStorage.removeItem("bot-storage");
-} catch (e) {
+} catch {
   // Silent cleanup
 }
 
@@ -183,7 +183,7 @@ export const useBotStore = create<BotState>()(
                 statusRes.message || "El entrenamiento falló en el servidor"
               );
             }
-          } catch (e: unknown) {
+          } catch {
             if (attempts > 10) {
               // Only show error after repeated failures
               set({ error: "Error de conexión al monitorear entrenamiento" });
@@ -253,7 +253,7 @@ export const useBotStore = create<BotState>()(
               });
             }
           }
-        } catch (error) {
+        } catch {
           // Don't set error state - keep using cached data
         } finally {
           set({ isReconciling: false });

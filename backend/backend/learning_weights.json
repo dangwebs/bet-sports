@@ -1,0 +1,27 @@
+{
+  "market_performances": {
+    "corners_over": {
+      "market_type": "corners_over",
+      "total_predictions": 2,
+      "correct_predictions": 2,
+      "success_rate": 1.0,
+      "avg_odds": 2.5,
+      "total_profit_loss": 15.0,
+      "confidence_adjustment": 1.0,
+      "last_updated": "2026-03-31T18:35:10.406072"
+    },
+    "win": {
+      "market_type": "win",
+      "total_predictions": 1,
+      "correct_predictions": 1,
+      "success_rate": 1.0,
+      "avg_odds": 1.5,
+      "total_profit_loss": 0.0,
+      "confidence_adjustment": 1.0,
+      "last_updated": "2026-03-31T18:35:28.693256"
+    }
+  },
+  "global_adjustments": {},
+  "version": "1.0",
+  "last_saved": "2026-03-31T13:35:28.693314-05:00"
+}
