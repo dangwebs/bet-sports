@@ -1,3 +1,4 @@
+var _a, _b;
 /// <reference types="vitest" />
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
@@ -89,7 +90,17 @@ export default defineConfig({
         port: 5173,
         proxy: {
             "/api": {
-                target: "http://localhost:8000",
+                target: (_a = process.env.VITE_API_PROXY_TARGET) !== null && _a !== void 0 ? _a : "http://localhost:8000",
+                changeOrigin: true,
+            },
+        },
+    },
+    preview: {
+        host: "0.0.0.0",
+        port: 4173,
+        proxy: {
+            "/api": {
+                target: (_b = process.env.VITE_API_PROXY_TARGET) !== null && _b !== void 0 ? _b : "http://localhost:8000",
                 changeOrigin: true,
             },
         },
