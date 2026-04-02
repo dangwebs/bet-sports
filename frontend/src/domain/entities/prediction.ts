@@ -2,6 +2,7 @@ import { Match, League } from "./match";
 import { SuggestedPick } from "./pick";
 
 export interface Prediction {
+  id?: string;
   match_id: string;
   home_win_probability: number;
   draw_probability: number;
@@ -10,6 +11,13 @@ export interface Prediction {
   under_25_probability: number;
   predicted_home_goals: number;
   predicted_away_goals: number;
+
+  predicted_home_corners?: number;
+  predicted_away_corners?: number;
+  predicted_home_yellow_cards?: number;
+  predicted_away_yellow_cards?: number;
+  predicted_home_red_cards?: number;
+  predicted_away_red_cards?: number;
 
   // New Standard Probabilities
   over_95_corners_probability?: number;
