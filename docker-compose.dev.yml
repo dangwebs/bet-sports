@@ -84,6 +84,7 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    profiles: ["automation"]
     restart: unless-stopped
     volumes:
       - ./backend:/workspace/backend:rw
@@ -128,6 +129,7 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    profiles: ["automation"]
     restart: unless-stopped
     volumes:
       - ./backend:/workspace/backend:rw
@@ -150,6 +152,7 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    profiles: ["automation"]
     restart: unless-stopped
     volumes:
       - ./backend:/workspace/backend:rw
