@@ -101,6 +101,7 @@ El entrenamiento se ejecuta fuera de GitHub Actions y dentro de contenedores:
     - `cleanup` -> `train` -> `predict` -> `top-picks`
 4. Puedes ajustar recursos sin editar código:
     - `N_JOBS`, `TRAIN_DAYS`, `PREDICT_LEAGUES`
+    - El default de `N_JOBS` usa una fracción conservadora del host; si necesitas más paralelismo, sobrescríbelo explícitamente.
 
 ### Ejecución full-stack local
 
@@ -108,6 +109,12 @@ Para levantar API + frontend + Mongo:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
+```
+
+Para levantar también los jobs periódicos opcionales (`ml-worker`, `labeler`, `updater`):
+
+```bash
+docker compose -f docker-compose.dev.yml --profile automation up -d
 ```
 
 ### Rebuild canónico del stack portable
