@@ -1,12 +1,33 @@
 import logging
 import os
+from dataclasses import asdict, is_dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pymongo import MongoClient
 from src.utils.time_utils import get_current_time
 
 logger = logging.getLogger(__name__)
+
+
+def _to_bson_friendly(value: Any) -> Any:
+    """Convert nested Python/domain objects into BSON-friendly primitives."""
+    if is_dataclass(value):
+        return _to_bson_friendly(asdict(value))
+
+    if hasattr(value, "model_dump"):
+        return _to_bson_friendly(value.model_dump())
+
+    if isinstance(value, dict):
+        return {key: _to_bson_friendly(item) for key, item in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_to_bson_friendly(item) for item in value]
+
+    if hasattr(value, "__dict__") and not isinstance(value, type):
+        return _to_bson_friendly(vars(value))
+
+    return value
 
 
 class MongoRepository:
@@ -43,9 +64,10 @@ class MongoRepository:
         pass
 
     def save_training_result(self, key: str, data: dict):
+        normalized_data = _to_bson_friendly(data)
         self.training_results.update_one(
             {"key": key},
-            {"$set": {"data": data, "last_updated": get_current_time()}},
+            {"$set": {"data": normalized_data, "last_updated": get_current_time()}},
             upsert=True,
         )
 

@@ -146,6 +146,11 @@ class PicksService:
             model_path = os.path.join(_backend_dir, ML_MODEL_FILENAME)
 
             self.ml_model = self._load_ml_model_safely(model_path)
+            if self.ml_model is None:
+                logger.info(
+                    "Local ML model not available at %s. Using statistical fallback.",
+                    model_path,
+                )
         except Exception as e:
             logger.warning(f"Failed to resolve model path: {e}")
             self.ml_model = None
@@ -166,7 +171,7 @@ class PicksService:
         except (ZeroDivisionError, ValueError, TypeError):
             return default
 
-    def _load_ml_model_safely(self, model_path: str):
+    def _load_ml_model_safely(self, model_path: str) -> Optional[object]:
         """
         Securely load the ML model with proper error handling and logging.
         """
@@ -190,7 +195,7 @@ class PicksService:
             )
         return None
 
-    def reload_model(self):
+    def reload_model(self) -> None:
         """Force reload of the ML model from disk."""
         # Resolve absolute path (same logic as __init__)
         try:
@@ -201,7 +206,16 @@ class PicksService:
             model_path = os.path.join(_backend_dir, ML_MODEL_FILENAME)
 
             self.ml_model = self._load_ml_model_safely(model_path)
-            logger.info("ML Model reloaded successfully.")
+            if self.ml_model is None:
+                logger.info(
+                    (
+                        "Local ML model not available after reload at %s. "
+                        "Using statistical fallback."
+                    ),
+                    model_path,
+                )
+            else:
+                logger.info("ML Model reloaded successfully.")
         except Exception as e:
             logger.error(f"Failed to reload model: {e}")
 
