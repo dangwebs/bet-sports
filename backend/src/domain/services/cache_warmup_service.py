@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from src.application.use_cases.use_cases import DataSources, GetPredictionsUseCase
 from src.domain.services.match_aggregator_service import MatchAggregatorService
@@ -8,6 +10,10 @@ from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
 
 # from src.domain.services.risk_management.risk_manager import RiskManager
+
+if TYPE_CHECKING:
+    from src.infrastructure.repositories.mongo_repository import MongoRepository
+    from src.infrastructure.services.background_processor import BackgroundProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +30,9 @@ class CacheWarmupService:
         prediction_service: PredictionService,
         statistics_service: StatisticsService,
         match_aggregator: MatchAggregatorService,
-        persistence_repository: Optional[PersistenceRepository] = None,
-        background_processor: Optional[any] = None,
-    ):
+        persistence_repository: Optional[MongoRepository] = None,
+        background_processor: Optional[BackgroundProcessor] = None,
+    ) -> None:
         self.use_case = GetPredictionsUseCase(
             data_sources=data_sources,
             prediction_service=prediction_service,
@@ -37,7 +43,7 @@ class CacheWarmupService:
             background_processor=background_processor,
         )
 
-    async def warm_up_predictions(self, league_ids: Optional[List[str]] = None):
+    async def warm_up_predictions(self, league_ids: Optional[List[str]] = None) -> None:
         """
         Warms up predictions for specific leagues or all priority leagues.
         """

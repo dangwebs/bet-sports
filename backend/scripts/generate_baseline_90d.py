@@ -4,10 +4,11 @@ desde los datos de muestra en `sample_data` o desde un JSON similar.
 Guarda resultado en `backend/output/baseline_90d.json`.
 """
 from __future__ import annotations
+
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 
 def parse_score(match: Dict[str, Any]) -> Optional[Dict[str, int]]:
@@ -18,7 +19,10 @@ def parse_score(match: Dict[str, Any]) -> Optional[Dict[str, int]]:
         return {"home": int(match["home_score"]), "away": int(match["away_score"])}
     if "score" in match and isinstance(match["score"], dict):
         try:
-            return {"home": int(match["score"].get("home", 0)), "away": int(match["score"].get("away", 0))}
+            return {
+                "home": int(match["score"].get("home", 0)),
+                "away": int(match["score"].get("away", 0)),
+            }
         except Exception:
             return None
     return None
@@ -37,7 +41,6 @@ def brier_score(preds: List[float], truths: List[int]) -> float:
 
 def ece(preds: List[float], truths: List[int], n_bins: int = 10) -> Dict[str, float]:
     # Expected Calibration Error (ECE) with equal-width bins
-    import math
 
     if not preds:
         return {"ece": float("nan"), "mce": float("nan")}
@@ -53,7 +56,7 @@ def ece(preds: List[float], truths: List[int], n_bins: int = 10) -> Dict[str, fl
     for i in range(n_bins):
         if bins[i] == 0:
             continue
-        avg_p = ((i + 0.5) / n_bins)
+        avg_p = (i + 0.5) / n_bins
         acc_i = acc[i] / bins[i]
         e = abs(acc_i - avg_p)
         ece += (bins[i] / tot) * e
@@ -61,7 +64,9 @@ def ece(preds: List[float], truths: List[int], n_bins: int = 10) -> Dict[str, fl
     return {"ece": ece, "mce": mce}
 
 
-def simulate_betting(preds: List[float], truths: List[int], threshold: float = 0.5) -> Dict[str, float]:
+def simulate_betting(
+    preds: List[float], truths: List[int], threshold: float = 0.5
+) -> Dict[str, float]:
     # Simple strategy: bet 1 unit on home win when p > threshold, odds = 1/p
     stakes = 0
     pnl = 0.0
@@ -118,7 +123,14 @@ def run(sample_path: Path, out_path: Path) -> Dict[str, Any]:
         y = outcome_home_win(score)
         preds.append(float(p))
         truths.append(int(y))
-        included.append({"match_id": doc.get("match_id"), "p": float(p), "y": int(y), "match_date": match_date_s})
+        included.append(
+            {
+                "match_id": doc.get("match_id"),
+                "p": float(p),
+                "y": int(y),
+                "match_date": match_date_s,
+            }
+        )
 
     brier = brier_score(preds, truths)
     ece_res = ece(preds, truths)
@@ -147,5 +159,10 @@ if __name__ == "__main__":
     out = base / "output" / "baseline_90d.json"
     res = run(sample, out)
     print("Baseline generated:")
-    print(json.dumps({k: res[k] for k in ("generated_at", "n_samples", "brier", "ece", "mce")}, indent=2))
+    print(
+        json.dumps(
+            {k: res[k] for k in ("generated_at", "n_samples", "brier", "ece", "mce")},
+            indent=2,
+        )
+    )
     print("Saved to", out)

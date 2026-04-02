@@ -1,0 +1,120 @@
+name: CI — Pull Request Checks
+
+on:
+  pull_request:
+    branches: [main, develop, "feature/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-lint-and-types:
+    name: "Backend: Lint + Types"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend deps
+        run: python -m pip install -r requirements.txt
+      - name: Black check
+        run: python -m black --check src/ tests/
+      - name: Mypy (changed-files)
+        run: |
+          # Fetch main to compare changes in PRs
+          git fetch origin main || true
+          FILES_CHANGED=$(git diff --name-only origin/main...HEAD || true)
+          PY_FILES=$(echo "$FILES_CHANGED" | tr '\n' ' ' | xargs -n1 | grep -E '^src/.*\\.py$' || true)
+          if [ -z "$PY_FILES" ]; then
+            echo "No backend Python files changed; skipping mypy"
+          else
+            echo "Running mypy on: $PY_FILES"
+            python -m mypy $PY_FILES --ignore-missing-imports --follow-imports=skip
+          fi
+
+  backend-tests:
+    name: "Backend: Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend deps
+        run: python -m pip install -r requirements.txt
+      - name: Run pytest
+        run: python -m pytest -v --tb=short
+
+  frontend-lint:
+    name: "Frontend: Lint + Build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        run: npm ci
+      - name: Lint
+        run: |
+          # Run ESLint only on TS/TSX files changed in this PR to avoid failing on unrelated legacy errors.
+          git fetch origin main || true
+          FILES_CHANGED=$(git diff --name-only origin/main...HEAD || true)
+          JS_FILES=$(echo "$FILES_CHANGED" | tr '\n' ' ' | xargs -n1 | grep -E '^frontend/src/.*\.(ts|tsx)$' || true)
+          if [ -z "$JS_FILES" ]; then
+            echo "No frontend TS/TSX files changed; running full lint"
+            npm run lint
+          else
+            echo "Running eslint on: $JS_FILES"
+            npx eslint $JS_FILES --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+          fi
+      - name: Build
+        run: npm run build
+
+  frontend-tests:
+    name: "Frontend: Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        run: npm ci
+      - name: Run tests
+        run: npx vitest run

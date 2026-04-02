@@ -5,6 +5,7 @@ import os
 import subprocess
 import threading
 from pathlib import Path
+from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,12 +49,12 @@ app.add_middleware(
 # Configure rate limiter for selective endpoint protection
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
 
 
 @app.exception_handler(Exception)
-async def _global_exception_handler(request: Request, exc: Exception):
+async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     _logger.exception(
         "Unhandled exception on %s %s: %s", request.method, request.url, exc
     )
@@ -65,10 +66,13 @@ def health_check() -> HealthResponse:
     return HealthResponse(status="ok", version=app.version, timestamp=_utc_now_iso())
 
 
+from src.api.routers.labeler import router as labeler_router  # noqa: E402
+
 # Register routers
 from src.api.routers.leagues import router as leagues_router  # noqa: E402
 from src.api.routers.matches import router as matches_router  # noqa: E402
 from src.api.routers.metrics import router as metrics_router  # noqa: E402
+from src.api.routers.monitor import router as monitor_router  # noqa: E402
 from src.api.routers.picks import router as picks_router  # noqa: E402
 from src.api.routers.predictions import router as predictions_router  # noqa: E402
 
@@ -77,6 +81,40 @@ app.include_router(predictions_router)
 app.include_router(matches_router)
 app.include_router(picks_router)
 app.include_router(metrics_router)
+app.include_router(labeler_router)
+app.include_router(monitor_router)
+
+
+@app.get("/_ready")
+def readiness_check() -> Dict[str, Any]:
+    """Readiness check that attempts to validate critical dependencies.
+
+    This endpoint is permissive: if the database is not configured it returns
+    a structured response indicating the missing piece instead of failing the
+    whole app startup.
+    """
+    import os
+
+    checks = {"app": "ok"}
+    ready = True
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        checks["database"] = "not_configured"
+        ready = False
+    else:
+        try:
+            from src.infrastructure.database.database_service import (
+                get_database_service,
+            )
+
+            # get_database_service will raise if cannot connect
+            get_database_service()
+            checks["database"] = "ok"
+        except Exception as exc:  # pragma: no cover - runtime environment dependent
+            checks["database"] = f"error: {exc}"
+            ready = False
+
+    return {"ready": ready, "checks": checks}
 
 
 @app.get("/api/v1/train/status", response_model=TrainingStatusPayload)

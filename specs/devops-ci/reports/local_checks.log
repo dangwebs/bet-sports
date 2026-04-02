@@ -1,0 +1,132 @@
+=== RUN LOCAL CHECKS ===
+USER: jhormanorozco
+PWD: /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports
+SHELL: /bin/zsh
+PATH: /Users/jhormanorozco/.antigravity/antigravity/bin:/Users/jhormanorozco/.local/bin:/Users/jhormanorozco/.antigravity/antigravity/bin:/Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin:/opt/homebrew/bin:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/opt/homebrew/bin:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli:/Users/jhormanorozco/.antigravity/antigravity/bin:/Users/jhormanorozco/.local/bin:/Users/jhormanorozco/.local/state/fnm_multishells/65818_1775006952542/bin:/Users/jhormanorozco/.vscode/extensions/ms-python.debugpy-2025.18.0-darwin-arm64/bundled/scripts/noConfigScripts
+/Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin/node
+v22.21.1
+/Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin/npm
+11.10.0
+/usr/bin/curl
+/opt/homebrew/bin/brew
+NVM_NOT_FOUND
+Post-install: node: /Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin/node
+node version: v22.21.1
+npm version: 11.10.0
+=== FRONTEND: npm ci ===
+npm error code ENOTEMPTY
+npm error syscall rmdir
+npm error path /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/frontend/node_modules/@mui/icons-material/esm
+npm error errno -66
+npm error ENOTEMPTY: directory not empty, rmdir '/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/frontend/node_modules/@mui/icons-material/esm'
+npm error A complete log of this run can be found in: /Users/jhormanorozco/.npm/_logs/2026-04-01T03_22_21_821Z-debug-0.log
+npm ci exit code: 190
+=== FRONTEND: npm run build --if-present ===
+
+> bjj-betsports-frontend@1.0.0 build
+> tsc -b && vite build
+
+error TS2688: Cannot find type definition file for 'node'.
+  The file is in the program because:
+    Entry point of type library 'node' specified in compilerOptions
+src/App.tsx(8,32): error TS2307: Cannot find module 'react' or its corresponding type declarations.
+src/App.tsx(9,41): error TS2307: Cannot find module 'react-router-dom' or its corresponding type declarations.
+src/App.tsx(10,58): error TS2307: Cannot find module '@mui/material' or its corresponding type declarations.
+src/App.tsx(46,44): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/App.tsx(47,46): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/App.tsx(48,55): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/App.tsx(56,30): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/App.tsx(65,5): error TS2875: This JSX tag requires the module path 'react/jsx-runtime' to exist, but none could be found. Make sure you have types for the appropriate package installed.
+... (truncated; many TS errors — missing modules/types, implicit anys, JSX runtime missing)
+
+build exit code: 1
+=== FRONTEND: npm test --if-present ===
+
+> bjj-betsports-frontend@1.0.0 test
+> vitest
+
+sh: vitest: command not found
+npm test exit code: 127
+Activating .venv
+Running pytest -q
+
+==================================== ERRORS ====================================
+_____________ ERROR collecting tests/unit/test_orchestrator_cli.py _____________
+import file mismatch:
+imported module 'test_orchestrator_cli' has this __file__ attribute:
+  /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/tests/unit/test_orchestrator_cli.py
+which is not the same as the test file we want to collect:
+  /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/tests/unit/test_orchestrator_cli.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+=========================== short test summary info ============================
+ERROR tests/unit/test_orchestrator_cli.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 4.89s
+pytest exit code: 2
+LOCAL CHECKS COMPLETE
+=== RUN LOCAL CHECKS ===
+USER: jhormanorozco
+PWD: /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports
+SHELL: /bin/zsh
+PATH: /Users/jhormanorozco/.antigravity/antigravity/bin:/Users/jhormanorozco/.local/bin:/Users/jhormanorozco/.antigravity/antigravity/bin:/Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin:/opt/homebrew/bin:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/opt/homebrew/bin:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand:/Users/jhormanorozco/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli:/Users/jhormanorozco/.antigravity/antigravity/bin:/Users/jhormanorozco/.local/bin:/Users/jhormanorozco/.local/state/fnm_multishells/65818_1775006952542/bin:/Users/jhormanorozco/.vscode/extensions/ms-python.debugpy-2025.18.0-darwin-arm64/bundled/scripts/noConfigScripts
+/Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin/node
+v22.21.1
+/Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin/npm
+11.10.0
+/usr/bin/curl
+/opt/homebrew/bin/brew
+NVM_NOT_FOUND
+Post-install: node: /Users/jhormanorozco/.local/state/fnm_multishells/1569_1775013709929/bin/node
+node version: v22.21.1
+npm version: 11.10.0
+=== FRONTEND: npm ci ===
+npm error code ENOTEMPTY
+npm error syscall rmdir
+npm error path /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/frontend/node_modules/@mui/icons-material/esm
+npm error errno -66
+npm error ENOTEMPTY: directory not empty, rmdir '/Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/frontend/node_modules/@mui/icons-material/esm'
+npm error A complete log of this run can be found in: /Users/jhormanorozco/.npm/_logs/2026-04-01T03_22_21_821Z-debug-0.log
+npm ci exit code: 190
+=== FRONTEND: npm run build --if-present ===
+
+> bjj-betsports-frontend@1.0.0 build
+> tsc -b && vite build
+
+error TS2688: Cannot find type definition file for 'node'.
+  The file is in the program because:
+    Entry point of type library 'node' specified in compilerOptions
+src/App.tsx(8,32): error TS2307: Cannot find module 'react' or its corresponding type declarations.
+src/App.tsx(9,41): error TS2307: Cannot find module 'react-router-dom' or its corresponding type declarations.
+src/App.tsx(10,58): error TS2307: Cannot find module '@mui/material' or its corresponding type declarations.
+src/App.tsx(46,44): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/App.tsx(47,46): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/App.tsx(48,55): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/App.tsx(56,30): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/App.tsx(65,5): error TS2875: This JSX tag requires the module path 'react/jsx-runtime' to exist, but none could be found. Make sure you have types for the appropriate package installed.
+... (truncated; many TS errors — missing modules/types, implicit anys, JSX runtime missing)
+
+build exit code: 1
+=== FRONTEND: npm test --if-present ===
+
+> bjj-betsports-frontend@1.0.0 test
+> vitest
+
+sh: vitest: command not found
+npm test exit code: 127
+Activating .venv
+Running pytest -q
+
+==================================== ERRORS ====================================
+_____________ ERROR collecting tests/unit/test_orchestrator_cli.py _____________
+import file mismatch:
+imported module 'test_orchestrator_cli' has this __file__ attribute:
+  /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/backend/tests/unit/test_orchestrator_cli.py
+which is not the same as the test file we want to collect:
+  /Users/jhormanorozco/Documents/Personal-Projects/BJJ-BetSports/tests/unit/test_orchestrator_cli.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+=========================== short test summary info ============================
+ERROR tests/unit/test_orchestrator_cli.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 4.89s
+pytest exit code: 2
+LOCAL CHECKS COMPLETE

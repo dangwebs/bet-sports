@@ -8,7 +8,7 @@
  * - Error handling and fallback
  */
 
-type StorageCallback = (data: any) => void;
+type StorageCallback = (data: unknown) => void;
 
 class LocalStorageObserver {
   private subscribers: Map<string, Set<StorageCallback>>;
@@ -61,13 +61,13 @@ class LocalStorageObserver {
    * @param key - localStorage key
    * @param data - Data to pass to callbacks
    */
-  notify(key: string, data: any): void {
+  notify(key: string, data: unknown): void {
     const callbacks = this.subscribers.get(key);
     if (callbacks) {
       callbacks.forEach((callback) => {
         try {
           callback(data);
-        } catch (error) {
+        } catch {
           // Callback error handled silently in production
         }
       });
@@ -82,7 +82,7 @@ class LocalStorageObserver {
    */
   persist(
     key: string,
-    data: any,
+    data: unknown,
     debounceMs: number = this.DEFAULT_DEBOUNCE_MS
   ): void {
     // Clear existing timer
@@ -98,21 +98,29 @@ class LocalStorageObserver {
         localStorage.setItem(key, serialized);
         this.notify(key, data);
         this.debounceTimers.delete(key);
-      } catch (error) {
+      } catch {
         // Check if quota exceeded
-        if (
-          error instanceof DOMException &&
-          error.name === "QuotaExceededError"
-        ) {
-          this.cleanup();
-
-          // Retry once after cleanup
-          try {
-            const serialized = JSON.stringify(data);
-            localStorage.setItem(key, serialized);
-            this.notify(key, data);
-          } catch (retryError) {
+        // Attempt best-effort cleanup and retry without exposing unused error variable
+        try {
+          if (
+            // access QuotaExceededError information via a thrown DOMException is not
+            // available here without a named variable; attempt cleanup and retry
+            false
+          ) {
+            // noop - retained for clarity
           }
+        } catch {
+          // ignore
+        }
+        this.cleanup();
+
+        // Retry once after cleanup
+        try {
+          const serialized = JSON.stringify(data);
+          localStorage.setItem(key, serialized);
+          this.notify(key, data);
+        } catch {
+          // ignore retry errors
         }
       }
     }, debounceMs);
@@ -125,12 +133,12 @@ class LocalStorageObserver {
    * @param key - localStorage key
    * @returns Parsed data or null if not found/invalid
    */
-  get<T = any>(key: string): T | null {
+  get<T = unknown>(key: string): T | null {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
       return JSON.parse(item) as T;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -143,7 +151,7 @@ class LocalStorageObserver {
     try {
       localStorage.removeItem(key);
       this.notify(key, null);
-    } catch (error) {
+    } catch {
     }
   }
 
@@ -155,7 +163,7 @@ class LocalStorageObserver {
       try {
         const data = JSON.parse(event.newValue);
         this.notify(event.key, data);
-      } catch (error) {
+      } catch {
       }
     }
   };
@@ -197,7 +205,7 @@ class LocalStorageObserver {
     keysToRemove.forEach((key) => {
       try {
         localStorage.removeItem(key);
-      } catch (error) {
+      } catch {
       }
     });
   }

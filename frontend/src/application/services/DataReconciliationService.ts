@@ -34,7 +34,8 @@ class DataReconciliationService {
       await Promise.all([this.reconcilePredictions(), this.reconcileBotData()]);
 
       offlineStore.updateLastSync();
-    } catch (error) {
+    } catch (_error) {
+      // ignore individual reconciliation errors
     } finally {
       this.isReconciling = false;
     }
@@ -54,7 +55,7 @@ class DataReconciliationService {
       if (predictionStore.selectedLeague) {
         await predictionStore.fetchPredictions(true);
       }
-    } catch (error) {
+    } catch (_error) {
       // Don't throw - allow other reconciliations to continue
     }
   }
@@ -68,7 +69,7 @@ class DataReconciliationService {
     try {
       // Use the store's built-in reconcile method
       await botStore.reconcile();
-    } catch (error) {
+    } catch (_error) {
       // Don't throw - keep using cached data
     }
   }

@@ -78,7 +78,8 @@ export const useImageColor = (imageUrl: string | undefined) => {
         // Generate a deterministic color from the URL string
         console.warn(
           "CORS/Canvas error for image, generating fallback glow:",
-          imageUrl
+          imageUrl,
+          e
         );
 
         let hash = 0;

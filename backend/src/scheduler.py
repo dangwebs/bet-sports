@@ -2,11 +2,19 @@ import asyncio
 import gc
 import logging
 from datetime import datetime
-from typing import Generator
+from typing import Any, Generator
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from src.utils.time_utils import COLOMBIA_TZ, get_today_str
+
+try:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+
+    APSCHEDULER_AVAILABLE = True
+except ModuleNotFoundError:
+    AsyncIOScheduler = None  # type: ignore[assignment]
+    CronTrigger = None  # type: ignore[assignment]
+    APSCHEDULER_AVAILABLE = False
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -16,7 +24,9 @@ class BotScheduler:
     """Manages scheduled tasks with extreme memory efficiency for Render Free Tier."""
 
     def __init__(self):
-        self.scheduler = AsyncIOScheduler(timezone=COLOMBIA_TZ)
+        self.scheduler: Any = (
+            AsyncIOScheduler(timezone=COLOMBIA_TZ) if APSCHEDULER_AVAILABLE else None
+        )
         self._job_in_progress = False
 
     def _get_league_iterator(self, leagues_dict: dict) -> Generator[str, None, None]:
@@ -126,6 +136,27 @@ class BotScheduler:
                         training_data,
                         ttl_seconds=cache.TTL_TRAINING,
                     )
+                    cache.set(
+                        orchestrator.CACHE_KEY_RESULT,
+                        training_data,
+                        ttl_seconds=cache.TTL_TRAINING,
+                    )
+
+                    lightweight_training_result = {
+                        "matches_processed": training_result.matches_processed,
+                        "correct_predictions": training_result.correct_predictions,
+                        "accuracy": training_result.accuracy,
+                        "total_bets": training_result.total_bets,
+                        "roi": training_result.roi,
+                        "profit_units": training_result.profit_units,
+                        "market_stats": training_result.market_stats,
+                        "roi_evolution": training_result.roi_evolution,
+                        "pick_efficiency": training_result.pick_efficiency,
+                    }
+                    persistence_repo.save_training_result(
+                        "latest_daily",
+                        lightweight_training_result,
+                    )
                     logger.info("Unified Cache updated with training results.")
                 except Exception as e:
                     logger.error(f"Failed to update unified cache: {e}")
@@ -223,6 +254,18 @@ class BotScheduler:
 
     def start(self, run_immediate: bool = False):
         """Start the scheduler with daily job at 06:00 AM Colombia time."""
+        if self.scheduler is None or CronTrigger is None:
+            logger.warning(
+                (
+                    "apscheduler is not installed; cron scheduling is "
+                    "disabled in this environment."
+                )
+            )
+            if run_immediate:
+                logger.info("Triggering immediate job execution without APScheduler.")
+                asyncio.create_task(self.run_daily_orchestrated_job())
+            return
+
         try:
             self.scheduler.add_job(
                 self.run_daily_orchestrated_job,
@@ -254,6 +297,12 @@ class BotScheduler:
 
     def shutdown(self):
         """Shutdown the scheduler gracefully."""
+        if self.scheduler is None:
+            logger.info(
+                "Scheduler shutdown skipped because APScheduler is unavailable."
+            )
+            return
+
         try:
             self.scheduler.shutdown(wait=False)
             logger.info("Scheduler shutdown successfully")
