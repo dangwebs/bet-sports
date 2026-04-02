@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 # ML Imports
 try:
-    import joblib
     from sklearn.ensemble import RandomForestClassifier
 
     ML_AVAILABLE = True
@@ -16,6 +15,7 @@ except ImportError:
 
 from src.application.services.training_data_service import TrainingDataService
 from src.core.constants import DEFAULT_LEAGUES
+from src.core.model_artifacts import cleanup_model_artifacts
 from src.domain.services.learning_service import LearningService
 from src.domain.services.ml_feature_extractor import MLFeatureExtractor
 from src.domain.services.pick_resolution_service import PickResolutionService
@@ -479,11 +479,6 @@ def train_league_models(ml_features: List[Any], ml_targets: List[int]):
     return clf
 
 
-def save_models(clf, path: str = "ml_picks_classifier.joblib") -> None:
-    """Persist trained model to disk."""
-    joblib.dump(clf, path)
-
-
 def evaluate_models(
     match_history: List[dict], total_staked: float, total_return: float
 ) -> Tuple[float, float, float]:
@@ -554,68 +549,70 @@ class MLTrainingOrchestrator:
             league_ids,
             days_back,
         )
+        try:
+            (
+                ml_features,
+                ml_targets,
+                daily_stats,
+                match_history,
+                team_stats_cache,
+                matches_processed,
+                total_bets,
+                total_staked,
+                total_return,
+                league_averages_map,
+            ) = await prepare_datasets(
+                self.training_data_service,
+                self.statistics_service,
+                self.prediction_service,
+                self.resolution_service,
+                self.cache_service,
+                self.feature_extractor,
+                self.learning_service,
+                PicksService,
+                league_ids,
+                days_back,
+                start_date,
+                force_refresh,
+            )
 
-        (
-            ml_features,
-            ml_targets,
-            daily_stats,
-            match_history,
-            team_stats_cache,
-            matches_processed,
-            total_bets,
-            total_staked,
-            total_return,
-            league_averages_map,
-        ) = await prepare_datasets(
-            self.training_data_service,
-            self.statistics_service,
-            self.prediction_service,
-            self.resolution_service,
-            self.cache_service,
-            self.feature_extractor,
-            self.learning_service,
-            PicksService,
-            league_ids,
-            days_back,
-            start_date,
-            force_refresh,
-        )
+            # --- TRAIN ML MODEL ---
+            if ML_AVAILABLE and RandomForestClassifier and len(ml_features) > 100:
+                try:
+                    logger.info("Training ML Model on %s samples...", len(ml_features))
 
-        # --- TRAIN ML MODEL ---
-        if ML_AVAILABLE and RandomForestClassifier and len(ml_features) > 100:
-            try:
-                logger.info("Training ML Model on %s samples...", len(ml_features))
+                    def _train_model() -> Any:
+                        return train_league_models(ml_features, ml_targets)
 
-                def _train_and_save():
-                    clf = train_league_models(ml_features, ml_targets)
-                    save_models(clf, "ml_picks_classifier.joblib")
-                    return clf
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, _train_model)
 
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, _train_and_save)
+                    logger.info(
+                        "ML Model trained in memory for the current pipeline run."
+                    )
+                except Exception:
+                    logger.exception("Failed to train ML model in memory.")
 
-                logger.info("ML Model trained and saved.")
-            except Exception as e:
-                logger.error(f"Failed to train ML model: {e}")
+            # --- PREPARE RESULTS ---
+            accuracy = self._calculate_accuracy(match_history)
+            profit = total_return - total_staked
+            roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
 
-        # --- PREPARE RESULTS ---
-        accuracy = self._calculate_accuracy(match_history)
-        profit = total_return - total_staked
-        roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
-
-        return TrainingResult(
-            matches_processed=matches_processed,
-            correct_predictions=self._get_correct_count(match_history),
-            accuracy=round(accuracy, 4),
-            total_bets=total_bets,
-            roi=round(roi, 2),
-            profit_units=round(profit, 2),
-            market_stats=self.learning_service.get_all_stats(),
-            match_history=match_history,
-            roi_evolution=self._calculate_roi_evolution(daily_stats),
-            pick_efficiency=self._calculate_pick_efficiency(match_history),
-            team_stats=team_stats_cache,
-        )
+            return TrainingResult(
+                matches_processed=matches_processed,
+                correct_predictions=self._get_correct_count(match_history),
+                accuracy=round(accuracy, 4),
+                total_bets=total_bets,
+                roi=round(roi, 2),
+                profit_units=round(profit, 2),
+                market_stats=self.learning_service.get_all_stats(),
+                match_history=match_history,
+                roi_evolution=self._calculate_roi_evolution(daily_stats),
+                pick_efficiency=self._calculate_pick_efficiency(match_history),
+                team_stats=team_stats_cache,
+            )
+        finally:
+            cleanup_model_artifacts(logger)
 
     def _get_predicted_winner(self, prediction) -> str:
         if (

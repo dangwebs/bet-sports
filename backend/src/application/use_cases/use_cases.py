@@ -59,7 +59,8 @@ class GetLeaguesUseCase:
     async def execute(self) -> "LeaguesResponseDTO":
         """Get all available leagues grouped by country."""
         # Local imports to avoid module-level runtime cycles and satisfy linters
-        from src.core.constants import DEFAULT_LEAGUES, LEAGUES_METADATA
+        from src.core.constants import DEFAULT_LEAGUES
+        from src.domain.constants import LEAGUES_METADATA
 
         # Get all default leagues using metadata
         leagues = []
@@ -168,8 +169,11 @@ class GetPredictionsUseCase:
                     model_path,
                 )
             else:
-                logger.warning(
-                    "⚠️ ML Model not found at %s. Using heuristic probabilities.",
+                logger.info(
+                    (
+                        "ML model not found at %s. Using heuristic "
+                        "probabilities as expected."
+                    ),
                     model_path,
                 )
         except Exception as e:
@@ -596,7 +600,7 @@ class GetPredictionsUseCase:
         matches_processing_data: list,
         suggested_picks_results: list,
     ) -> list:
-        """Assemble `MatchPredictionDTO` list from processing data and suggested picks results."""
+        """Assemble `MatchPredictionDTO` values from processing data."""
         # Local import for DTO construction at runtime
 
         predictions = []
@@ -801,7 +805,7 @@ class GetPredictionsUseCase:
             Predictions response with match predictions
         """
         # Runtime imports for constants and DTOs used below
-        from src.core.constants import LEAGUES_METADATA
+        from src.domain.constants import LEAGUES_METADATA
 
         # Get league metadata
         if league_id not in LEAGUES_METADATA:

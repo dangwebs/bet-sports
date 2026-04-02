@@ -6,9 +6,10 @@ import sys
 # Add parent directory to path
 sys.path.append(os.getcwd())
 
-from src.api.dependencies import (
+from src.dependencies import (
     get_background_processor,
     get_data_sources,
+    get_match_aggregator_service,
     get_persistence_repository,
     get_prediction_service,
     get_statistics_service,
@@ -20,13 +21,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def main():
+async def main() -> None:
     logger.info("🚀 Starting manual massive warmup for ALL leagues...")
 
     warmup_service = CacheWarmupService(
         data_sources=get_data_sources(),
         prediction_service=get_prediction_service(),
         statistics_service=get_statistics_service(),
+        match_aggregator=get_match_aggregator_service(),
         persistence_repository=get_persistence_repository(),
         background_processor=get_background_processor(),
     )
@@ -37,7 +39,7 @@ async def main():
     await warmup_service.warm_up_predictions(all_leagues)
 
     logger.info("✅ Massive warmup complete.")
-    logger.info("All picks are now persisted in PostgreSQL.")
+    logger.info("All picks are now persisted in MongoDB.")
 
 
 if __name__ == "__main__":

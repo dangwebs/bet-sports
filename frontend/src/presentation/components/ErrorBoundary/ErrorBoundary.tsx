@@ -1,22 +1,29 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import { Alert, Button } from "@mui/material";
+
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+}
 
 interface State {
   hasError: boolean;
   error: Error | null;
 }
 
-export default class ErrorBoundary extends React.Component<{}, State> {
-  constructor(props: {}) {
+export default class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  State
+> {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: Error) {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
+  componentDidCatch(_error: Error, _info: React.ErrorInfo) {
     // Here you could log to an error tracking service
     // console.error('ErrorBoundary caught', error, info);
   }
@@ -38,6 +45,7 @@ export default class ErrorBoundary extends React.Component<{}, State> {
         </div>
       );
     }
-    return this.props.children as React.ReactElement;
+
+    return this.props.children ?? null;
   }
 }

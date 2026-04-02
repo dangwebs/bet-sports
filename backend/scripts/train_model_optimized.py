@@ -21,6 +21,7 @@ from src.application.dtos.dtos import (  # noqa: E402
     TeamDTO,
 )
 from src.core.constants import DEFAULT_LEAGUES  # noqa: E402
+from src.core.model_artifacts import cleanup_model_artifacts  # noqa: E402
 from src.domain.services.learning_service import LearningService  # noqa: E402
 from src.domain.services.ml_feature_extractor import MLFeatureExtractor  # noqa: E402
 from src.domain.services.pick_resolution_service import (  # noqa: E402
@@ -465,12 +466,13 @@ async def train_for_league(
         )
     elif std_dev < 0.5:
         logger.warning(
-            f"      ⚠️ Low Variance in Corners Model for {league_id} "
-            f"(StdDev < 0.5). Model might be too conservative."
+            f"      ⚠️ Low Variance in Corners Model for {league_id} "(
+                "(StdDev < 0.5). Model might be too conservative, "
+                "but it remains in memory."
+            )
         )
-        joblib.dump(reg_corners, f"ml_models/{league_id}_corners.joblib")
     else:
-        joblib.dump(reg_corners, f"ml_models/{league_id}_corners.joblib")
+        logger.info("      ✓ Corners regressor ready in memory for %s", league_id)
 
     # 2. Cards Regressor
     logger.info(f"   cards Training Cards Regressor ({league_id})...")
@@ -496,7 +498,7 @@ async def train_for_league(
             f"Skipping save."
         )
     else:
-        joblib.dump(reg_cards, f"ml_models/{league_id}_cards.joblib")
+        logger.info("      ✓ Cards regressor ready in memory for %s", league_id)
 
     # 3. Match Winner Classifier
     logger.info(f"   🏆 Training Outcome Classifier ({league_id})...")
@@ -511,7 +513,7 @@ async def train_for_league(
     logger.info(f"      - Accuracy: {np.mean(scores_acc):.2%}")
 
     clf_outcome.fit(x, y_outcome)
-    joblib.dump(clf_outcome, f"ml_models/{league_id}_winner.joblib")
+    logger.info("      ✓ Outcome classifier ready in memory for %s", league_id)
 
     models_bundle = {"winner": clf_outcome, "corners": reg_corners, "cards": reg_cards}
 
@@ -610,7 +612,7 @@ async def main():
     # Parse CLI args
     args = parse_args()
 
-    from src.api.dependencies import (
+    from src.dependencies import (
         get_match_aggregator_service,
         get_statistics_service,
         get_training_data_service,
@@ -620,9 +622,6 @@ async def main():
     stats_service = get_statistics_service()
     learning_service = LearningService()
 
-    # Ensure models directory exists
-    os.makedirs("ml_models", exist_ok=True)
-
     # Clear stale predictions
     from src.infrastructure.repositories.persistence_repository import (
         get_persistence_repository,
@@ -631,46 +630,49 @@ async def main():
     repo = get_persistence_repository()
     clear_stale_predictions(repo)
 
-    # Determine Leagues
-    leagues_to_fetch = [args.league] if args.league else DEFAULT_LEAGUES
+    try:
+        # Determine Leagues
+        leagues_to_fetch = [args.league] if args.league else DEFAULT_LEAGUES
 
-    # Fetch Data
-    logger.info(
-        f"📥 Fetching Training Data ({args.days} days) for {leagues_to_fetch}..."
-    )
-    matches = await training_service.fetch_comprehensive_training_data(
-        leagues=leagues_to_fetch, days_back=args.days, force_refresh=False
-    )
-    logger.info(f"✅ Loaded {len(matches)} matches.")
-
-    # Sort Chronologically and group
-    matches.sort(key=lambda x: x.match_date.replace(tzinfo=None))
-    matches_by_league = group_matches_by_league(matches)
-
-    # --- SETUP PREDICTION SERVICES ---
-    aggregator = get_match_aggregator_service()
-    pred_service = PredictionService()
-    from src.domain.services.ai_picks_service import AIPicksService
-
-    weights = learning_service.get_learning_weights()
-    picks_service = AIPicksService(learning_weights=weights)
-
-    # Train per league (delegated)
-    for league_id, league_matches in matches_by_league.items():
-        await train_for_league(
-            league_id,
-            league_matches,
-            stats_service,
-            learning_service,
-            args,
-            repo,
-            aggregator,
-            pred_service,
-            picks_service,
+        # Fetch Data
+        logger.info(
+            f"📥 Fetching Training Data ({args.days} days) for {leagues_to_fetch}..."
         )
+        matches = await training_service.fetch_comprehensive_training_data(
+            leagues=leagues_to_fetch, days_back=args.days, force_refresh=False
+        )
+        logger.info(f"✅ Loaded {len(matches)} matches.")
 
-    elapsed = time.time() - start_time
-    logger.info(f"🎉 Training Completed in {elapsed:.2f} seconds.")
+        # Sort Chronologically and group
+        matches.sort(key=lambda x: x.match_date.replace(tzinfo=None))
+        matches_by_league = group_matches_by_league(matches)
+
+        # --- SETUP PREDICTION SERVICES ---
+        aggregator = get_match_aggregator_service()
+        pred_service = PredictionService()
+        from src.domain.services.ai_picks_service import AIPicksService
+
+        weights = learning_service.get_learning_weights()
+        picks_service = AIPicksService(learning_weights=weights)
+
+        # Train per league (delegated)
+        for league_id, league_matches in matches_by_league.items():
+            await train_for_league(
+                league_id,
+                league_matches,
+                stats_service,
+                learning_service,
+                args,
+                repo,
+                aggregator,
+                pred_service,
+                picks_service,
+            )
+
+        elapsed = time.time() - start_time
+        logger.info(f"🎉 Training Completed in {elapsed:.2f} seconds.")
+    finally:
+        cleanup_model_artifacts(logger)
 
 
 if __name__ == "__main__":

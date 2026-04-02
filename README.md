@@ -110,6 +110,20 @@ Para levantar API + frontend + Mongo:
 docker compose -f docker-compose.dev.yml up -d
 ```
 
+### Rebuild canónico del stack portable
+
+La forma canónica de reconstruir el stack portable es:
+
+```bash
+bash scripts/docker-rebuild-portable.sh
+```
+
+El script encapsula este comando exacto:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build --force-recreate
+```
+
 Servicios expuestos:
 
 - Frontend: `http://localhost:5173`
