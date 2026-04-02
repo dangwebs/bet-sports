@@ -26,13 +26,19 @@ if ! docker compose version >/dev/null 2>&1; then
     exit 1
 fi
 
-# Use all host CPUs by default unless user overrides N_JOBS
+# Use a conservative CPU default unless the user overrides N_JOBS
 HOST_CPUS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
-export N_JOBS="${N_JOBS:-$HOST_CPUS}"
+DEFAULT_N_JOBS=$(( (HOST_CPUS + 1) / 2 ))
+if [ "$DEFAULT_N_JOBS" -gt 4 ]; then
+    DEFAULT_N_JOBS=4
+fi
+
+export N_JOBS="${N_JOBS:-$DEFAULT_N_JOBS}"
 export TRAIN_DAYS="${TRAIN_DAYS:-550}"
 export PREDICT_LEAGUES="${PREDICT_LEAGUES:-E0,SP1,D1,I1,F1,P1,B1,UCL}"
 
-echo -e "${BLUE}🧠 Host resources detected: ${N_JOBS} CPU threads${NC}"
+echo -e "${BLUE}🧠 Host CPUs detected: ${HOST_CPUS}${NC}"
+echo -e "${BLUE}⚙️ Pipeline threads: ${N_JOBS}${NC}"
 echo -e "${BLUE}📅 Training window: ${TRAIN_DAYS} days${NC}"
 echo -e "${BLUE}⚽ Leagues: ${PREDICT_LEAGUES}${NC}"
 
