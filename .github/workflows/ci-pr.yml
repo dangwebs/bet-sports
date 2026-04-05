@@ -34,8 +34,7 @@ jobs:
         run: |
           # Fetch main to compare changes in PRs
           git fetch origin main || true
-          FILES_CHANGED=$(git diff --name-only origin/main...HEAD || true)
-          PY_FILES=$(echo "$FILES_CHANGED" | tr '\n' ' ' | xargs -n1 | grep -E '^src/.*\\.py$' || true)
+          PY_FILES=$(git diff --relative --name-only origin/main...HEAD | grep -E '^src/.*\.py$' || true)
           if [ -z "$PY_FILES" ]; then
             echo "No backend Python files changed; skipping mypy"
           else
@@ -84,8 +83,7 @@ jobs:
         run: |
           # Run ESLint only on TS/TSX files changed in this PR to avoid failing on unrelated legacy errors.
           git fetch origin main || true
-          FILES_CHANGED=$(git diff --name-only origin/main...HEAD || true)
-          JS_FILES=$(echo "$FILES_CHANGED" | tr '\n' ' ' | xargs -n1 | grep -E '^frontend/src/.*\.(ts|tsx)$' || true)
+          JS_FILES=$(git diff --relative --name-only origin/main...HEAD | grep -E '^src/.*\.(ts|tsx)$' || true)
           if [ -z "$JS_FILES" ]; then
             echo "No frontend TS/TSX files changed; running full lint"
             npm run lint
