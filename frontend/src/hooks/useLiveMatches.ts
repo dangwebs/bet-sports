@@ -282,7 +282,7 @@ const fetchPublicLiveMatches = async (): Promise<LiveMatch[]> => {
 
     publicApiCache = { data: liveMatches, timestamp: Date.now() };
     return liveMatches;
-  } catch (error) {
+  } catch {
     return [];
   }
 };
@@ -304,35 +304,35 @@ export const useLiveMatches = () => {
         const data = await api.getLiveMatches();
 
         let liveMatches: LiveMatch[] = Array.isArray(data)
-          ? data.map((match: any) => ({
-              id: match.id,
-              home_team:
-                typeof match.home_team === "object"
-                  ? match.home_team
-                  : match.home_team || "Local",
-              home_short_name: match.home_team?.short_name,
-              home_logo_url: match.home_team?.logo_url,
-              away_team:
-                typeof match.away_team === "object"
-                  ? match.away_team
-                  : match.away_team || "Visitante",
-              away_short_name: match.away_team?.short_name,
-              away_logo_url: match.away_team?.logo_url,
-              home_score: match.home_goals ?? match.home_score ?? 0,
-              away_score: match.away_goals ?? match.away_score ?? 0,
-              minute: match.minute || 0,
-              league_id: match.league?.id || "unknown",
-              league_name: match.league?.name || "Liga Desconocida",
-              league_flag: match.league?.flag || match.league?.logo || null,
-              status: (match.status as LiveMatch["status"]) || "LIVE",
-              home_corners: match.home_corners || 0,
-              away_corners: match.away_corners || 0,
-              home_yellow_cards: match.home_yellow_cards || 0,
-              away_yellow_cards: match.away_yellow_cards || 0,
-              home_red_cards: match.home_red_cards || 0,
-              away_red_cards: match.away_red_cards || 0,
-              prediction: match.prediction,
-            }))
+          ? data.map((item: unknown) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const match = item as any; // Cast once to bypass strict check on data from API
+              return {
+                id: (match.id as string) || "",
+                home_team: match.home_team,
+                home_short_name: match.home_team?.short_name,
+                home_logo_url: match.home_team?.logo_url,
+                away_team: match.away_team,
+                away_short_name: match.away_team?.short_name,
+                away_logo_url: match.away_team?.logo_url,
+                home_score: (match.home_goals ?? match.home_score ?? 0) as number,
+                away_score: (match.away_goals ?? match.away_score ?? 0) as number,
+                minute: (match.minute || 0) as number,
+                league_id: (match.league?.id || "unknown") as string,
+                league_name: (match.league?.name || "Liga Desconocida") as string,
+                league_flag: (match.league?.flag ||
+                  match.league?.logo ||
+                  undefined) as string | undefined,
+                status: (match.status as LiveMatch["status"]) || "LIVE",
+                home_corners: (match.home_corners || 0) as number,
+                away_corners: (match.away_corners || 0) as number,
+                home_yellow_cards: (match.home_yellow_cards || 0) as number,
+                away_yellow_cards: (match.away_yellow_cards || 0) as number,
+                home_red_cards: (match.home_red_cards || 0) as number,
+                away_red_cards: (match.away_red_cards || 0) as number,
+                prediction: match.prediction,
+              };
+            })
           : [];
 
         if (liveMatches.length === 0) {
@@ -342,18 +342,18 @@ export const useLiveMatches = () => {
 
         setMatches(liveMatches);
         setError(null);
-      } catch (err) {
+      } catch {
         try {
           const publicMatches = await fetchPublicLiveMatches();
           setMatches(publicMatches);
-        } catch (publicApiErr) {
+        } catch {
           setMatches([]);
         }
         setError(null);
       } finally {
         setLoading(false);
       }
-    } catch (e) {
+    } catch {
       setLoading(false);
     }
   }, []);

@@ -291,7 +291,7 @@ export const fetchESPNLiveMatches = async (): Promise<
 
     publicApiCache = { data: liveMatches, timestamp: Date.now() };
     return liveMatches;
-  } catch (error) {
+  } catch {
     return [];
   }
 };

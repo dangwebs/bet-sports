@@ -22,6 +22,16 @@ class MatchModel(BaseModel):
     league: LeagueModel
     match_date: str
     status: str
+    home_goals: int | None = None
+    away_goals: int | None = None
+    home_corners: int | None = None
+    away_corners: int | None = None
+    home_yellow_cards: int | None = None
+    away_yellow_cards: int | None = None
+    home_red_cards: int | None = None
+    away_red_cards: int | None = None
+    home_spi: float | None = None
+    away_spi: float | None = None
 
 
 class PredictionModel(BaseModel):
@@ -33,6 +43,17 @@ class PredictionModel(BaseModel):
     under_25_probability: float = 0.0
     predicted_home_goals: float = 0.0
     predicted_away_goals: float = 0.0
+    # Map Extended Predictions
+    predicted_home_corners: float = 0.0
+    predicted_away_corners: float = 0.0
+    predicted_home_yellow_cards: float = 0.0
+    predicted_away_yellow_cards: float = 0.0
+    predicted_home_red_cards: float = 0.0
+    predicted_away_red_cards: float = 0.0
+    over_95_corners_probability: float = 0.0
+    under_95_corners_probability: float = 0.0
+    over_45_cards_probability: float = 0.0
+    under_45_cards_probability: float = 0.0
     confidence: float = 0.0
     data_sources: list[str] = Field(default_factory=list)
     recommended_bet: str = ""

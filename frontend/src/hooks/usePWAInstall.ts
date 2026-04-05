@@ -16,7 +16,11 @@ declare global {
 export const usePWAInstall = () => {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(display-mode: standalone)").matches
+      : false
+  );
 
   useEffect(() => {
     const handler = (e: BeforeInstallPromptEvent) => {
@@ -24,10 +28,6 @@ export const usePWAInstall = () => {
       setInstallPrompt(e);
     };
     window.addEventListener("beforeinstallprompt", handler);
-
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true);
-    }
 
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);

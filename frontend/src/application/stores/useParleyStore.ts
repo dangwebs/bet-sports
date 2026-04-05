@@ -24,7 +24,7 @@ try {
   if (typeof window !== "undefined") {
     localStorage.removeItem("parley-storage");
   }
-} catch (e) {
+} catch {
   // Silent cleanup fail
 }
 

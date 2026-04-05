@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 
 interface UseSmartPollingOptions {
   /** Polling interval in milliseconds */
@@ -27,7 +27,7 @@ export function useSmartPolling({
   maxBackoffMultiplier = 4,
 }: UseSmartPollingOptions) {
   const intervalRef = useRef<number | null>(null);
-  const backoffMultiplier = useRef(1);
+  const [backoff, setBackoff] = useState(1);
   const isVisibleRef = useRef(!document.hidden);
   const lastPollTimeRef = useRef<number>(0);
 
@@ -36,26 +36,23 @@ export function useSmartPolling({
 
     try {
       await onPoll();
-      backoffMultiplier.current = 1; // Reset backoff on success
+      setBackoff(1); // Reset backoff on success
       lastPollTimeRef.current = Date.now();
     } catch {
       // Increase backoff on error (max 4x)
-      backoffMultiplier.current = Math.min(
-        backoffMultiplier.current * 2,
-        maxBackoffMultiplier
-      );
+      setBackoff((prev: number) => Math.min(prev * 2, maxBackoffMultiplier));
     }
   }, [onPoll, enabled, maxBackoffMultiplier]);
 
   const startPolling = useCallback(() => {
     if (intervalRef.current) return;
 
-    const effectiveInterval = intervalMs * backoffMultiplier.current;
+    const effectiveInterval = intervalMs * backoff;
 
     intervalRef.current = window.setInterval(() => {
       poll();
     }, effectiveInterval);
-  }, [intervalMs, poll]);
+  }, [intervalMs, poll, backoff]);
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -98,9 +95,15 @@ export function useSmartPolling({
   // Start/stop polling based on enabled state
   useEffect(() => {
     if (enabled && isVisibleRef.current) {
-      // Initial poll
-      poll();
-      startPolling();
+      // Initial poll - wrap in setTimeout to avoid synchronous setState warning in effect
+      const timer = setTimeout(() => {
+        poll();
+        startPolling();
+      }, 0);
+      return () => {
+        clearTimeout(timer);
+        stopPolling();
+      };
     } else {
       stopPolling();
     }
@@ -114,6 +117,6 @@ export function useSmartPolling({
     /** Force an immediate poll */
     pollNow: poll,
     /** Current backoff multiplier (for debugging) */
-    backoffMultiplier: backoffMultiplier.current,
+    backoffMultiplier: backoff,
   };
 }

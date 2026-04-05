@@ -58,7 +58,7 @@ try {
   if (typeof window !== "undefined") {
     localStorage.removeItem("prediction-storage");
   }
-} catch (e) {
+} catch {
   // Silent cleanup fail
 }
 
@@ -258,7 +258,7 @@ export const usePredictionStore = create<PredictionState>()(
               setTimeout(() => set({ newPredictionsAvailable: false }), 5000);
             }
           }
-        } catch (error) {
+        } catch {
           // Silent fail on background check
         }
       },

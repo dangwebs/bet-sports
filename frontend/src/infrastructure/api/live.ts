@@ -112,7 +112,7 @@ export const liveApi = {
       });
 
       return mergedMatches;
-    } catch (error) {
+    } catch {
       // Final fallback
       return await fetchESPNLiveMatches();
     }
