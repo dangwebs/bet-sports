@@ -17,7 +17,7 @@ localforage.config({
 export const indexedDBStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
     try {
-      const value = await localforage.getItem<any>(name);
+      const value = await localforage.getItem<unknown>(name);
       if (!value) return null;
       // Zustand expect a string, but localforage can store objects.
       // We stringify to maintain compatibility with Zustand's default JSON parser

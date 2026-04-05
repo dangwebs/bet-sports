@@ -26,7 +26,7 @@ repos:
 
       - id: eslint-frontend-local
         name: Frontend ESLint (local)
-        entry: npm run --prefix frontend lint
+        entry: bash -c 'cd frontend && exec npm run lint -- "${@#frontend/}"' --
         language: system
         files: ^frontend/.*
       - id: ruff-local

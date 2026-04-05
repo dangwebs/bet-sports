@@ -256,7 +256,10 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
 
   const loading = isLoading && !hasPicks;
   const error = !hasPicks && !isLoading ? "No suggested picks available" : null;
-  const apiPicks = cachedPicks ? { suggested_picks: cachedPicks } : null;
+  const apiPicks = useMemo(
+    () => (cachedPicks ? { suggested_picks: cachedPicks } : null),
+    [cachedPicks],
+  );
 
   // Sort picks by probability (highest first)
   const sortedPicks = useMemo(() => {
@@ -325,30 +328,33 @@ const SuggestedPicksTab: React.FC<SuggestedPicksTabProps> = ({
   }, [sortedPicks]);
 
   // Auto-select first available tab in priority order
-  useEffect(() => {
-    if (!loading && !initialized && sortedPicks.length > 0) {
-      const priorityOrder = [
-        "TOP_ML",
-        "GOALS",
-        "CORNERS",
-        "CARDS",
-        "BTTS",
-        "WINNER",
-        "DOUBLE_CHANCE",
-        "HANDICAPS",
-      ];
+  const defaultTab = useMemo(() => {
+    if (loading || sortedPicks.length === 0) return "";
+    const priorityOrder = [
+      "TOP_ML",
+      "GOALS",
+      "CORNERS",
+      "CARDS",
+      "BTTS",
+      "WINNER",
+      "DOUBLE_CHANCE",
+      "HANDICAPS",
+    ];
 
-      for (const cat of priorityOrder) {
-        if (categoryCounts[cat as keyof typeof categoryCounts] > 0) {
-          setCurrentTab(cat);
-          setInitialized(true);
-          return;
-        }
-      }
-      // Fallback
-      setInitialized(true);
+    for (const cat of priorityOrder) {
+      if (categoryCounts[cat as keyof typeof categoryCounts] > 0) return cat;
     }
-  }, [loading, initialized, categoryCounts, sortedPicks.length]);
+    return "";
+  }, [loading, sortedPicks.length, categoryCounts]);
+
+  // Adjust state during render if not initialized
+  if (!initialized && defaultTab && !currentTab) {
+    setCurrentTab(defaultTab);
+    setInitialized(true);
+  } else if (!initialized && !loading && sortedPicks.length === 0) {
+    // If we finished loading and there are no picks, just mark as initialized
+    setInitialized(true);
+  }
 
   // Filtered picks based on tab
   const filteredPicks = useMemo(() => {

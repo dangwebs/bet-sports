@@ -56,7 +56,7 @@ describe("useLiveMatches Hook", () => {
     ];
 
     // Mock API response
-    (api.getLiveMatches as any).mockResolvedValue(mockMatches);
+    vi.mocked(api.getLiveMatches).mockResolvedValue(mockMatches as unknown as import("../../../domain/entities").Match[]);
 
     const { result } = renderHook(() => useLiveMatches());
 
@@ -73,7 +73,7 @@ describe("useLiveMatches Hook", () => {
   });
 
   it("handles API errors gracefully by using mocks/fallback", async () => {
-    (api.getLiveMatches as any).mockRejectedValue(new Error("API Error"));
+    vi.mocked(api.getLiveMatches).mockRejectedValue(new Error("API Error"));
 
     const { result } = renderHook(() => useLiveMatches());
 

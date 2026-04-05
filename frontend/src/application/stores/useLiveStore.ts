@@ -22,7 +22,7 @@ try {
   if (typeof window !== "undefined") {
     localStorage.removeItem("live-matches-storage");
   }
-} catch (e) {
+} catch {
   // Silent cleanup fail
 }
 

@@ -35,7 +35,7 @@ export function useTeamSearch() {
             },
           }));
           setSearchMatches(predictions);
-        } catch (e) {
+        } catch {
           setSearchMatches([]);
         } finally {
           setLoading(false);

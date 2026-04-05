@@ -8,14 +8,15 @@ const colorCache: Record<string, string> = {};
  * Prioritizes high saturation pixels to find the "brand" color.
  */
 export const useImageColor = (imageUrl: string | undefined) => {
-  const [color, setColor] = useState<string | null>(null);
+  const [color, setColor] = useState<string | null>(() => {
+    if (imageUrl && colorCache[imageUrl]) {
+      return colorCache[imageUrl];
+    }
+    return null;
+  });
 
   useEffect(() => {
-    if (!imageUrl) return;
-    if (colorCache[imageUrl]) {
-      setColor(colorCache[imageUrl]);
-      return;
-    }
+    if (!imageUrl || colorCache[imageUrl]) return;
 
     const img = new Image();
     img.crossOrigin = "Anonymous";

@@ -91,44 +91,47 @@ interface NormalizedMatch {
 
 // Normalize match data from either Match or LiveMatch
 const normalizeMatch = (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   match: any
 ): NormalizedMatch => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = match as any;
   // Check if it's a LiveMatch (has league_name) or Match (has league object)
-  if ("league_name" in match) {
+  if ("league_name" in m) {
     // It's a LiveMatch
     return {
-      status: match.status || "LIVE",
-      leagueName: match.league_name || "Liga",
+      status: m.status || "LIVE",
+      leagueName: m.league_name || "Liga",
       homeTeamName:
-        typeof match.home_team === "string"
-          ? match.home_team
-          : match.home_team.name || "Local",
+        typeof m.home_team === "string"
+          ? m.home_team
+          : m.home_team.name || "Local",
       awayTeamName:
-        typeof match.away_team === "string"
-          ? match.away_team
-          : match.away_team.name || "Visitante",
-      homeTeam: match.home_team,
-      awayTeam: match.away_team,
-      homeScore: match.home_score ?? 0,
-      awayScore: match.away_score ?? 0,
+        typeof m.away_team === "string"
+          ? m.away_team
+          : m.away_team.name || "Visitante",
+      homeTeam: m.home_team,
+      awayTeam: m.away_team,
+      homeScore: m.home_score ?? 0,
+      awayScore: m.away_score ?? 0,
     };
   } else {
     // It's a Match or LiveMatch
     return {
-      status: match.status || "LIVE",
-      leagueName: (match && match.league && match.league.name) || match.league_name || "Liga",
+      status: m.status || "LIVE",
+      leagueName: (m && m.league && m.league.name) || m.league_name || "Liga",
       homeTeamName:
-        typeof match.home_team === "string"
-          ? match.home_team
-          : match.home_team?.name || "Local",
+        typeof m.home_team === "string"
+          ? m.home_team
+          : m.home_team?.name || "Local",
       awayTeamName:
-        typeof match.away_team === "string"
-          ? match.away_team
-          : match.away_team?.name || "Visitante",
-      homeScore: match.home_goals ?? match.home_score ?? 0,
-      awayScore: match.away_goals ?? match.away_score ?? 0,
-      homeTeam: match.home_team_obj || match.home_team,
-      awayTeam: match.away_team_obj || match.away_team,
+        typeof m.away_team === "string"
+          ? m.away_team
+          : m.away_team?.name || "Visitante",
+      homeScore: m.home_goals ?? m.home_score ?? 0,
+      awayScore: m.away_goals ?? m.away_score ?? 0,
+      homeTeam: m.home_team_obj || m.home_team,
+      awayTeam: m.away_team_obj || m.away_team,
     };
   }
 };

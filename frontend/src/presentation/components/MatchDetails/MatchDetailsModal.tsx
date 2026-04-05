@@ -482,20 +482,32 @@ const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
               {[
                 {
                   label: "Córners",
-                  home: details.match.home_corners,
-                  away: details.match.away_corners,
+                  home:
+                    details.prediction.predicted_home_corners ||
+                    details.match.home_corners,
+                  away:
+                    details.prediction.predicted_away_corners ||
+                    details.match.away_corners,
                   icon: "⚑",
                 },
                 {
                   label: "Amarillas",
-                  home: details.match.home_yellow_cards,
-                  away: details.match.away_yellow_cards,
+                  home:
+                    details.prediction.predicted_home_yellow_cards ||
+                    details.match.home_yellow_cards,
+                  away:
+                    details.prediction.predicted_away_yellow_cards ||
+                    details.match.away_yellow_cards,
                   icon: "🟨",
                 },
                 {
                   label: "Rojas",
-                  home: details.match.home_red_cards,
-                  away: details.match.away_red_cards,
+                  home:
+                    details.prediction.predicted_home_red_cards ||
+                    details.match.home_red_cards,
+                  away:
+                    details.prediction.predicted_away_red_cards ||
+                    details.match.away_red_cards,
                   icon: "🟥",
                 },
               ].map((row, i) => (
