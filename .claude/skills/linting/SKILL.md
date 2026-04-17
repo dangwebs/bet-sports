@@ -1,43 +1,20 @@
 ---
 name: linting
-description: "Linting and code formatting. Activate when setting up, fixing, or verifying linting and formatting. Covers ESLint, Prettier, TypeScript strict mode, and the project's specific configurations."
+description: "Linting and code formatting. Activate when setting up, fixing, or verifying linting and formatting. Covers ESLint, Prettier, TypeScript strict mode, and import ordering."
 ---
 
 # Linting & Formatting Skill
 
 ## Discovery (Mandatory First Step)
 
-Before modifying any linting config, check:
+Before modifying any linting config, find and read the project's actual files:
 
-```bash
-# Backend (mono-ms)
-HyperGenIA/mono-ms/.eslintrc.mjs
-HyperGenIA/mono-ms/.prettierrc.mjs
-HyperGenIA/mono-ms/tsconfig.json
-
-# Frontend
-Front/eslint.config.mjs
-Front/prettier.config.mjs
-Front/tsconfig.json
-```
+1. Search for ESLint configs: `.eslintrc.*`, `eslint.config.*`, `eslint` key in `package.json`.
+2. Search for Prettier configs: `.prettierrc.*`, `prettier.config.*`, `prettier` key in `package.json`.
+3. Read `tsconfig.json` files to understand strictness level.
+4. Identify the lint/format commands in `package.json` scripts.
 
 Never assume config — always read it first.
-
----
-
-## Project Linting Stack
-
-### Backend (`HyperGenIA/mono-ms/`)
-- **ESLint** with NestJS-compatible rules
-- **Prettier** for formatting
-- **TypeScript** strict mode
-- **pnpm lint** → runs across all services via Turborepo
-
-### Frontend (`Front/`)
-- **ESLint** with Next.js config (`next lint`)
-- **Prettier** for formatting
-- **TypeScript** strict mode
-- `npm run check` → lint + typecheck together
 
 ---
 
@@ -47,16 +24,16 @@ These rules must NEVER be disabled:
 
 ```javascript
 // TypeScript-specific
-'@typescript-eslint/no-explicit-any': 'error',       // Zero any
-'@typescript-eslint/no-unused-vars': 'error',         // Clean up dead code
+'@typescript-eslint/no-explicit-any': 'error',
+'@typescript-eslint/no-unused-vars': 'error',
 '@typescript-eslint/explicit-function-return-type': 'warn',
-'@typescript-eslint/no-floating-promises': 'error',   // Unhandled promises
+'@typescript-eslint/no-floating-promises': 'error',
 '@typescript-eslint/await-thenable': 'error',
 
 // General
-'no-console': 'warn',       // Use the logger, not console.log
+'no-console': 'warn',
 'no-debugger': 'error',
-'prefer-const': 'error',    // Never use var or unnecessary let
+'prefer-const': 'error',
 'eqeqeq': ['error', 'always'],
 ```
 
@@ -69,10 +46,9 @@ const rawResponse: unknown = await sdk.call();
 
 ## Prettier Configuration
 
-The project uses the following Prettier defaults (verify against `.prettierrc.mjs`):
+Expected defaults — verify against the project's actual Prettier config:
 
 ```javascript
-// Expected defaults for this project
 {
   semi: true,
   singleQuote: true,
@@ -91,17 +67,16 @@ The project uses the following Prettier defaults (verify against `.prettierrc.mj
 
 ## TypeScript Strict Mode
 
-The project runs TypeScript in strict mode. These compiler flags must remain enabled:
+These compiler flags must remain enabled:
 
 ```json
-// Required in every tsconfig.json
 {
   "compilerOptions": {
-    "strict": true,                        // Enables all strict checks
-    "noImplicitAny": true,                 // Prevents 'any' from sneaking in
-    "strictNullChecks": true,              // Forces null/undefined handling
-    "noUncheckedIndexedAccess": true,      // Array access returns T | undefined
-    "noImplicitReturns": true,             // All code paths must return
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   }
 }
@@ -111,46 +86,22 @@ The project runs TypeScript in strict mode. These compiler flags must remain ena
 
 ---
 
-## Import Ordering (ESLint `import/order`)
+## Import Ordering
 
-Imports must follow this order, enforced by ESLint:
+Imports must follow this order (adapt alias patterns from the project's config):
 
 ```typescript
 // 1. Node built-ins
 import path from 'path';
-import fs from 'fs';
 
 // 2. External packages
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { SomeLib } from 'some-library';
 
-// 3. Internal monorepo packages
-import { CreateUserDto } from '@repo/api';
-import { slugify } from '@repo/common';
+// 3. Internal monorepo / alias packages
+import { SharedDto } from '@alias/shared';
 
 // 4. Local imports (relative)
-import { UserRepository } from './user.repository';
-import { UserMapper } from './user.mapper';
-```
-
-Frontend order:
-
-```typescript
-// 1. React/Next.js
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-// 2. External packages
-import { useForm } from 'react-hook-form';
-import { useTranslations } from 'next-intl';
-
-// 3. Internal aliases
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/use-auth';
-
-// 4. Relative imports
-import { BotCard } from './bot-card';
-import type { BotListProps } from './types';
+import { MyService } from './my.service';
 ```
 
 ---
@@ -159,7 +110,7 @@ import type { BotListProps } from './types';
 
 Before committing any file, verify:
 
-- [ ] `pnpm lint` (backend) or `npm run check` (frontend) passes with 0 errors
+- [ ] Lint command passes with 0 errors
 - [ ] No unused imports or variables
 - [ ] No `any` types
 - [ ] No `console.log` left in production code
@@ -172,28 +123,19 @@ Before committing any file, verify:
 
 ## Common Fixes
 
-### Unused import
-```typescript
-// ❌ Left over import
-import { BadRequestException } from '@nestjs/common'; // never used
-
-// ✅ Remove it
-```
-
-### Floating promise (no-floating-promises)
+### Floating promise
 ```typescript
 // ❌ Promise not awaited or handled
 this.mailer.send(user.email);
 
-// ✅ Await it
+// ✅ Await it or mark fire-and-forget
 await this.mailer.send(user.email);
-// or if truly fire-and-forget
 void this.mailer.send(user.email);
 ```
 
 ### `any` type violation
 ```typescript
-// ❌ 
+// ❌
 function parseConfig(config: any) { ... }
 
 // ✅

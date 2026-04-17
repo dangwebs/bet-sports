@@ -89,9 +89,34 @@ Given that feature description, do this:
    - The JSON output will contain BRANCH_NAME and SPEC_FILE paths
    - For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot")
 
-3. Load `.specify/templates/spec-template.md` to understand required sections.
+3. **Project Context Discovery** (MANDATORY — do this BEFORE generating any spec content):
 
-4. Follow this execution flow:
+   The agent MUST build a mental model of the project to ground the specification in reality. Read in this order, skip files that don't exist:
+
+   a. **Project identity** (read ALL that exist):
+      - `CLAUDE.md` or `AGENTS.md` at repo root → project overview, structure, conventions, tech stack
+      - `.github/copilot-instructions.md` → workspace-level rules and boundaries
+      - `README.md` at repo root → project description, setup, and domain context
+
+   b. **Tech stack detection** (read the first match found per category):
+      - Package manifests: `package.json`, `pnpm-workspace.yaml`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `composer.json`
+      - Framework configs: `tsconfig.json`, `next.config.*`, `vite.config.*`, `angular.json`, `nest-cli.json`
+      - Monorepo indicators: `turbo.json`, `lerna.json`, `nx.json`
+
+   c. **Directory structure**: List the top-level directories and up to 2 levels deep for the areas relevant to the feature being specified. This reveals naming conventions, module organization, and existing patterns.
+
+   d. **Existing code in the target area**: If the feature touches an existing domain (e.g., "bots", "auth", "billing"), read 1-2 existing files in that area to understand current patterns, naming, and structure.
+
+   **This context is NOT written to a file**. It is held in memory and used to:
+   - Ground functional requirements in the project's actual capabilities
+   - Use domain-specific terminology that matches the codebase
+   - Identify existing infrastructure that the feature can leverage
+   - Scope the feature realistically based on what already exists
+   - Avoid specifying what's already implemented
+
+4. Load `.specify/templates/spec-template.md` to understand required sections.
+
+5. Follow this execution flow:
 
     1. Parse user description from Input
        If empty: ERROR "No feature description provided"
@@ -117,9 +142,9 @@ Given that feature description, do this:
     7. Identify Key Entities (if data involved)
     8. Return: SUCCESS (spec ready for planning)
 
-5. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
+6. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
 
-6. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
+7. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
 
    a. **Create Spec Quality Checklist**: Generate a checklist file at `FEATURE_DIR/checklists/requirements.md` using the checklist template structure with these validation items:
 
@@ -166,7 +191,7 @@ Given that feature description, do this:
 
    c. **Handle Validation Results**:
 
-      - **If all items pass**: Mark checklist complete and proceed to step 7
+      - **If all items pass**: Mark checklist complete and proceed to step 8
 
       - **If items fail (excluding [NEEDS CLARIFICATION])**:
         1. List the failing items and specific issues
@@ -211,9 +236,9 @@ Given that feature description, do this:
 
    d. **Update Checklist**: After each validation iteration, update the checklist file with current pass/fail status
 
-7. Report completion with branch name, spec file path, checklist results, and readiness for the next phase (`/speckit.clarify` or `/speckit.plan`).
+8. Report completion with branch name, spec file path, checklist results, and readiness for plan generation.
 
-8. **Check for extension hooks**: After reporting completion, check if `.specify/extensions.yml` exists in the project root.
+9. **Check for extension hooks**: After reporting completion, check if `.specify/extensions.yml` exists in the project root.
    - If it exists, read it and look for entries under the `hooks.after_specify` key
    - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
    - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -304,3 +329,41 @@ Success criteria must be:
 - "Database can handle 1000 TPS" (implementation detail, use user-facing metric)
 - "React components render efficiently" (framework-specific)
 - "Redis cache hit rate above 80%" (technology-specific)
+
+## Automatic Pipeline Continuation (MANDATORY)
+
+After spec generation and validation are complete, **DO NOT stop**. Continue with plan and tasks generation in the **same conversation thread** to preserve context.
+
+### Phase A: Generate plan.md
+
+Execute the full workflow defined in `speckit.plan.md` using the spec just created:
+
+1. Run `.specify/scripts/bash/setup-plan.sh --json` from repo root and parse JSON output
+2. **Skip Project Context Discovery** — reuse the context already gathered during spec generation
+3. Load the spec just written plus `.specify/memory/constitution.md`
+4. Execute the plan workflow (Phase 0: Research → Phase 1: Design & Contracts)
+5. Write `plan.md` to the feature directory
+
+### Phase B: Generate tasks.md
+
+After the plan is complete, execute the full workflow defined in `speckit.tasks.md`:
+
+1. Run `.specify/scripts/bash/check-prerequisites.sh --json` from repo root and parse JSON output
+2. **Skip Project Context Discovery** — reuse the context already in memory
+3. Load spec.md, plan.md, and any design artifacts generated in Phase A
+4. Generate tasks organized by user story following the Task Generation Rules from `speckit.tasks.md`
+5. Write `tasks.md` to the feature directory
+
+### Final Report
+
+After all three artifacts are generated, output a single summary:
+
+```
+## Pipeline Complete
+
+- **spec.md**: [path] — [status]
+- **plan.md**: [path] — [status]
+- **tasks.md**: [path] — [total task count] tasks across [phase count] phases
+
+Ready for implementation (`/speckit.implement`).
+```

@@ -57,12 +57,37 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 1. **Setup**: Run `.specify/scripts/bash/check-prerequisites.sh --json` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list. All paths must be absolute. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
-2. **Load design documents**: Read from FEATURE_DIR:
+2. **Project Context Discovery** (MANDATORY — do this BEFORE generating tasks):
+
+   The agent MUST build a mental model of the project to generate tasks with correct file paths, naming conventions, and patterns. Read in this order, skip files that don't exist:
+
+   a. **Project identity** (read ALL that exist):
+      - `CLAUDE.md` or `AGENTS.md` at repo root → project overview, structure, conventions, tech stack
+      - `.github/copilot-instructions.md` → workspace-level rules and boundaries
+      - `README.md` at repo root → project description, setup, and domain context
+
+   b. **Tech stack detection** (read the first match found per category):
+      - Package manifests: `package.json`, `pnpm-workspace.yaml`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `composer.json`
+      - Framework configs: `tsconfig.json`, `next.config.*`, `vite.config.*`, `angular.json`, `nest-cli.json`
+      - Monorepo indicators: `turbo.json`, `lerna.json`, `nx.json`
+
+   c. **Directory structure**: List the top-level directories and up to 2 levels deep for the areas relevant to the feature. This reveals naming conventions, module organization, and existing patterns.
+
+   d. **Existing code in the target area**: If the feature touches an existing domain, read 2-3 existing files in that area to understand current patterns, naming, imports, and file structure.
+
+   **This context is NOT written to a file**. It is held in memory and used to:
+   - Generate tasks with CORRECT file paths matching the project's actual structure
+   - Use exact import paths, naming conventions, and module patterns from the codebase
+   - Include realistic inline Pattern examples that match the project's actual code style
+   - Reference existing utilities, types, and services for the Depends on / Input fields
+   - Avoid generating tasks for infrastructure that already exists
+
+3. **Load design documents**: Read from FEATURE_DIR:
    - **Required**: plan.md (tech stack, libraries, structure), spec.md (user stories with priorities)
    - **Optional**: data-model.md (entities), contracts/ (interface contracts), research.md (decisions), quickstart.md (test scenarios)
    - Note: Not all projects have all documents. Generate tasks based on what's available.
 
-3. **Execute task generation workflow**:
+4. **Execute task generation workflow**:
    - Load plan.md and extract tech stack, libraries, project structure
    - Load spec.md and extract user stories with their priorities (P1, P2, P3, etc.)
    - If data-model.md exists: Extract entities and map to user stories
@@ -73,7 +98,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Create parallel execution examples per user story
    - Validate task completeness (each user story has all needed tasks, independently testable)
 
-4. **Generate tasks.md**: Use `.specify/templates/tasks-template.md` as structure, fill with:
+5. **Generate tasks.md**: Use `.specify/templates/tasks-template.md` as structure, fill with:
    - Correct feature name from plan.md
    - Phase 1: Setup tasks (project initialization)
    - Phase 2: Foundational tasks (blocking prerequisites for all user stories)
@@ -86,7 +111,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Parallel execution examples per story
    - Implementation strategy section (MVP first, incremental delivery)
 
-5. **Report**: Output path to generated tasks.md and summary:
+6. **Report**: Output path to generated tasks.md and summary:
    - Total task count
    - Task count per user story
    - Parallel opportunities identified
@@ -94,7 +119,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Suggested MVP scope (typically just User Story 1)
    - Format validation: Confirm ALL tasks follow the checklist format (checkbox, ID, labels, file paths)
 
-6. **Check for extension hooks**: After tasks.md is generated, check if `.specify/extensions.yml` exists in the project root.
+7. **Check for extension hooks**: After tasks.md is generated, check if `.specify/extensions.yml` exists in the project root.
    - If it exists, read it and look for entries under the `hooks.after_tasks` key
    - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
    - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -125,7 +150,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 Context for task generation: $ARGUMENTS
 
-The tasks.md should be immediately executable - each task must be specific enough that an LLM can complete it without additional context.
+The tasks.md should be immediately executable - each task must be specific enough that the MOST BASIC LLM (e.g., GPT-3.5, Haiku, small local models) can complete it without additional context, without reading other tasks, and without needing to make architectural decisions.
 
 ## Task Generation Rules
 
@@ -133,12 +158,36 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 **Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the feature specification or if user requests TDD approach.
 
+### Atomicity Principle (MANDATORY)
+
+Each task MUST be **self-contained and atomic** — executable by the most basic AI without access to any other task, spec, or design document. This means:
+
+1. **Zero ambiguity**: The task description alone must contain ALL information needed to execute it. No "see spec" or "as described in plan.md".
+2. **Exact inputs/outputs**: Specify the exact interface (props, params, return types) inline in the task.
+3. **Explicit patterns**: If the task must follow an existing pattern, PASTE the pattern example in the task — don't reference another file to "follow".
+4. **One file, one concern**: Each task creates or modifies exactly ONE file (exceptions only for tightly coupled pairs like component + test).
+5. **No decision-making**: The task tells the AI WHAT to do, not what to "figure out". Architecture decisions are resolved in the task description, not delegated.
+6. **Copy-pasteable verification**: Each task includes HOW to verify it's done correctly (e.g., "the component renders a table with 4 columns", "the function returns `{ success: boolean }`").
+
 ### Checklist Format (REQUIRED)
 
 Every task MUST strictly follow this format:
 
 ```text
 - [ ] [TaskID] [P?] [Story?] Description with file path
+```
+
+Followed by an **indented detail block** with:
+
+```text
+  - **What**: One-sentence summary of what to create/modify
+  - **File**: Exact absolute or relative file path
+  - **Why**: One sentence on the purpose (so AI understands intent, not just mechanics)
+  - **Input**: What this file receives (props, params, imports from specific files)
+  - **Output**: What this file exports/renders/returns
+  - **Pattern**: Inline code snippet showing the structure to follow (3-10 lines max)
+  - **Acceptance**: How to verify correctness (renders X, exports Y, passes Z)
+  - **Depends on**: Task IDs that must be complete first (or "none")
 ```
 
 **Format Components**:
@@ -149,21 +198,62 @@ Every task MUST strictly follow this format:
 4. **[Story] label**: REQUIRED for user story phase tasks only
    - Format: [US1], [US2], [US3], etc. (maps to user stories from spec.md)
    - Setup phase: NO story label
-   - Foundational phase: NO story label  
+   - Foundational phase: NO story label
    - User Story phases: MUST have story label
    - Polish phase: NO story label
-5. **Description**: Clear action with exact file path
+5. **Description**: Clear action verb + what + exact file path
+6. **Detail block**: REQUIRED for every task (see format above)
 
 **Examples**:
 
-- ✅ CORRECT: `- [ ] T001 Create project structure per implementation plan`
-- ✅ CORRECT: `- [ ] T005 [P] Implement authentication middleware in src/middleware/auth.py`
-- ✅ CORRECT: `- [ ] T012 [P] [US1] Create User model in src/models/user.py`
-- ✅ CORRECT: `- [ ] T014 [US1] Implement UserService in src/services/user_service.py`
-- ❌ WRONG: `- [ ] Create User model` (missing ID and Story label)
-- ❌ WRONG: `T001 [US1] Create model` (missing checkbox)
-- ❌ WRONG: `- [ ] [US1] Create User model` (missing Task ID)
-- ❌ WRONG: `- [ ] T001 [US1] Create model` (missing file path)
+- ✅ CORRECT:
+  ```
+  - [ ] T012 [P] [US1] Create Product type interface in src/types/product.ts
+    - **What**: Define the TypeScript interface for product data
+    - **File**: `src/types/product.ts`
+    - **Why**: Typed contract for product data used by list views and forms
+    - **Input**: None (standalone type file)
+    - **Output**: Export `Product` interface with fields: `id: string`, `name: string`, `price: number`, `category: string`, `createdAt: string`
+    - **Pattern**:
+      ```ts
+      export interface Product {
+        id: string;
+        name: string;
+        price: number;
+        category: string;
+        createdAt: string;
+      }
+      ```
+    - **Acceptance**: File exports the interface, no `any` types, compiles without errors
+    - **Depends on**: none
+  ```
+
+- ✅ CORRECT:
+  ```
+  - [ ] T014 [US1] Create product list service in src/services/product.service.ts
+    - **What**: Service class with CRUD methods for Product entity
+    - **File**: `src/services/product.service.ts`
+    - **Why**: Encapsulates business logic for product operations, called by controllers/handlers
+    - **Input**: Imports `Product` from `src/types/product.ts`, receives `{ name: string, price: number, category: string }` for create
+    - **Output**: Export `ProductService` with methods: `create(data) → Product`, `findAll() → Product[]`, `findById(id) → Product | null`, `delete(id) → boolean`
+    - **Pattern**:
+      ```ts
+      export class ProductService {
+        async create(data: CreateProductInput): Promise<Product> { /* ... */ }
+        async findAll(): Promise<Product[]> { /* ... */ }
+        async findById(id: string): Promise<Product | null> { /* ... */ }
+        async delete(id: string): Promise<boolean> { /* ... */ }
+      }
+      ```
+    - **Acceptance**: All 4 methods exist, types match, no `any`, service is importable without errors
+    - **Depends on**: T012 (Product type)
+  ```
+
+- ❌ WRONG: `- [ ] T001 Create project structure per implementation plan` (no detail block, vague)
+- ❌ WRONG: `- [ ] T012 [P] [US1] Create User model in src/models/user.py` (no detail block)
+- ❌ WRONG: `- [ ] Create User model` (missing ID, Story label, AND detail block)
+- ❌ WRONG: Any task with "follow the pattern in X file" without inlining the pattern
+- ❌ WRONG: Any task that requires reading another task to understand what to do
 
 ### Task Organization
 

@@ -23,15 +23,12 @@ Each `.prompt.md` delegates to the corresponding command definition in
 
 Any activity that implies code modification must follow this mandatory path:
 
-1. `Orchestrator` handles intake and routing.
-2. `/speckit.specify` generates (or updates) the intervention specification.
-3. `/speckit.plan` defines technical approach.
-4. `/speckit.tasks` creates executable tasks.
-5. Implementation starts only after the previous steps are completed.
+1. The **Orchestrator** handles intake and routing.
+2. `/speckit.specify` generates the intervention specification, plan, and tasks in one continuous flow.
+3. Implementation starts only after the previous steps are completed.
 
 ### Hard Gate
 
-- No code edits without a spec artifact (`spec.md`) for that intervention.
+- No code edits without the full pipeline artifacts (`spec.md`, `plan.md`, `tasks.md`) for that intervention.
 - If a code request reaches a specialist directly without spec context,
-  it must be redirected to `Orchestrator` first.
-
+  it must be redirected to the **Orchestrator** first.

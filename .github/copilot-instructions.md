@@ -1,4 +1,4 @@
-# Copilot Instructions — BJJ-BetSports
+# Copilot Instructions
 
 ## Scope
 
@@ -7,12 +7,11 @@ These instructions apply to the whole workspace.
 ## Language
 
 - Respond in the same language as the user.
-- For this repository, default to Spanish (see `RULES.md`).
 
 ## Mandatory Orchestration
 
 - Start with task classification (frontend, backend, architecture, or general).
-- Use the project specialists in `.github/agents/` for domain execution:
+- Use the specialists in `.github/agents/` for domain execution:
   - `Orchestrator`
   - `Frontend`
   - `Backend`
@@ -25,44 +24,38 @@ These instructions apply to the whole workspace.
 For any feature, bug fix with code edits, or refactor, follow this sequence before implementation:
 
 1. `/speckit.constitution` (when principles are missing/outdated)
-2. `/speckit.specify`
-3. `/speckit.plan`
-4. `/speckit.tasks`
-5. implement from generated tasks (`/speckit.implement` or equivalent)
+2. `/speckit.specify` — generates `spec.md`, `plan.md`, and `tasks.md` in one continuous flow
+3. implement from generated tasks (`/speckit.implement` or equivalent)
 
 ### Hard Gate (Mandatory)
 
-- No code edits are allowed before a feature specification exists for the intervention.
-- Minimum required artifact before coding: `spec.md` generated via `/speckit.specify`.
+- No code edits are allowed before the full spec pipeline has run for the intervention.
+- Minimum required artifacts before coding: `spec.md`, `plan.md`, and `tasks.md` — all generated via `/speckit.specify`.
 - For any code intervention, the expected path is:
-  `Orchestrator` → `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` → implementation.
+  `Orchestrator` → `/speckit.specify` (produces spec + plan + tasks) → implementation.
 - If a request arrives directly to a specialist with no spec context, the specialist must stop and redirect to `Orchestrator`.
 
 For read-only questions or explanations with no code changes, answer directly.
 
 ## Project Boundaries
 
-- Frontend work: `frontend/` (React 19 + Vite + Material UI)
-- Backend work: `backend/` (FastAPI + Python + ML worker pipeline)
-- Operational scripts: `scripts/`
-- Project rules source of truth: `RULES.md`
+Before any implementation, agents must discover the project structure by reading config files (`package.json`, `tsconfig.json`, `go.mod`, `requirements.txt`, etc.) and directory layout. Do not assume tech stack or directory names.
 
 ## Engineering Rules
 
-- Follow `RULES.md` as mandatory policy.
-- Keep strict typing; avoid `any` (TypeScript) and keep full type hints in Python.
+- Identify and respect existing API boundaries (REST, GraphQL, gRPC, etc.) from project config.
+- Keep strict typing; avoid `any`.
 - Keep changes small, testable, and aligned with existing structure.
 - Preserve existing lint/format rules; avoid unrelated refactors.
 
 ## Quality Gates Before Finishing
 
 - Validate edits for lint/type errors.
-- Frontend: run `cd frontend && npm run lint` and `cd frontend && npm run build` when relevant.
-- Backend: run `cd backend && pytest -v` for affected logic when relevant.
+- Ensure i18n strings are updated in both `Front/messages/en.json` and `Front/messages/es.json` when adding user-facing text.
 - Ensure task status/progress is updated when working from Spec Kit artifacts.
 
 ## Sources of Truth
 
 - Agent definitions: `.github/agents/`
 - Spec Kit prompts: `.github/prompts/`
-- Legacy/extended guidance: `AGENTS.md`, `CLAUDE.md`
+- Legacy/extended guidance: `AGENTS.md`, `CLAUDE.md`, `.claude/skills/`
