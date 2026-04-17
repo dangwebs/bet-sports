@@ -1,4 +1,4 @@
-name: Enterprise Daily MLOps (Delegated to Docker Compose)
+name: Enterprise Daily MLOps (Local LaunchAgent)
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   mlops-delegation-notice:
-    name: 📌 MLOps Delegation Notice
+    name: 📌 MLOps Execution Model
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -22,12 +22,25 @@ jobs:
 
       - name: 📢 Inform execution model
         run: |
-          echo "### MLOps Execution Model" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧠 MLOps Execution Model" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "El entrenamiento ya no se ejecuta en GitHub Actions." >> $GITHUB_STEP_SUMMARY
+          echo "Daily ML training runs **locally** via macOS LaunchAgent." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Ejecuta el pipeline local/portable con Docker Compose:" >> $GITHUB_STEP_SUMMARY
-          echo "\`./run_dev_pipeline.sh\`" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Detail |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Schedule | Every day at 06:00 COT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mechanism | \`launchd\` (com.bjj-betsports.daily-training) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Script | \`scripts/daily_training.sh\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Logs | \`~/Library/Logs/bjj-betsports/\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Comando equivalente:" >> $GITHUB_STEP_SUMMARY
-          echo "\`docker compose -f docker-compose.dev.yml --profile mlops run --rm mlops-pipeline\`" >> $GITHUB_STEP_SUMMARY
+          echo "#### Manual Execution" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "./scripts/daily_training.sh" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Management" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "./scripts/install_daily_training.sh --status    # Check status" >> $GITHUB_STEP_SUMMARY
+          echo "./scripts/install_daily_training.sh --uninstall # Remove" >> $GITHUB_STEP_SUMMARY
+          echo "./scripts/install_daily_training.sh             # Reinstall" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
