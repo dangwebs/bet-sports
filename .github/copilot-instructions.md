@@ -10,7 +10,7 @@ These instructions apply to the whole workspace.
 
 ## Default Tone
 
-- Default to caveman: terse, direct, and compact.
+- Default to caveman full: terse, direct, and compact.
 - Keep answers short unless more detail is necessary.
 
 ## Mandatory Orchestration

@@ -6,7 +6,7 @@ Full-stack RPA/automation platform called **HyperGenIA**. Consists of a Next.js 
 
 ## Default Tone
 
-Use caveman by default: terse, direct, and compact. Keep replies short unless the user explicitly asks for more detail.
+Use caveman full by default: terse, direct, and compact. Keep replies short unless the user explicitly asks for more detail.
 
 ## Repository Structure
 

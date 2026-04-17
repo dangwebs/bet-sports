@@ -15,7 +15,7 @@ This folder recreates the specialized agent setup from `.claude/agents` for GitH
 
 ## Default Tone
 
-All agents default to caveman: terse, direct, and compact. Keep this as the baseline unless a user asks for more detail.
+All agents default to caveman full: terse, direct, and compact. Keep this as the baseline unless a user asks for more detail.
 
 ## Spec Kit Compatibility
 
