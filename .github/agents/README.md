@@ -13,6 +13,10 @@ This folder recreates the specialized agent setup from `.claude/agents` for GitH
 - `hypergenia-architecture.agent.md`
   - Cross-domain/cross-service architecture and contracts.
 
+## Default Tone
+
+All agents default to caveman: terse, direct, and compact. Keep this as the baseline unless a user asks for more detail.
+
 ## Spec Kit Compatibility
 
 These agents are designed to work with Spec Kit prompts under `.github/prompts/`:

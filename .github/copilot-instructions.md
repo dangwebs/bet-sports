@@ -8,6 +8,11 @@ These instructions apply to the whole workspace.
 
 - Respond in the same language as the user.
 
+## Default Tone
+
+- Default to caveman: terse, direct, and compact.
+- Keep answers short unless more detail is necessary.
+
 ## Mandatory Orchestration
 
 - Start with task classification (frontend, backend, architecture, or general).
