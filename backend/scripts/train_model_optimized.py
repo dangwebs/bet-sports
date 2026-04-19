@@ -466,10 +466,9 @@ async def train_for_league(
         )
     elif std_dev < 0.5:
         logger.warning(
-            f"      ⚠️ Low Variance in Corners Model for {league_id} "(
-                "(StdDev < 0.5). Model might be too conservative, "
-                "but it remains in memory."
-            )
+            f"      ⚠️ Low Variance in Corners Model for {league_id} "
+            "(StdDev < 0.5). Model might be too conservative, "
+            "but it remains in memory."
         )
     else:
         logger.info("      ✓ Corners regressor ready in memory for %s", league_id)
@@ -614,6 +613,7 @@ async def main():
 
     from src.dependencies import (
         get_match_aggregator_service,
+        get_persistence_repository,
         get_statistics_service,
         get_training_data_service,
     )

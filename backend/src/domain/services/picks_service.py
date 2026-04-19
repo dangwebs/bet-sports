@@ -9,7 +9,7 @@ import functools
 import logging
 import math
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from src.domain.entities.betting_feedback import LearningWeights
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
