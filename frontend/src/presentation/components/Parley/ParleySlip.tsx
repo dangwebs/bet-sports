@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Paper,
   Box,
@@ -79,7 +80,9 @@ const ParleySlip: React.FC = () => {
     };
   }, [items]);
 
-  if (items.length === 0) return null;
+  const location = useLocation();
+
+  if (items.length === 0 || location.pathname === '/parley-calculator') return null;
 
   return (
     <Paper

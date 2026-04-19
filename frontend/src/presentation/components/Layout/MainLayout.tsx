@@ -7,10 +7,8 @@ import {
   AppBar,
   Toolbar,
   Button,
-  IconButton,
-  Tooltip,
 } from "@mui/material";
-import { SportsSoccer, GetApp, SmartToy, Dashboard } from "@mui/icons-material";
+import { SportsSoccer, GetApp, SmartToy, Calculate } from "@mui/icons-material";
 import OfflineIndicator from "../../components/common/OfflineIndicator";
 import { usePWAInstall } from "../../../hooks/usePWAInstall";
 import { useBotStore } from "../../../application/stores/useBotStore";
@@ -23,7 +21,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { installPrompt, isInstalled, handleInstallClick } = usePWAInstall();
   const { trainingStatus } = useBotStore();
   const location = useLocation();
-  const isPredictions = location.pathname === "/";
 
   // Only show the bot icon if training is fully completed
   const showBotIcon = trainingStatus === "COMPLETED";
@@ -48,29 +45,58 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         >
           <Toolbar>
             <SportsSoccer sx={{ mr: 2, color: "primary.main" }} />
-            <Typography
-              variant="h6"
-              component="h1"
-              sx={{ flexGrow: 1, fontWeight: 700 }}
-            >
-              BJJ - BetSports
-            </Typography>
-            {showBotIcon && (
-              <Tooltip
-                title={
-                  isPredictions ? "Ir al Bot de Inversión" : "Ver Predicciones"
-                }
+            <Link to="/" style={{ textDecoration: "none", color: "inherit", display: "flex", alignItems: "center", flexGrow: 1 }}>
+              <Typography
+                variant="h6"
+                component="h1"
+                sx={{ fontWeight: 700 }}
               >
-                <Link
-                  to={isPredictions ? "/bot" : "/"}
-                  style={{ textDecoration: "none" }}
+                BJJ - BetSports v2
+              </Typography>
+            </Link>
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Link to="/" style={{ textDecoration: "none" }}>
+                <Button
+                  sx={{
+                    color: location.pathname === "/" ? "primary.main" : "white",
+                    fontWeight: location.pathname === "/" ? 700 : 400,
+                    textTransform: "none"
+                  }}
+                  startIcon={<SportsSoccer />}
                 >
-                  <IconButton sx={{ color: "white", mr: 1 }}>
-                    {isPredictions ? <SmartToy /> : <Dashboard />}
-                  </IconButton>
+                  Predicciones
+                </Button>
+              </Link>
+
+              {showBotIcon && (
+                <Link to="/bot" style={{ textDecoration: "none" }}>
+                  <Button
+                    sx={{
+                      color: location.pathname === "/bot" ? "primary.main" : "white",
+                      fontWeight: location.pathname === "/bot" ? 700 : 400,
+                      textTransform: "none"
+                    }}
+                    startIcon={<SmartToy />}
+                  >
+                    Bot
+                  </Button>
                 </Link>
-              </Tooltip>
-            )}
+              )}
+
+              <Link to="/parley-calculator" style={{ textDecoration: "none" }}>
+                <Button
+                  sx={{
+                    color: location.pathname === "/parley-calculator" ? "primary.main" : "white",
+                    fontWeight: location.pathname === "/parley-calculator" ? 700 : 400,
+                    textTransform: "none"
+                  }}
+                  startIcon={<Calculate />}
+                >
+                  Calculadora
+                </Button>
+              </Link>
+            </Box>
 
             {installPrompt && !isInstalled && (
               <Button
