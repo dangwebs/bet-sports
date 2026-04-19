@@ -48,11 +48,15 @@ class MongoRepository:
             self.training_results = self.db["training_results"]
             self.match_predictions = self.db["match_predictions"]
             self.api_cache = self.db["api_cache"]
+            self.app_state = self.db["app_state"]
+            self.binary_artifacts = self.db["binary_artifacts"]
 
             # Create indexes
             self.training_results.create_index("key", unique=True)
             self.match_predictions.create_index("match_id", unique=True)
             self.api_cache.create_index("key", unique=True)
+            self.app_state.create_index("key", unique=True)
+            self.binary_artifacts.create_index("key", unique=True)
 
             logger.info(f"✅ Successfully connected to MongoDB database: {db_name}")
         except Exception as e:
@@ -206,12 +210,52 @@ class MongoRepository:
         training_deleted = self.training_results.delete_many({}).deleted_count
         predictions_deleted = self.match_predictions.delete_many({}).deleted_count
         cache_deleted = self.api_cache.delete_many({}).deleted_count
+        app_state_deleted = self.app_state.delete_many({}).deleted_count
+        artifacts_deleted = self.binary_artifacts.delete_many({}).deleted_count
 
         return {
             "training_results": training_deleted,
             "match_predictions": predictions_deleted,
             "api_cache": cache_deleted,
+            "app_state": app_state_deleted,
+            "binary_artifacts": artifacts_deleted,
         }
+
+    def save_app_state(self, key: str, data: dict):
+        """Save general application state (JSON)."""
+        normalized_data = _to_bson_friendly(data)
+        self.app_state.update_one(
+            {"key": key},
+            {"$set": {"data": normalized_data, "last_updated": get_current_time()}},
+            upsert=True,
+        )
+
+    def get_app_state(self, key: str) -> Optional[dict]:
+        """Retrieve general application state."""
+        doc = self.app_state.find_one({"key": key})
+        return doc.get("data") if doc else None
+
+    def save_binary_artifact(self, key: str, binary_data: bytes):
+        """Save heavy binary data (e.g. ML model) as BSON Binary."""
+        from bson.binary import Binary
+
+        self.binary_artifacts.update_one(
+            {"key": key},
+            {
+                "$set": {
+                    "data": Binary(binary_data),
+                    "last_updated": get_current_time(),
+                }
+            },
+            upsert=True,
+        )
+
+    def get_binary_artifact(self, key: str) -> Optional[bytes]:
+        """Retrieve binary data from MongoDB."""
+        doc = self.binary_artifacts.find_one({"key": key})
+        if doc and "data" in doc:
+            return bytes(doc["data"])
+        return None
 
 
 # Singleton accessor with old name alias to avoid changing dependencies everywhere

@@ -30,7 +30,7 @@ services:
     <<: *project-image
     container_name: bjj-backend-api-dev
     working_dir: /workspace/backend
-    command: ["python3", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["python3", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     env_file:
       - ./backend/.env
     environment:
@@ -52,21 +52,26 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    volumes:
+      - ./backend:/workspace/backend:rw
 
   frontend:
     <<: *project-image
     container_name: bjj-frontend-dev
     working_dir: /workspace/frontend
-    command: ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
       VITE_API_PROXY_TARGET: http://backend-api:8000
     ports:
-      - "5173:4173"
+      - "5173:5173"
     depends_on:
       backend-api:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - ./frontend:/workspace/frontend:rw
+      - /workspace/frontend/node_modules
 
   ml-worker:
     <<: *project-image

@@ -32,15 +32,22 @@ class LearningService:
     """
 
     DEFAULT_WEIGHTS_PATH = "learning_weights.json"
+    MONGO_KEY = "learning_weights"
 
-    def __init__(self, weights_path: Optional[str] = None):
+    def __init__(
+        self,
+        weights_path: Optional[str] = None,
+        persistence_repo: Optional[Any] = None,
+    ):
         """
         Initialize learning service.
 
         Args:
-            weights_path: Path to JSON file for persisting weights
+            weights_path: Path to JSON file for persisting weights (fallback/migration)
+            persistence_repo: Repository for DB persistence
         """
         self.weights_path = weights_path or self.DEFAULT_WEIGHTS_PATH
+        self.repo = persistence_repo
         self._learning_weights: Optional[LearningWeights] = None
 
     @property
@@ -51,74 +58,116 @@ class LearningService:
         return self._learning_weights
 
     def _load_weights(self) -> LearningWeights:
-        """Load learning weights from JSON file."""
+        """Load learning weights from DB or JSON file (migration)."""
+        # 1. Try DB first
+        if self.repo:
+            data = self.repo.get_app_state(self.MONGO_KEY)
+            if data:
+                return self._reconstruct_weights(data)
+
+        # 2. Migration: Try local file if DB empty
         if not os.path.exists(self.weights_path):
-            logger.info(f"No weights file found at {self.weights_path}, starting fresh")
+            logger.info("No weights found in DB or local file, starting fresh")
             return LearningWeights()
 
         try:
+            logger.info(f"🔄 Migrating weights from {self.weights_path} to Database...")
             with open(self.weights_path, "r") as f:
                 data = json.load(f)
 
-            # Reconstruct MarketPerformance objects
-            market_perfs = {}
-            for market_type, perf_data in data.get("market_performances", {}).items():
-                # Handle datetime field
-                if "last_updated" in perf_data and isinstance(
-                    perf_data["last_updated"], str
-                ):
-                    perf_data["last_updated"] = datetime.fromisoformat(
-                        perf_data["last_updated"]
-                    )
-                market_perfs[market_type] = MarketPerformance(**perf_data)
+            weights = self._reconstruct_weights(data)
 
-            # Handle datetime field for LearningWeights
-            last_saved = data.get("last_saved")
-            if last_saved and isinstance(last_saved, str):
-                last_saved = datetime.fromisoformat(last_saved)
-            else:
-                last_saved = datetime.now(timezone("America/Bogota"))
+            # Save to DB immediately if repo available
+            if self.repo:
+                self._save_to_db(weights)
+                # Cleanup local file after successful migration
+                try:
+                    os.remove(self.weights_path)
+                    logger.info(f"🗑️ Removed migrated file: {self.weights_path}")
+                except Exception as del_err:
+                    logger.warning(f"Failed to remove migrated file: {del_err}")
 
-            return LearningWeights(
-                market_performances=market_perfs,
-                global_adjustments=data.get("global_adjustments", {}),
-                version=data.get("version", "1.0"),
-                last_saved=last_saved,
-            )
+            return weights
         except Exception as e:
-            logger.error(f"Failed to load weights: {e}, starting fresh")
+            logger.error(f"Failed to load/migrate weights: {e}, starting fresh")
             return LearningWeights()
 
+    def _reconstruct_weights(self, data: dict) -> LearningWeights:
+        """Helper to reconstruct LearningWeights from dict."""
+        # Reconstruct MarketPerformance objects
+        market_perfs = {}
+        for market_type, perf_data in data.get("market_performances", {}).items():
+            # Handle datetime field
+            if "last_updated" in perf_data and isinstance(perf_data["last_updated"], str):
+                perf_data["last_updated"] = datetime.fromisoformat(
+                    perf_data["last_updated"]
+                )
+            market_perfs[market_type] = MarketPerformance(**perf_data)
+
+        # Handle datetime field for LearningWeights
+        last_saved = data.get("last_saved")
+        if last_saved and isinstance(last_saved, str):
+            last_saved = datetime.fromisoformat(last_saved)
+        else:
+            last_saved = datetime.now(timezone("America/Bogota"))
+
+        return LearningWeights(
+            market_performances=market_perfs,
+            global_adjustments=data.get("global_adjustments", {}),
+            version=data.get("version", "1.0"),
+            last_saved=last_saved,
+        )
+
     def _save_weights(self) -> None:
-        """Save learning weights to JSON file."""
+        """Save learning weights to DB (primary) and JSON file (legacy/transitional)."""
+        if self.repo:
+            self._save_to_db(self.learning_weights)
+
+        # Still attempt file save if not yet deleted?
+        # The user specifically asked to ELIMINATE heavy/unnecessary files.
+        # Once migrated, we stop writing to disk.
+        if not os.path.exists(self.weights_path):
+            return
+
         try:
-            # Convert to serializable dict
-            data = {
-                "market_performances": {},
-                "global_adjustments": self.learning_weights.global_adjustments,
-                "version": self.learning_weights.version,
-                "last_saved": datetime.now(timezone("America/Bogota")).isoformat(),
-            }
-
-            for market_type, perf in self.learning_weights.market_performances.items():
-                perf_dict = {
-                    "market_type": perf.market_type,
-                    "total_predictions": perf.total_predictions,
-                    "correct_predictions": perf.correct_predictions,
-                    "success_rate": perf.success_rate,
-                    "avg_odds": perf.avg_odds,
-                    "total_profit_loss": perf.total_profit_loss,
-                    "confidence_adjustment": perf.confidence_adjustment,
-                    "last_updated": perf.last_updated.isoformat(),
-                }
-                data["market_performances"][market_type] = perf_dict
-
+            # Legacy file save (only if file still exists - fallback)
+            data = self._serialize_weights(self.learning_weights)
             with open(self.weights_path, "w") as f:
                 json.dump(data, f, indent=2)
-
-            logger.info(f"Saved learning weights to {self.weights_path}")
         except Exception as e:
-            logger.error(f"Failed to save weights: {e}")
+            logger.error(f"Failed to save weights to file: {e}")
+
+    def _save_to_db(self, weights: LearningWeights) -> None:
+        """Save weights to MongoDB."""
+        try:
+            data = self._serialize_weights(weights)
+            self.repo.save_app_state(self.MONGO_KEY, data)
+            logger.debug("Saved learning weights to Database")
+        except Exception as e:
+            logger.error(f"Failed to save weights to DB: {e}")
+
+    def _serialize_weights(self, weights: LearningWeights) -> dict:
+        """Helper to serialize LearningWeights to dict."""
+        data = {
+            "market_performances": {},
+            "global_adjustments": weights.global_adjustments,
+            "version": weights.version,
+            "last_saved": datetime.now(timezone("America/Bogota")).isoformat(),
+        }
+
+        for market_type, perf in weights.market_performances.items():
+            perf_dict = {
+                "market_type": perf.market_type,
+                "total_predictions": perf.total_predictions,
+                "correct_predictions": perf.correct_predictions,
+                "success_rate": perf.success_rate,
+                "avg_odds": perf.avg_odds,
+                "total_profit_loss": perf.total_profit_loss,
+                "confidence_adjustment": perf.confidence_adjustment,
+                "last_updated": perf.last_updated.isoformat(),
+            }
+            data["market_performances"][market_type] = perf_dict
+        return data
 
     def register_feedback(self, feedback: BettingFeedback) -> None:
         """

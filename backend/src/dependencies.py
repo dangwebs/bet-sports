@@ -107,7 +107,7 @@ def get_statistics_service() -> StatisticsService:
 @lru_cache()
 def get_learning_service() -> LearningService:
     """Get learning service (cached)."""
-    return LearningService()
+    return LearningService(persistence_repo=get_persistence_repository())
 
 
 @lru_cache()
@@ -119,7 +119,10 @@ def get_parley_service() -> ParleyService:
 @lru_cache()
 def get_picks_service() -> AIPicksService:
     """Get AI picks service (cached)."""
-    return AIPicksService()
+    return AIPicksService(
+        learning_weights=get_learning_service().get_learning_weights(),
+        persistence_repo=get_persistence_repository(),
+    )
 
 
 @lru_cache()
@@ -163,6 +166,7 @@ def get_ml_training_orchestrator() -> "MLTrainingOrchestrator":
         learning_service=get_learning_service(),
         resolution_service=get_pick_resolution_service(),
         cache_service=get_cache_service(),
+        persistence_repo=get_persistence_repository(),
     )
 
 
