@@ -109,19 +109,7 @@ def get_daily_matches(  # noqa: C901
                 continue
 
             if dt.date() == requested_date:
-                results.append(
-                    {
-                        "match_id": match.id,
-                        "league_id": match.league.id,
-                        "match_date": match.match_date,
-                        "home_team": match.home_team.model_dump(),
-                        "away_team": match.away_team.model_dump(),
-                        "status": match.status,
-                        "prediction": normalized.prediction.model_dump()
-                        if normalized.prediction
-                        else None,
-                    }
-                )
+                results.append(normalized.model_dump())
 
         return results
     except HTTPException:
@@ -169,16 +157,7 @@ def get_team_matches(team_name: str, limit: int = 10) -> list[dict[str, Any]]:
 
         results: list[dict[str, Any]] = []
         for n in sorted_candidates[:limit]:
-            results.append(
-                {
-                    "match_id": n.match.id,
-                    "league_id": n.match.league.id,
-                    "match_date": n.match.match_date,
-                    "home_team": n.match.home_team.model_dump(),
-                    "away_team": n.match.away_team.model_dump(),
-                    "prediction": n.prediction.model_dump() if n.prediction else None,
-                }
-            )
+            results.append(n.model_dump())
 
         return results
     except Exception:

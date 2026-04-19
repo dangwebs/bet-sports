@@ -126,9 +126,14 @@ class PicksService:
         MarketType.AWAY_CARDS_UNDER: 1.1,
     }
 
-    def __init__(self, learning_weights: Optional[LearningWeights] = None):
+    def __init__(
+        self,
+        learning_weights: Optional[LearningWeights] = None,
+        persistence_repo: Optional[Any] = None,
+    ):
         """Initialize with optional learning, context, and confidence services."""
         self.learning_weights = learning_weights or LearningWeights()
+        self.repo = persistence_repo
         self.statistics_service = StatisticsService()
         self.context_analyzer = ContextAnalyzer()
         self.resolution_service = PickResolutionService()  # Centralized validator
@@ -178,6 +183,22 @@ class PicksService:
         if not ML_AVAILABLE:
             return None
 
+        # 1. Try DB first
+        if self.repo:
+            try:
+                from io import BytesIO
+
+                from src.core.constants import ML_MODEL_FILENAME
+
+                model_bytes = self.repo.get_binary_artifact(ML_MODEL_FILENAME)
+                if model_bytes:
+                    model = joblib.load(BytesIO(model_bytes))
+                    logger.info("ML Model loaded successfully from Database")
+                    return model
+            except Exception as e:
+                logger.warning(f"Failed to load model from Database: {e}")
+
+        # 2. Fallback to Disk (Legacy/Migration)
         if not os.path.exists(model_path):
             return None
 
@@ -185,7 +206,7 @@ class PicksService:
             # Note: We trust this local file as it is part of our internal training
             # pipeline
             model = joblib.load(model_path)
-            logger.info(f"ML Model loaded successfully from {model_path}")
+            logger.info(f"ML Model loaded successfully from {model_path} (Disk)")
             return model
         except (FileNotFoundError, ImportError) as e:
             logger.warning(f"Technical failure loading ML model: {e}")
