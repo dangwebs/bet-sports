@@ -9,9 +9,11 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from pytz import timezone
+
+from src.core.paths import BACKEND_ROOT, PROJECT_ROOT
 from src.domain.entities.betting_feedback import (
     BettingFeedback,
     LearningWeights,
@@ -46,9 +48,15 @@ class LearningService:
             weights_path: Path to JSON file for persisting weights (fallback/migration)
             persistence_repo: Repository for DB persistence
         """
-        self.weights_path = weights_path or self.DEFAULT_WEIGHTS_PATH
+        # Legacy locations
+        self.legacy_paths = [
+            PROJECT_ROOT / "learning_weights.json",
+            BACKEND_ROOT / "learning_weights.json",
+            BACKEND_ROOT / self.DEFAULT_WEIGHTS_PATH,
+        ]
         self.repo = persistence_repo
         self._learning_weights: Optional[LearningWeights] = None
+        self.active_legacy_path: Optional[Path] = None
 
     @property
     def learning_weights(self) -> LearningWeights:
@@ -58,39 +66,41 @@ class LearningService:
         return self._learning_weights
 
     def _load_weights(self) -> LearningWeights:
-        """Load learning weights from DB or JSON file (migration)."""
-        # 1. Try DB first
+        """Load learning weights. Prioritizes Legacy Migration to ensure cleanup."""
+        # 1. Check for legacy local files first to ensure migration/cleanup
+        legacy_weights = None
+        for path in self.legacy_paths:
+            if path.exists():
+                try:
+                    logger.info(f"🔄 Legacy weights file found at {path}. Migrating...")
+                    with open(path, "r") as f:
+                        data = json.load(f)
+                    
+                    legacy_weights = self._reconstruct_weights(data)
+                    
+                    # Save to DB immediately to finalize migration
+                    if self.repo:
+                        self._save_to_db(legacy_weights)
+                        # Cleanup local file
+                        try:
+                            path.unlink()
+                            logger.info(f"🗑️ Cleaned up legacy file after migration: {path}")
+                        except Exception as del_err:
+                            logger.warning(f"Failed to remove migrated file: {del_err}")
+                    
+                    # If we found and processed a legacy file, we use it as truth
+                    return legacy_weights
+                except Exception as e:
+                    logger.debug(f"Failed to process legacy weights from {path}: {e}")
+
+        # 2. If no legacy file, try DB
         if self.repo:
             data = self.repo.get_app_state(self.MONGO_KEY)
             if data:
                 return self._reconstruct_weights(data)
 
-        # 2. Migration: Try local file if DB empty
-        if not os.path.exists(self.weights_path):
-            logger.info("No weights found in DB or local file, starting fresh")
-            return LearningWeights()
-
-        try:
-            logger.info(f"🔄 Migrating weights from {self.weights_path} to Database...")
-            with open(self.weights_path, "r") as f:
-                data = json.load(f)
-
-            weights = self._reconstruct_weights(data)
-
-            # Save to DB immediately if repo available
-            if self.repo:
-                self._save_to_db(weights)
-                # Cleanup local file after successful migration
-                try:
-                    os.remove(self.weights_path)
-                    logger.info(f"🗑️ Removed migrated file: {self.weights_path}")
-                except Exception as del_err:
-                    logger.warning(f"Failed to remove migrated file: {del_err}")
-
-            return weights
-        except Exception as e:
-            logger.error(f"Failed to load/migrate weights: {e}, starting fresh")
-            return LearningWeights()
+        logger.info("No weights found in DB or legacy files, starting fresh")
+        return LearningWeights()
 
     def _reconstruct_weights(self, data: dict) -> LearningWeights:
         """Helper to reconstruct LearningWeights from dict."""
@@ -119,23 +129,11 @@ class LearningService:
         )
 
     def _save_weights(self) -> None:
-        """Save learning weights to DB (primary) and JSON file (legacy/transitional)."""
+        """Save learning weights to DB (primary). No more local disk writes."""
         if self.repo:
             self._save_to_db(self.learning_weights)
-
-        # Still attempt file save if not yet deleted?
-        # The user specifically asked to ELIMINATE heavy/unnecessary files.
-        # Once migrated, we stop writing to disk.
-        if not os.path.exists(self.weights_path):
-            return
-
-        try:
-            # Legacy file save (only if file still exists - fallback)
-            data = self._serialize_weights(self.learning_weights)
-            with open(self.weights_path, "w") as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save weights to file: {e}")
+        else:
+            logger.warning("No persistence repository available, weights not saved.")
 
     def _save_to_db(self, weights: LearningWeights) -> None:
         """Save weights to MongoDB."""
