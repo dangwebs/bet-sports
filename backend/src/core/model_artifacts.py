@@ -9,9 +9,17 @@ from src.core.paths import BACKEND_ROOT
 
 def get_model_artifact_paths() -> list[Path]:
     """Return the local ML artifact paths that must not survive a run."""
-    model_paths = [BACKEND_ROOT / ML_MODEL_FILENAME]
+    model_paths = [
+        BACKEND_ROOT / ML_MODEL_FILENAME,
+        BACKEND_ROOT / "learning_weights.json",
+    ]
+    # Include all joblib files in roots and subdirs
+    model_paths.extend(sorted(BACKEND_ROOT.glob("*.joblib")))
+    model_paths.extend(sorted(BACKEND_ROOT.glob("*.csv")))
     model_paths.extend(sorted((BACKEND_ROOT / "ml_models").glob("*.joblib")))
-    return model_paths
+
+    # Deduplicate paths
+    return list(set(model_paths))
 
 
 def cleanup_model_artifacts(logger: logging.Logger) -> None:

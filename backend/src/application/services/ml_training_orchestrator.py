@@ -524,6 +524,7 @@ class MLTrainingOrchestrator:
         learning_service: LearningService,
         resolution_service: PickResolutionService,
         cache_service: CacheService,
+        persistence_repo: Optional[Any] = None,
     ):
         self.training_data_service = training_data_service
         self.statistics_service = statistics_service
@@ -531,6 +532,7 @@ class MLTrainingOrchestrator:
         self.learning_service = learning_service
         self.resolution_service = resolution_service
         self.cache_service = cache_service
+        self.persistence_repo = persistence_repo
         self.feature_extractor = MLFeatureExtractor()
 
     async def run_training_pipeline(
@@ -585,13 +587,28 @@ class MLTrainingOrchestrator:
                         return train_league_models(ml_features, ml_targets)
 
                     loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(None, _train_model)
+                    trained_model = await loop.run_in_executor(None, _train_model)
+
+                    # --- PERSIST TO DB ---
+                    if self.persistence_repo:
+                        from io import BytesIO
+
+                        import joblib
+                        from src.core.constants import ML_MODEL_FILENAME
+
+                        logger.info("💾 Persisting trained model to Database...")
+                        buffer = BytesIO()
+                        joblib.dump(trained_model, buffer)
+                        self.persistence_repo.save_binary_artifact(
+                            ML_MODEL_FILENAME, buffer.getvalue()
+                        )
+                        logger.info("✅ Model persisted to Database successfully.")
 
                     logger.info(
-                        "ML Model trained in memory for the current pipeline run."
+                        "ML Model trained and persisted for the current pipeline run."
                     )
-                except Exception:
-                    logger.exception("Failed to train ML model in memory.")
+                except Exception as e:
+                    logger.exception(f"Failed to train or persist ML model: {e}")
 
             # --- PREPARE RESULTS ---
             accuracy = self._calculate_accuracy(match_history)

@@ -618,17 +618,12 @@ async def main():
         get_training_data_service,
     )
 
-    training_service = get_training_data_service()
-    stats_service = get_statistics_service()
-    learning_service = LearningService()
-
-    # Clear stale predictions
-    from src.infrastructure.repositories.persistence_repository import (
-        get_persistence_repository,
-    )
-
     repo = get_persistence_repository()
     clear_stale_predictions(repo)
+
+    training_service = get_training_data_service()
+    stats_service = get_statistics_service()
+    learning_service = LearningService(persistence_repo=repo)
 
     try:
         # Determine Leagues
@@ -653,7 +648,7 @@ async def main():
         from src.domain.services.ai_picks_service import AIPicksService
 
         weights = learning_service.get_learning_weights()
-        picks_service = AIPicksService(learning_weights=weights)
+        picks_service = AIPicksService(learning_weights=weights, persistence_repo=repo)
 
         # Train per league (delegated)
         for league_id, league_matches in matches_by_league.items():
