@@ -33,6 +33,11 @@ ESPN_LEAGUE_MAPPING = {
     "UCL": "uefa.champions",
     "UEL": "uefa.europa",
     "UECL": "uefa.europa.conf",  # Corrected generic slug for Conference League
+    "LIB": "conmebol.libertadores",
+    "SUD": "conmebol.sudamericana",
+    "COL1": "col.1",
+    "ARG1": "arg.1",
+    "BRA1": "bra.1",
 }
 
 

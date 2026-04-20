@@ -32,4 +32,9 @@ LEAGUE_ID_MAPPING = {
     "B2": 145,  # Challenger Pro League (Belgium 2)
     "P1": 94,  # Primeira Liga
     "P2": 95,  # Liga Portugal 2
+    "COL1": 239,  # Colombia Primera A
+    "ARG1": 128,  # Argentina Primera Division
+    "BRA1": 71,  # Brasil Serie A
+    "LIB": 13,   # Copa Libertadores
+    "SUD": 11,   # Copa Sudamericana
 }

@@ -100,17 +100,22 @@ class TheSportsDBClient:
         # Map internal ID to TheSportsDB ID
         # Values from: https://www.thesportsdb.com/api/v1/json/3/all_leagues.php
         INTERNAL_TO_TSDB = {
-            # "E0": "4328"  # Premier League - disabled to avoid confusion
-            # "E1": "4329"  # Championship
-            # "SP1": "4335"  # La Liga
-            # "D1": "4331"  # Bundesliga
-            # "I1": "4332"  # Serie A - disabled: returns unexpected League One data
-            # "I2": "4333"  # Serie B
-            # "F1": "4334"  # Ligue 1 - disabled: returns unexpected League One data
-            # "F2": "4335"  # Ligue 2
-            # "P1": "4344"  # Primeira Liga - disabled
-            # "N1": "4337"  # Eredivisie - disabled
-            # "B1": "4338"  # Belgium Jupiler Pro League - disabled
+            "E0": "4328",  # Premier League
+            "E1": "4329",  # Championship
+            "SP1": "4335",  # La Liga
+            "D1": "4331",  # Bundesliga
+            "I1": "4332",  # Serie A
+            "I2": "4333",  # Serie B
+            "F1": "4334",  # Ligue 1
+            "F2": "4351",  # Ligue 2 (Corrected ID mapped to separate source if needed)
+            "P1": "4344",  # Primeira Liga
+            "N1": "4337",  # Eredivisie
+            "B1": "4338",  # Belgium Jupiler Pro League
+            "COL1": "4367",  # Colombia Primera A
+            "ARG1": "4393",  # Argentina Primera Division
+            "BRA1": "4351",  # Brasil Serie A
+            "LIB": "4430",   # Copa Libertadores
+            "SUD": "4431",   # Copa Sudamericana
         }
 
         tsdb_id = INTERNAL_TO_TSDB.get(league_id)

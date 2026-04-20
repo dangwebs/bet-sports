@@ -35,6 +35,11 @@ class LocalGithubDataSource:
         "F1": "Ligue 1",
         "P1": "Primeira Liga",
         "N1": "Eredivisie",
+        "COL1": "Liga BetPlay",
+        "ARG1": "Liga Profesional",
+        "BRA1": "Série A",
+        "LIB": "Copa Libertadores",
+        "SUD": "Copa Sudamericana",
         # Add more as needed based on CSV "Division" column
     }
 
