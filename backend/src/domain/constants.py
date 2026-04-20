@@ -41,4 +41,8 @@ LEAGUES_METADATA = {
     "EURO": {"name": "Euro Championship", "country": "International"},
     "LIB": {"name": "Copa Libertadores", "country": "International"},
     "SUD": {"name": "Copa Sudamericana", "country": "International"},
+    # South America
+    "COL1": {"name": "Liga BetPlay", "country": "Colombia"},
+    "ARG1": {"name": "Liga Profesional", "country": "Argentina"},
+    "BRA1": {"name": "Série A", "country": "Brazil"},
 }
