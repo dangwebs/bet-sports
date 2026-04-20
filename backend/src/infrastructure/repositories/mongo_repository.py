@@ -202,8 +202,12 @@ class MongoRepository:
             return doc.get("data")
         return None
 
-    def clear_all_predictions(self):
-        self.match_predictions.delete_many({})
+    def clear_all_predictions(self, league_ids: Optional[List[str]] = None) -> bool:
+        if league_ids:
+            self.match_predictions.delete_many({"league_id": {"$in": league_ids}})
+        else:
+            self.match_predictions.delete_many({})
+        return True
 
     def clear_all_data(self) -> Dict[str, int]:
         """Clear training, predictions and API cache collections."""

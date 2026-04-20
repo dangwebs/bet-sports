@@ -94,12 +94,13 @@ def parse_args(argv: Optional[List[str]] = None):
     return parser.parse_args(argv)
 
 
-def clear_stale_predictions(repo: Any) -> bool:
+def clear_stale_predictions(repo: Any, league_ids: Optional[List[str]] = None) -> bool:
     """Clear stale predictions from persistence repository and log result."""
-    success = repo.clear_all_predictions()
+    success = repo.clear_all_predictions(league_ids=league_ids)
     if success:
+        target = f"for leagues: {league_ids}" if league_ids else "for ALL leagues"
         logger.info(
-            "🗑️  Cleared old match predictions from database to force regeneration."
+            f"🗑️  Cleared old match predictions from database {target} to force regeneration."
         )
     else:
         logger.warning("⚠️  Failed to clear old predictions. Stale data might persist.")
@@ -618,17 +619,17 @@ async def main():
         get_training_data_service,
     )
 
+    # Determine Leagues
+    leagues_to_fetch = [args.league] if args.league else DEFAULT_LEAGUES
+
     repo = get_persistence_repository()
-    clear_stale_predictions(repo)
+    clear_stale_predictions(repo, league_ids=leagues_to_fetch)
 
     training_service = get_training_data_service()
     stats_service = get_statistics_service()
     learning_service = LearningService(persistence_repo=repo)
 
     try:
-        # Determine Leagues
-        leagues_to_fetch = [args.league] if args.league else DEFAULT_LEAGUES
-
         # Fetch Data
         logger.info(
             f"📥 Fetching Training Data ({args.days} days) for {leagues_to_fetch}..."
