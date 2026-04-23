@@ -115,51 +115,62 @@ def group_matches_by_league(matches: List[Any]) -> Dict[str, List[Any]]:
     return matches_by_league
 
 
-def build_training_tasks(
-    league_matches: List[Any],
+def build_global_training_tasks(
+    all_matches: List[Any],
     stats_service: StatisticsService,
     learning_service: LearningService,
-    league_avgs: Any,
-) -> (Dict[str, Any], List[Any]):
-    """Build rolling team stats cache and training tasks list for a league."""
-    team_stats_cache: Dict[str, Any] = {}
+    league_avgs_map: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, List[Any]]]:
+    """
+    Builds a global rolling team stats cache across ALL leagues (domestic + intl)
+    to support the "domestic context for international tournaments" requirement.
+    Generates training tasks grouped by league_id.
+    """
+    global_team_stats_cache: Dict[str, Any] = {}
     empty_stats = stats_service.create_empty_stats_dict()
-    training_tasks: List[Any] = []
+    tasks_by_league: Dict[str, List[Any]] = {}
 
     weights = learning_service.get_learning_weights()
 
-    for match in league_matches:
+    for match in all_matches:
         if match.home_goals is None or match.away_goals is None:
             continue
 
+        league_id = match.league.id
         h_name = stats_service.normalize_team_name(match.home_team.name)
         a_name = stats_service.normalize_team_name(match.away_team.name)
 
-        # Snapshot state BEFORE match
-        raw_home = team_stats_cache.get(h_name, empty_stats).copy()
-        raw_away = team_stats_cache.get(a_name, empty_stats).copy()
+        # Snapshot state BEFORE match (Global context)
+        raw_home_global = global_team_stats_cache.get(h_name, empty_stats).copy()
+        raw_away_global = global_team_stats_cache.get(a_name, empty_stats).copy()
 
         # Init if new
-        if h_name not in team_stats_cache:
-            team_stats_cache[h_name] = raw_home
-        if a_name not in team_stats_cache:
-            team_stats_cache[a_name] = raw_away
+        if h_name not in global_team_stats_cache:
+            global_team_stats_cache[h_name] = raw_home_global
+        if a_name not in global_team_stats_cache:
+            global_team_stats_cache[a_name] = raw_away_global
 
-        # Warmup check (> 3 matches)
-        if raw_home["matches_played"] >= 3 and raw_away["matches_played"] >= 3:
-            training_tasks.append(
-                (match, raw_home, raw_away, league_avgs, None, weights)
+        # Warmup check (> 3 matches globally)
+        if raw_home_global["matches_played"] >= 3 and raw_away_global["matches_played"] >= 3:
+            if league_id not in tasks_by_league:
+                tasks_by_league[league_id] = []
+            
+            # We pass the global state. To strictly support tournament-specific state,
+            # we could also track `league_team_stats_cache`, but for now we pass global 
+            # to fulfill the blended strength requirement.
+            tasks_by_league[league_id].append(
+                (match, raw_home_global, raw_away_global, league_avgs_map.get(league_id), None, weights)
             )
 
-        # Update State
+        # Update State (Global)
         stats_service.update_team_stats_dict(
-            team_stats_cache[h_name], match, is_home=True
+            global_team_stats_cache[h_name], match, is_home=True
         )
         stats_service.update_team_stats_dict(
-            team_stats_cache[a_name], match, is_home=False
+            global_team_stats_cache[a_name], match, is_home=False
         )
 
-    return team_stats_cache, training_tasks
+    return global_team_stats_cache, tasks_by_league
 
 
 def extract_features_from_tasks(training_tasks: List[Any], args: Any):
@@ -228,10 +239,10 @@ async def generate_league_predictions(
             a_name = stats_service.normalize_team_name(match.away_team.name)
 
             # Use current state of stats (after all history processed)
-            raw_home = team_stats_cache.get(
+            raw_home = global_team_stats_cache.get(
                 h_name, stats_service.create_empty_stats_dict()
             )
-            raw_away = team_stats_cache.get(
+            raw_away = global_team_stats_cache.get(
                 a_name, stats_service.create_empty_stats_dict()
             )
 
@@ -397,8 +408,11 @@ async def generate_league_predictions(
 async def train_for_league(
     league_id: str,
     league_matches: List[Any],
+    global_team_stats_cache: Dict[str, Any],
+    training_tasks: List[Any],
     stats_service: StatisticsService,
     learning_service: LearningService,
+    league_avgs: Any,
     args: Any,
     repo: Any,
     aggregator: Any,
@@ -418,14 +432,6 @@ async def train_for_league(
         return
 
     logger.info(f"🏟️ Processing League: {league_id} ({len(league_matches)} matches)")
-
-    # Calculate League Avgs (Specific to this league)
-    league_avgs = stats_service.calculate_league_averages(league_matches)
-
-    # Prepare Rolling Stats
-    team_stats_cache, training_tasks = build_training_tasks(
-        league_matches, stats_service, learning_service, league_avgs
-    )
 
     if not training_tasks:
         return
@@ -651,13 +657,27 @@ async def main():
         weights = learning_service.get_learning_weights()
         picks_service = AIPicksService(learning_weights=weights, persistence_repo=repo)
 
+        # Pre-calculate League Avgs map
+        league_avgs_map = {}
+        for league_id, league_matches in matches_by_league.items():
+            league_avgs_map[league_id] = stats_service.calculate_league_averages(league_matches)
+
+        # Build Global Stats Cache and Tasks
+        global_team_stats_cache, tasks_by_league = build_global_training_tasks(
+            matches, stats_service, learning_service, league_avgs_map
+        )
+
         # Train per league (delegated)
         for league_id, league_matches in matches_by_league.items():
+            league_tasks = tasks_by_league.get(league_id, [])
             await train_for_league(
                 league_id,
                 league_matches,
+                global_team_stats_cache,
+                league_tasks,
                 stats_service,
                 learning_service,
+                league_avgs_map[league_id],
                 args,
                 repo,
                 aggregator,

@@ -245,9 +245,31 @@ class MLFeatureExtractor:
             ref_strictness = 4.5
             features.append(ref_strictness)
 
+            # ============================================================
+            # DOMESTIC VS INTERNATIONAL PERFORMANCE (Global Expansion)
+            # ============================================================
+            def get_win_rate(stats_dict: dict) -> float:
+                if not stats_dict:
+                    return 0.0
+                mp = stats_dict.get("matches_played", 0)
+                if mp == 0:
+                    return 0.0
+                return stats_dict.get("wins", 0) / mp
+
+            # Calculate win rates contextually
+            h_dom_wr = get_win_rate(getattr(home_stats, "domestic_stats", None))
+            h_intl_wr = get_win_rate(getattr(home_stats, "international_stats", None))
+            a_dom_wr = get_win_rate(getattr(away_stats, "domestic_stats", None))
+            a_intl_wr = get_win_rate(getattr(away_stats, "international_stats", None))
+
+            # Feature: difference between intl performance and domestic performance
+            # Positive means they perform better in international matches
+            features.append(float(h_intl_wr - h_dom_wr))
+            features.append(float(a_intl_wr - a_dom_wr))
+
         else:
-            # Padding if no stats provided (39 zeros: 35 original + 4 new
-            # efficiency/interaction features)
-            features.extend([0.0] * 39)
+            # Padding if no stats provided (41 zeros: 35 original + 4 new
+            # efficiency/interaction features + 2 new context features)
+            features.extend([0.0] * 41)
 
         return features

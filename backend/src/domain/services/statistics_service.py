@@ -704,8 +704,7 @@ class StatisticsService:
         }
 
     @staticmethod
-    def update_team_stats_dict(stats: dict, match: Match, is_home: bool):
-        """Update a stats dictionary with a new match result."""
+    def _update_raw_stats_dict(stats: dict, match: Match, is_home: bool):
         goals_for = match.home_goals if is_home else match.away_goals
         goals_against = match.away_goals if is_home else match.home_goals
 
@@ -773,6 +772,24 @@ class StatisticsService:
             stats["matches_with_fouls"] += 1
 
     @staticmethod
+    def update_team_stats_dict(stats: dict, match: Match, is_home: bool):
+        """Update a stats dictionary with a new match result (includes context splitting)."""
+        # Update global blended stats
+        StatisticsService._update_raw_stats_dict(stats, match, is_home)
+
+        # Update contextual stats
+        is_intl = match.league.id in ["UCL", "UEL", "UECL", "WC", "EURO", "LIB", "SUD"]
+        
+        if is_intl:
+            if "international_stats" not in stats:
+                stats["international_stats"] = StatisticsService.create_empty_stats_dict()
+            StatisticsService._update_raw_stats_dict(stats["international_stats"], match, is_home)
+        else:
+            if "domestic_stats" not in stats:
+                stats["domestic_stats"] = StatisticsService.create_empty_stats_dict()
+            StatisticsService._update_raw_stats_dict(stats["domestic_stats"], match, is_home)
+
+    @staticmethod
     def convert_to_domain_stats(team_name: str, raw_stats: dict) -> TeamStatistics:
         """Convert a raw stats dictionary to a TeamStatistics domain entity."""
         mp = raw_stats["matches_played"]
@@ -800,6 +817,8 @@ class StatisticsService:
             recent_yellow_cards=raw_stats.get("recent_yellow_cards", [])[-5:],
             recent_shots=raw_stats.get("recent_shots", [])[-5:],
             recent_form="",  # Form is calculated from full history if needed
+            domestic_stats=raw_stats.get("domestic_stats"),
+            international_stats=raw_stats.get("international_stats"),
         )
 
     def calculate_league_averages(self, matches: List[Match]) -> "LeagueAverages":

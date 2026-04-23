@@ -348,6 +348,10 @@ class TeamStatistics:
     recent_shots: list[int] = field(default_factory=list)  # Last 5 matches shots
 
     recent_form: str = ""  # e.g., "WWDLW"
+
+    # Contexto Local e Internacional (World Cup / Libertadores expansion)
+    domestic_stats: Optional[dict[str, Any]] = field(default=None)
+    international_stats: Optional[dict[str, Any]] = field(default=None)
     data_updated_at: Optional[datetime] = None
 
     @property
