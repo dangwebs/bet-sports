@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import asyncio
 from collections import OrderedDict
 from typing import Any, Optional, TypeVar
 
@@ -203,6 +204,30 @@ class CacheService:
 
     def set_league_averages(self, league_id: str, data: Any) -> None:
         self.set(f"league_averages:{league_id}", data, self.TTL_HISTORICAL)
+
+    # --- Async wrappers ---
+    async def aget(self, key: str) -> Optional[Any]:
+        """Async wrapper for `get` to be used in async contexts.
+
+        Runs the synchronous `get` in a thread to avoid blocking the event loop.
+        """
+        return await asyncio.to_thread(self.get, key)
+
+    async def aset(self, key: str, value: Any, ttl_seconds: int) -> None:
+        """Async wrapper for `set` to be used in async contexts."""
+        await asyncio.to_thread(self.set, key, value, ttl_seconds)
+
+    async def aget_live_matches(self, key: str) -> Optional[Any]:
+        return await self.aget(f"live_matches:{key}")
+
+    async def aset_live_matches(self, data: Any, key: str) -> None:
+        await self.aset(f"live_matches:{key}", data, self.TTL_LIVE_MATCHES)
+
+    async def aget_predictions(self, match_id: str) -> Optional[Any]:
+        return await self.aget(f"predictions:{match_id}")
+
+    async def aset_predictions(self, match_id: str, data: Any) -> None:
+        await self.aset(f"predictions:{match_id}", data, self.TTL_PREDICTIONS)
 
 
 # Singleton instance

@@ -243,7 +243,7 @@ class GetLivePredictionsUseCase:
 
     async def _get_live_matches_or_cached(self, filter_target_leagues: bool):
         cache_key = "filtered" if filter_target_leagues else "all"
-        cached = self.cache_service.get_live_matches(cache_key)
+        cached = await self.cache_service.aget_live_matches(cache_key)
         if cached is not None:
             logger.info("Returning %d cached live matches", len(cached))
             return cached, True, cache_key, None
@@ -261,7 +261,7 @@ class GetLivePredictionsUseCase:
 
         if not matches:
             # Cache empty result for short period to avoid hammering API
-            self.cache_service.set_live_matches([], cache_key)
+            await self.cache_service.aset_live_matches([], cache_key)
             return [], False, cache_key, None
 
         return matches, False, cache_key, source_used
@@ -371,6 +371,28 @@ class GetLivePredictionsUseCase:
         # Pre-fetch bulk history for active leagues (if available)
         bulk_history = await self._prefetch_bulk_history(matches)
 
+        # Pre-fetch pre-calculated predictions in bulk to avoid N+1 DB calls
+        pre_calculated_map: dict = {}
+        # Use async mongo adapter when available to prefetch pre-calculated predictions
+        try:
+            from src.infrastructure.repositories.async_mongo_adapter import (
+                get_async_mongo_repository,
+            )
+
+            async_repo = get_async_mongo_repository()
+            match_ids = [m.id for m in matches]
+            pre_calculated_map = await async_repo.get_match_predictions_bulk(match_ids)
+        except Exception as e:
+            # Fallback to sync persistence repository if async adapter fails
+            logger.warning("Bulk prefetch predictions (async) failed: %s", e)
+            if self.persistence_repository:
+                try:
+                    pre_calculated_map = await asyncio.to_thread(
+                        self.persistence_repository.get_match_predictions_bulk, [m.id for m in matches]
+                    )
+                except Exception as e2:
+                    logger.warning("Bulk prefetch predictions (threaded) failed: %s", e2)
+
         # Generate predictions for each match
         results: List[MatchPredictionDTO] = []
 
@@ -382,7 +404,7 @@ class GetLivePredictionsUseCase:
                 start_time = time.time()
 
             processed = await self._process_single_live_match(
-                match, bulk_history, start_time
+                match, bulk_history, start_time, pre_calculated_map
             )
             results.append(processed)
 
@@ -416,9 +438,8 @@ class GetLivePredictionsUseCase:
 
         Uses all available historical data for maximum accuracy.
         """
-        # Check prediction cache
-        # Check prediction cache early
-        cached_pred = self.cache_service.get_predictions(match.id)
+        # Check prediction cache (async-safe)
+        cached_pred = await self.cache_service.aget_predictions(match.id)
         if cached_pred is not None:
             return cached_pred
 
@@ -467,38 +488,46 @@ class GetLivePredictionsUseCase:
                 else None
             )
 
-        # Generate prediction via prediction service
-        prediction = self.prediction_service.generate_prediction(
-            match=match,
-            home_stats=home_stats,
-            away_stats=away_stats,
-            league_averages=league_averages,
-            global_averages=global_averages,
-            data_sources=data_sources_used,
+        # Generate prediction via prediction service (offload to threadpool)
+        prediction = await asyncio.to_thread(
+            lambda: self.prediction_service.generate_prediction(
+                match=match,
+                home_stats=home_stats,
+                away_stats=away_stats,
+                league_averages=league_averages,
+                global_averages=global_averages,
+                data_sources=data_sources_used,
+            )
         )
 
-        # Generate Suggested Picks
-        picks_container = self.picks_service.generate_suggested_picks(
-            match=match,
-            home_stats=home_stats,
-            away_stats=away_stats,
-            league_averages=league_averages,
-            predicted_home_goals=prediction.predicted_home_goals,
-            predicted_away_goals=prediction.predicted_away_goals,
-            home_win_prob=prediction.home_win_probability,
-            draw_prob=prediction.draw_probability,
-            away_win_prob=prediction.away_win_probability,
+        # Generate Suggested Picks (offload to threadpool)
+        picks_container = await asyncio.to_thread(
+            lambda: self.picks_service.generate_suggested_picks(
+                match=match,
+                home_stats=home_stats,
+                away_stats=away_stats,
+                league_averages=league_averages,
+                predicted_home_goals=prediction.predicted_home_goals,
+                predicted_away_goals=prediction.predicted_away_goals,
+                home_win_prob=prediction.home_win_probability,
+                draw_prob=prediction.draw_probability,
+                away_win_prob=prediction.away_win_probability,
+            )
         )
 
         # Convert to DTO and cache
         prediction_dto = self._prediction_to_dto(prediction, picks_container.picks)
-        self.cache_service.set_predictions(match.id, prediction_dto)
+        await self.cache_service.aset_predictions(match.id, prediction_dto)
 
         return prediction_dto
         return prediction_dto
 
     async def _process_single_live_match(
-        self, match: Match, bulk_history: dict, start_time: float
+        self,
+        match: Match,
+        bulk_history: dict,
+        start_time: float,
+        pre_calculated_map: dict = None,
     ) -> MatchPredictionDTO:
         """Process a single live match: try DB lookup, otherwise run realtime inference.
 
@@ -507,23 +536,32 @@ class GetLivePredictionsUseCase:
         try:
             # 1. ATTEMPT DB LOOKUP (Pre-calculated in Training Action)
             pre_calculated_dto = None
-            if self.persistence_repository:
-                pre_calculated_data = self.persistence_repository.get_match_prediction(
-                    match.id
-                )
-                if pre_calculated_data:
-                    try:
-                        pre_calculated_dto = MatchPredictionDTO(**pre_calculated_data)
-                        logger.info(
-                            "✓ Using pre-calculated data from DB for match %s",
-                            match.id,
-                        )
-                    except Exception as parse_e:
-                        logger.warning(
-                            "Failed to parse pre-calculated data for %s: %s",
-                            match.id,
-                            parse_e,
-                        )
+            # First try the bulk-prefetched map to avoid per-match DB calls
+            pre_calculated_data = None
+            if pre_calculated_map and match.id in pre_calculated_map:
+                pre_calculated_data = pre_calculated_map.get(match.id)
+
+            if not pre_calculated_data and self.persistence_repository:
+                try:
+                    pre_calculated_data = await asyncio.to_thread(
+                        self.persistence_repository.get_match_prediction, match.id
+                    )
+                except Exception as e:
+                    logger.warning("Single pre-calculated lookup failed: %s", e)
+
+            if pre_calculated_data:
+                try:
+                    pre_calculated_dto = MatchPredictionDTO(**pre_calculated_data)
+                    logger.info(
+                        "✓ Using pre-calculated data from DB for match %s",
+                        match.id,
+                    )
+                except Exception as parse_e:
+                    logger.warning(
+                        "Failed to parse pre-calculated data for %s: %s",
+                        match.id,
+                        parse_e,
+                    )
 
             if pre_calculated_dto:
                 # Update potentially stale live data (score, minute) while keeping

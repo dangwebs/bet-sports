@@ -95,9 +95,12 @@ class LearningService:
 
         # 2. If no legacy file, try DB
         if self.repo:
-            data = self.repo.get_app_state(self.MONGO_KEY)
-            if data:
-                return self._reconstruct_weights(data)
+            try:
+                data = self.repo.get_app_state(self.MONGO_KEY)
+                if data:
+                    return self._reconstruct_weights(data)
+            except Exception as e:
+                logger.warning("Failed to read learning weights from repo: %s", e)
 
         logger.info("No weights found in DB or legacy files, starting fresh")
         return LearningWeights()

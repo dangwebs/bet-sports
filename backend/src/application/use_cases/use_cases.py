@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -531,7 +532,7 @@ class GetPredictionsUseCase:
 
         return match_tasks, matches_processing_data
 
-    def _try_serve_cached_predictions(
+    async def _try_serve_cached_predictions(
         self, league_id: str, force_refresh: bool, cache_service, cache_key: str
     ) -> "PredictionsResponseDTO | None":
         """Attempt to serve predictions from ephemeral or persistent cache.
@@ -549,15 +550,24 @@ class GetPredictionsUseCase:
         # 0.1 Check for new data in DB first (Versioning/Sync)
         db_data, db_last_updated = (None, None)
         if self.persistence_repository:
-            (
-                db_data,
-                db_last_updated,
-            ) = self.persistence_repository.get_training_result_with_timestamp(
-                cache_key
-            )
+            try:
+                from src.infrastructure.repositories.async_mongo_adapter import (
+                    get_async_mongo_repository,
+                )
+
+                async_repo = get_async_mongo_repository()
+                db_data, db_last_updated = await async_repo.get_training_result_with_timestamp(
+                    cache_key
+                )
+            except Exception:
+                # Fallback to threaded sync repo
+                db_data, db_last_updated = await asyncio.to_thread(
+                    self.persistence_repository.get_training_result_with_timestamp, cache_key
+                )
 
         # 0.2 Try Ephemeral Cache (Memory/Disk)
-        cached_response = cache_service.get(cache_key)
+        # Use thread offload for potentially blocking cache implementations
+        cached_response = await asyncio.to_thread(cache_service.get, cache_key)
 
         # SYNC LOGIC: If we have cached response, check if it's stale compared to DB
         is_stale = False
@@ -580,8 +590,8 @@ class GetPredictionsUseCase:
         # 0.3 Try Persistent DB (PostgreSQL fallback)
         if db_data:
             logger.info("Serving persistent (PostgreSQL) predictions for %s", league_id)
-            # Warm up ephemeral cache for next time
-            cache_service.set(cache_key, db_data, ttl_seconds=86400)
+            # Warm up ephemeral cache for next time (offload to thread)
+            await asyncio.to_thread(cache_service.set, cache_key, db_data, ttl_seconds=86400)
             response = PredictionsResponseDTO(**db_data)
 
             # STRICT DATE FILTERING
@@ -725,25 +735,20 @@ class GetPredictionsUseCase:
             logger.warning("Error comparing cache vs db timestamp: %s", e)
             return bool(db_last_updated)
 
-    def _persist_response_and_predictions(
+    async def _persist_response_and_predictions(
         self, cache_service, cache_key: str, response, predictions: list, league_id: str
     ) -> None:
         """Persist response to ephemeral cache and optional persistent repository.
 
         This consolidates caching and DB persistence logic to keep `execute()` small.
+        Uses async adapter when available to avoid blocking the event loop.
         """
         try:
-            # 1. Ephemeral Cache
-            cache_service.set(cache_key, response.model_dump(), ttl_seconds=86400)
+            # 1. Ephemeral Cache (offload to thread if implementation is blocking)
+            await asyncio.to_thread(cache_service.set, cache_key, response.model_dump(), ttl_seconds=86400)
 
             # 2. Persistent DB (Fallback for restarts/deployments)
             if self.persistence_repository:
-                self.persistence_repository.save_training_result(
-                    cache_key, response.model_dump()
-                )
-
-                # Massive inference storage (Individual match predictions for
-                # instant access)
                 prediction_batch = [
                     {
                         "match_id": p_dto.match.id,
@@ -753,13 +758,30 @@ class GetPredictionsUseCase:
                     }
                     for p_dto in predictions
                 ]
-                self.persistence_repository.bulk_save_predictions(prediction_batch)
-                logger.info(
-                    "✓ Massively saved %s pre-calculated predictions for league %s "
-                    "in PostgreSQL",
-                    len(predictions),
-                    league_id,
-                )
+
+                try:
+                    from src.infrastructure.repositories.async_mongo_adapter import (
+                        get_async_mongo_repository,
+                    )
+
+                    async_repo = get_async_mongo_repository()
+                    await async_repo.save_training_result(cache_key, response.model_dump())
+                    await async_repo.bulk_save_predictions(prediction_batch)
+                    logger.info(
+                        "✓ Massively saved %s pre-calculated predictions for league %s (async)",
+                        len(predictions),
+                        league_id,
+                    )
+                except Exception as e:
+                    logger.warning("Async persist failed, falling back to threaded sync: %s", e)
+                    # Fallback to threaded sync calls
+                    await asyncio.to_thread(self.persistence_repository.save_training_result, cache_key, response.model_dump())
+                    await asyncio.to_thread(self.persistence_repository.bulk_save_predictions, prediction_batch)
+                    logger.info(
+                        "✓ Massively saved %s pre-calculated predictions for league %s (threaded)",
+                        len(predictions),
+                        league_id,
+                    )
         except Exception as e:
             logger.warning("Failed to cache league predictions: %s", e)
 
@@ -819,7 +841,7 @@ class GetPredictionsUseCase:
         # Unified Cache Key for League Forecasts
         cache_key = f"forecasts:league_{league_id}"
 
-        cached = self._try_serve_cached_predictions(
+        cached = await self._try_serve_cached_predictions(
             league_id, force_refresh, cache_service, cache_key
         )
         if cached:
@@ -903,7 +925,7 @@ class GetPredictionsUseCase:
         )
 
         # Persist results (ephemeral cache + optional persistent DB)
-        self._persist_response_and_predictions(
+        await self._persist_response_and_predictions(
             cache_service, cache_key, response, predictions, league_id
         )
 

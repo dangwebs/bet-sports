@@ -16,6 +16,7 @@ from src.application.use_cases.suggested_picks_use_case import (
 from src.dependencies import (
     get_cache_service,
     get_data_sources,
+    get_async_learning_service,
     get_learning_service,
     get_prediction_service,
     get_statistics_service,
@@ -31,7 +32,7 @@ async def get_suggested_picks(
     data_sources=Depends(get_data_sources),
     prediction_service=Depends(get_prediction_service),
     statistics_service=Depends(get_statistics_service),
-    learning_service: LearningService = Depends(get_learning_service),
+    learning_service: LearningService = Depends(get_async_learning_service),
     cache_service=Depends(get_cache_service),
 ) -> MatchSuggestedPicksResponse:
     """Generate suggested picks using the real use case and services."""

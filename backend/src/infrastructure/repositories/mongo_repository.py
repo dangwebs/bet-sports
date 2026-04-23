@@ -131,6 +131,20 @@ class MongoRepository:
             return doc.get("data")
         return None
 
+    def get_match_predictions_bulk(self, match_ids: List[str]) -> Dict[str, dict]:
+        """Return a dict mapping match_id -> prediction data for active (non-expired) docs."""
+        if not match_ids:
+            return {}
+        docs = self.match_predictions.find(
+            {"match_id": {"$in": match_ids}, "expires_at": {"$gt": get_current_time()}}
+        )
+        result: Dict[str, dict] = {}
+        for doc in docs:
+            mid = doc.get("match_id")
+            if mid:
+                result[mid] = doc.get("data")
+        return result
+
     def bulk_save_predictions(self, predictions_data: List[dict]):
         if not predictions_data:
             return

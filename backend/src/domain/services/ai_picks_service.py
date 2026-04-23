@@ -9,6 +9,7 @@ Extends the standard PicksService to provide "Exclusive AI Picks" driven by:
 """
 
 import logging
+import re
 from typing import List, Optional
 
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
@@ -83,6 +84,8 @@ class AIPicksService(PicksService):
         MarketType.CARDS_OVER,
         MarketType.RED_CARDS,
     }
+
+    _LINE_REGEX = re.compile(r"(\d+\.?\d*)")
 
     def generate_suggested_picks(
         self,
@@ -259,7 +262,24 @@ class AIPicksService(PicksService):
         """
         refined_picks = []
 
-        for pick in picks:
+        # Pre-compute ML predictions in batch to avoid repeated Python->C crossing
+        target_model = ml_model if ml_model else self.ml_model
+        ml_confidences = None
+        if target_model:
+            try:
+                features_batch = [MLFeatureExtractor.extract_features(p) for p in picks]
+                probs = target_model.predict_proba(features_batch)
+                ml_confidences = []
+                for p in probs:
+                    if len(p) > 1:
+                        ml_confidences.append(float(p[1]))
+                    else:
+                        ml_confidences.append(float(p[0]))
+            except Exception as e:
+                logger.debug(f"ML batch prediction failed: {e}")
+                ml_confidences = [0.0] * len(picks)
+
+        for idx, pick in enumerate(picks):
             market_type = pick.market_type
 
             # PHASE A: Model-First Filtering (LearningWeights)
@@ -304,15 +324,12 @@ class AIPicksService(PicksService):
 
             # --- PHASE C: ML Confirmation (Predict Proba) ---
             ml_confidence = 0.0
-            target_model = ml_model if ml_model else self.ml_model
-
-            if target_model:
+            if ml_confidences is not None:
                 try:
-                    features = [MLFeatureExtractor.extract_features(pick)]
-                    ml_confidence = target_model.predict_proba(features)[0][1]
+                    ml_confidence = ml_confidences[idx]
                     pick.ml_confidence = float(ml_confidence)
-                except Exception as e:
-                    logger.debug(f"ML prediction failed for pick: {e}")
+                except Exception:
+                    ml_confidence = 0.0
 
             # --- PHASE D: AI Locks Generation (HIGH PRECISION MODE) ---
             # Criteria: Prob > 65%, Weight >= 1.0, ML > 75%
@@ -527,9 +544,7 @@ class AIPicksService(PicksService):
         label = pick.market_label.lower()
 
         # Detectar línea del label (e.g., "Menos de 6.5 corners" -> 6.5)
-        import re
-
-        line_match = re.search(r"(\d+\.?\d*)", pick.market_label)
+        line_match = self._LINE_REGEX.search(pick.market_label)
         line = float(line_match.group(1)) if line_match else 0.0
 
         # Regla 1: Corners Under con línea < 9.5

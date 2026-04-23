@@ -36,6 +36,7 @@ services:
     environment:
       MONGO_URI: "mongodb://admin:adminpassword@mongodb:27017/"
       MONGO_DB_NAME: "bjj_betsports"
+      MONGO_ASYNC_MODE: ${MONGO_ASYNC_MODE:-}  # empty=auto, on=Motor, off=sync
       DISABLE_ML_TRAINING: ${DISABLE_ML_TRAINING:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       N_JOBS: ${N_JOBS:-2}

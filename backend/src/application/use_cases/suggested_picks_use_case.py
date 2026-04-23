@@ -9,6 +9,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+import asyncio
+
 from pytz import timezone
 from src.application.dtos.dtos import (
     BettingFeedbackRequestDTO,
@@ -84,8 +86,8 @@ class GetSuggestedPicksUseCase:
                     generated_at=get_current_time(),
                 )
 
-            # 1.5 Fetch Global Averages
-            global_avg_data = self.cache_service.get("global_statistical_averages")
+            # 1.5 Fetch Global Averages (async-safe)
+            global_avg_data = await self.cache_service.aget("global_statistical_averages")
             global_averages = None
             if global_avg_data:
                 from src.domain.value_objects.value_objects import LeagueAverages
@@ -157,35 +159,39 @@ class GetSuggestedPicksUseCase:
                 prediction_sources.append("The Odds API")
             if home_elo:
                 prediction_sources.append("ClubElo")
-            # 5. Generate prediction
-            prediction = self.prediction_service.generate_prediction(
-                match=match,
-                home_stats=home_stats,
-                away_stats=away_stats,
-                league_averages=league_averages,
-                global_averages=global_averages,
-                data_sources=prediction_sources,
-                highlights_url=highlights_url,
-                real_time_odds=rt_odds,
-                home_elo=home_elo,
-                away_elo=away_elo,
+            # 5. Generate prediction (offload CPU/blocking work to threadpool)
+            prediction = await asyncio.to_thread(
+                lambda: self.prediction_service.generate_prediction(
+                    match=match,
+                    home_stats=home_stats,
+                    away_stats=away_stats,
+                    league_averages=league_averages,
+                    global_averages=global_averages,
+                    data_sources=prediction_sources,
+                    highlights_url=highlights_url,
+                    real_time_odds=rt_odds,
+                    home_elo=home_elo,
+                    away_elo=away_elo,
+                )
             )
 
-            # 6. Generate suggested picks
-            suggested_picks_container = self.picks_service.generate_suggested_picks(
-                match=match,
-                home_stats=home_stats
-                if home_stats and home_stats.matches_played > 0
-                else None,
-                away_stats=away_stats
-                if away_stats and away_stats.matches_played > 0
-                else None,
-                league_averages=league_averages,
-                predicted_home_goals=prediction.predicted_home_goals,
-                predicted_away_goals=prediction.predicted_away_goals,
-                home_win_prob=prediction.home_win_probability,
-                draw_prob=prediction.draw_probability,
-                away_win_prob=prediction.away_win_probability,
+            # 6. Generate suggested picks (offload to threadpool)
+            suggested_picks_container = await asyncio.to_thread(
+                lambda: self.picks_service.generate_suggested_picks(
+                    match=match,
+                    home_stats=home_stats
+                    if home_stats and home_stats.matches_played > 0
+                    else None,
+                    away_stats=away_stats
+                    if away_stats and away_stats.matches_played > 0
+                    else None,
+                    league_averages=league_averages,
+                    predicted_home_goals=prediction.predicted_home_goals,
+                    predicted_away_goals=prediction.predicted_away_goals,
+                    home_win_prob=prediction.home_win_probability,
+                    draw_prob=prediction.draw_probability,
+                    away_win_prob=prediction.away_win_probability,
+                )
             )
 
             # 7. Convert to DTO
@@ -304,11 +310,10 @@ class GetSuggestedPicksUseCase:
         # This is vital when the account is suspended/limited but we already fetched the
         # list
         try:
-            from src.infrastructure.cache.cache_service import get_cache_service
-
-            cache = get_cache_service()
+            # Use injected cache_service (async-safe wrapper present)
+            cache = self.cache_service
             for key in ["filtered", "all"]:
-                live_preds = cache.get_live_matches(key)
+                live_preds = await cache.aget_live_matches(key)
                 if live_preds:
                     # live_preds is List[MatchPredictionDTO]
                     for lp in live_preds:

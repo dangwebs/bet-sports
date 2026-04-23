@@ -474,7 +474,7 @@ async def prepare_datasets(
 
 def train_league_models(ml_features: List[Any], ml_targets: List[int]):
     """Train a RandomForestClassifier on the provided features/targets and return it."""
-    clf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
+    clf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
     clf.fit(ml_features, ml_targets)
     return clf
 

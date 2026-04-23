@@ -24,6 +24,7 @@ from src.domain.services.prediction_service import PredictionService
 from src.domain.services.risk_management.risk_manager import RiskManager
 from src.domain.services.statistics_service import StatisticsService
 from src.infrastructure.cache.cache_service import get_cache_service
+from src.infrastructure.repositories.async_mongo_adapter import get_async_mongo_repository
 from src.infrastructure.data_sources.espn import ESPNSource
 from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
 from src.infrastructure.data_sources.football_data_uk import FootballDataUKSource
@@ -150,6 +151,39 @@ def get_training_data_service() -> TrainingDataService:
 def get_persistence_repository() -> MongoRepository:
     """Get the mongo repository instance (cached singleton)."""
     return get_mongo_repository()
+
+
+def get_async_persistence_repository() -> object:
+    """Return an async-friendly persistence repository (Motor-native when available).
+
+    Use this in FastAPI async handlers to avoid blocking the event loop.
+    """
+    return get_async_mongo_repository()
+
+
+async def get_async_learning_service() -> "LearningService":
+    """Async factory that returns a LearningService-like object preloaded with
+    learning weights fetched from the async repository.
+
+    This avoids calling the sync `LearningService._load_weights` inside the
+    event loop.
+    """
+    repo = get_async_persistence_repository()
+    svc = LearningService(persistence_repo=None)
+    try:
+        data = await repo.get_app_state(LearningService.MONGO_KEY)
+    except Exception:
+        data = None
+
+    if data:
+        try:
+            svc._learning_weights = svc._reconstruct_weights(data)
+        except Exception:
+            svc._learning_weights = svc.get_learning_weights()
+    else:
+        svc._learning_weights = svc.get_learning_weights()
+
+    return svc
 
 
 @lru_cache()
