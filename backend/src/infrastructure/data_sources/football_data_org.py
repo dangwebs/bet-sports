@@ -144,11 +144,13 @@ class FootballDataOrgSource:
 
         repo = None
         if use_cache:
-            from src.dependencies import get_persistence_repository
-
             try:
-                repo = get_persistence_repository()
-                cached_data = repo.get_cached_response(endpoint, params)
+                from src.infrastructure.repositories.async_mongo_adapter import (
+                    get_async_mongo_repository,
+                )
+
+                repo = get_async_mongo_repository()
+                cached_data = await repo.get_cached_response(endpoint, params)
                 if cached_data:
                     self._memory_cache[cache_key] = cached_data
                     return cached_data
@@ -194,7 +196,10 @@ class FootballDataOrgSource:
 
                     self._memory_cache[cache_key] = data
                     if use_cache and repo:
-                        repo.save_cached_response(endpoint, data, params, ttl_seconds)
+                        try:
+                            await repo.save_cached_response(endpoint, data, params, ttl_seconds)
+                        except Exception as e:
+                            logger.debug("Failed to persist cached response async: %s", e)
 
                     return data
 

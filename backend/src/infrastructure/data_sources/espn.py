@@ -8,7 +8,7 @@ Endpoints:
 - Scoreboard: http://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard
 - Summary: http://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary
 """
-
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -22,17 +22,39 @@ logger = logging.getLogger(__name__)
 
 # Mapping internal league codes to ESPN league slugs
 ESPN_LEAGUE_MAPPING = {
-    "E0": "eng.1",  # Premier League
-    "SP1": "esp.1",  # La Liga
-    "D1": "ger.1",  # Bundesliga
-    "I1": "ita.1",  # Serie A
-    "F1": "fra.1",  # Ligue 1
-    "B1": "bel.1",  # Jupiler Pro League (Belgium)
-    "P1": "por.1",  # Primeira Liga (check availability)
-    "N1": "ned.1",  # Eredivisie
+    # England
+    "E0": "eng.1",
+    "E1": "eng.2",
+    "E_FA": "eng.fa",
+    "E2": "eng.3",
+    "E3": "eng.4",
+    # Spain
+    "SP1": "esp.1",
+    "SP2": "esp.2",
+    "SP_C": "esp.copa_del_rey",
+    # Germany
+    "D1": "ger.1",
+    "D2": "ger.2",
+    # Italy
+    "I1": "ita.1",
+    "I2": "ita.2",
+    # France
+    "F1": "fra.1",
+    "F2": "fra.2",
+    # Others
+    "B1": "bel.1",
+    "B2": "bel.2",
+    "P1": "por.1",
+    "P2": "por.2",
+    "N1": "ned.1",
+    "N2": "ned.2",
+    # International Tournaments
     "UCL": "uefa.champions",
     "UEL": "uefa.europa",
-    "UECL": "uefa.europa.conf",  # Corrected generic slug for Conference League
+    "UECL": "uefa.europa.conf",
+    "EURO": "uefa.euro",
+    "WC": "fifa.world",
+    # South America
     "LIB": "conmebol.libertadores",
     "SUD": "conmebol.sudamericana",
     "COL1": "col.1",
@@ -290,8 +312,7 @@ class ESPNSource:
         end_date: Optional[datetime] = None,
     ) -> List[Match]:
         """
-        Get finished matches from ESPN.
-        Iterates through dates and leagues.
+        Get finished matches from ESPN using mass concurrency with Semaphore.
         """
         matches = []
         leagues_to_fetch = league_codes or list(ESPN_LEAGUE_MAPPING.keys())
@@ -304,59 +325,62 @@ class ESPNSource:
                 date_range.append(curr.strftime("%Y%m%d"))
                 curr += timedelta(days=1)
         elif days_back:
-            date_range = []
-            for i in range(days_back):
-                d = datetime.utcnow() - timedelta(days=i)
-                date_range.append(d.strftime("%Y%m%d"))
+            date_range = [
+                (datetime.utcnow() - timedelta(days=i)).strftime("%Y%m%d")
+                for i in range(days_back)
+            ]
         else:
-            # Default to last 7 days
             date_range = [
                 (datetime.utcnow() - timedelta(days=i)).strftime("%Y%m%d")
                 for i in range(7)
             ]
 
-        for code in leagues_to_fetch:
+        semaphore = asyncio.Semaphore(10)  # Rate limit concurrency
+
+        async def fetch_scoreboard(code: str, date_str: str):
             slug = ESPN_LEAGUE_MAPPING.get(code)
             if not slug:
-                continue
-
-            logger.info(
-                "ESPN: Fetching history for %s (%s) for %d days...",
-                code,
-                slug,
-                len(date_range),
-            )
-
-            # Fetch scoreboard for each date in range
-            # Note: For large ranges, prefer seasonal scoreboard endpoint.
-            # ESPN's `dates=YYYYMMDD` endpoint is reliable for per-day stats.
-            for date_str in date_range:
+                return []
+            async with semaphore:
                 url = f"{self.BASE_URL}/{slug}/scoreboard"
                 data = await self._make_request(url, {"dates": date_str})
+            
+            if not data or "events" not in data:
+                return []
+            
+            event_tasks = []
+            for event in data["events"]:
+                status = event.get("status", {}).get("type", {}).get("state")
+                if status == "post":
+                    match_id = event.get("id")
+                    event_tasks.append(self._get_match_details_atomic(slug, match_id, event, code, semaphore))
+            
+            return await asyncio.gather(*event_tasks)
 
-                if not data or "events" not in data:
-                    continue
-
-                for event in data["events"]:
-                    status = event.get("status", {}).get("type", {}).get("state")
-                    if status != "post":  # Finalized
-                        continue
-
-                    try:
-                        match_id = event.get("id")
-                        # Detailed fetch for stats
-                        match = await self._get_match_details(
-                            slug, match_id, event, code
-                        )
-                        if match:
-                            matches.append(match)
-
-                    except Exception as e:
-                        logger.debug(f"Error parsing ESPN match: {e}")
-                        continue
+        # 1. Parallel Scoreboard Fetching
+        tasks = []
+        for code in leagues_to_fetch:
+            for date_str in date_range:
+                tasks.append(fetch_scoreboard(code, date_str))
+        
+        logger.info(f"ESPN: Fetching history for {len(leagues_to_fetch)} leagues across {len(date_range)} days...")
+        results = await asyncio.gather(*tasks)
+        
+        # Flatten results
+        for day_results in results:
+            for match in day_results:
+                if match:
+                    matches.append(match)
 
         logger.info(f"ESPN: fetched {len(matches)} matches total")
         return matches
+
+    async def _get_match_details_atomic(
+        self, slug: str, match_id: str, event_summary: dict, league_code: str, semaphore: asyncio.Semaphore
+    ) -> Optional[Match]:
+        """Atomic helper for concurrent match details fetching."""
+        async with semaphore:
+            return await self._get_match_details(slug, match_id, event_summary, league_code)
 
     async def _get_match_details(
         self, slug: str, match_id: str, event_summary: dict, league_code: str
@@ -538,7 +562,7 @@ class ESPNSource:
         self, league_code: str, days_ahead: int = 7
     ) -> List[Match]:
         """
-        Get upcoming matches for a league with odds.
+        Get upcoming matches for a league with odds in parallel.
         """
         matches = []
         slug = ESPN_LEAGUE_MAPPING.get(league_code)
@@ -552,36 +576,45 @@ class ESPNSource:
             d = now + timedelta(days=i)
             dates_to_fetch.append(d.strftime("%Y%m%d"))
 
-        # Fetch scoreboard for these dates
-        for date_str in dates_to_fetch:
+        semaphore = asyncio.Semaphore(5)
+
+        async def fetch_day_upcoming(date_str: str):
             url = f"{self.BASE_URL}/{slug}/scoreboard"
-            data = await self._make_request(url, {"dates": date_str})
-
+            async with semaphore:
+                data = await self._make_request(url, {"dates": date_str})
+            
             if not data or "events" not in data:
-                continue
-
+                return []
+            
+            match_tasks = []
             for event in data["events"]:
                 status = event.get("status", {}).get("type", {}).get("state")
+                if status in ["pre"]:
+                    match_id = event.get("id")
+                    match_tasks.append(self._fetch_upcoming_match_details(slug, match_id, event, league_code, semaphore))
+            
+            return await asyncio.gather(*match_tasks)
 
-                # Check for scheduled matches
-                if status not in ["pre"]:
-                    continue
-
-                match_id = event.get("id")
-
-                # Fetch summary to get Odds (pickcenter)
-                summary = await self._make_request(
-                    f"{self.BASE_URL}/{slug}/summary", {"event": match_id}
-                )
-
-                if not summary:
-                    continue
-
-                match = self._parse_upcoming_match(event, summary, league_code)
-                if match:
-                    matches.append(match)
+        results = await asyncio.gather(*[fetch_day_upcoming(d) for d in dates_to_fetch])
+        
+        for day_matches in results:
+            for m in day_matches:
+                if m:
+                    matches.append(m)
 
         return matches
+
+    async def _fetch_upcoming_match_details(
+        self, slug: str, match_id: str, event: dict, league_code: str, semaphore: asyncio.Semaphore
+    ) -> Optional[Match]:
+        """Fetch summary to get Odds (pickcenter) in parallel."""
+        async with semaphore:
+            summary = await self._make_request(
+                f"{self.BASE_URL}/{slug}/summary", {"event": match_id}
+            )
+            if not summary:
+                return None
+            return self._parse_upcoming_match(event, summary, league_code)
 
     def _parse_upcoming_match(
         self, event: dict, summary: dict, league_code: str

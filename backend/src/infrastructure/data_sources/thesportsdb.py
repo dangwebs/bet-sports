@@ -116,6 +116,11 @@ class TheSportsDBClient:
             "BRA1": "4351",  # Brasil Serie A
             "LIB": "4430",   # Copa Libertadores
             "SUD": "4431",   # Copa Sudamericana
+            "WC": "4362",    # FIFA World Cup
+            "UCL": "4480",   # UEFA Champions League
+            "UEL": "4481",   # UEFA Europa League
+            "UECL": "4843",  # UEFA Conference League
+            "EURO": "4326",  # UEFA European Championship
         }
 
         tsdb_id = INTERNAL_TO_TSDB.get(league_id)
