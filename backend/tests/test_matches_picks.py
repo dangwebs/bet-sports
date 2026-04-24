@@ -76,14 +76,14 @@ def test_suggested_picks_endpoints():
         assert r.status_code == 200
         assert r.json()["match_id"] == "foo"
 
-    payload = {
-        "match_id": "foo",
-        "market_type": "win",
-        "prediction": "home",
-        "actual_outcome": "home",
-        "was_correct": True,
-        "odds": 1.5,
-    }
+        payload = {
+            "match_id": "foo",
+            "market_type": "win",
+            "prediction": "home",
+            "actual_outcome": "home",
+            "was_correct": True,
+            "odds": 1.5,
+        }
         r2 = client.post("/api/v1/suggested-picks/feedback", json=payload)
         assert r2.status_code == 200
         assert r2.json()["success"] is True
