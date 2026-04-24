@@ -676,7 +676,7 @@ class StatisticsService:
         )
 
     @staticmethod
-    def create_empty_stats_dict() -> dict:
+    def create_empty_stats_dict() -> dict[str, Any]:
         """Create a dictionary for tracking stats incrementally."""
         return {
             "matches_played": 0,
@@ -704,7 +704,9 @@ class StatisticsService:
         }
 
     @staticmethod
-    def _update_raw_stats_dict(stats: dict, match: Match, is_home: bool):
+    def _update_raw_stats_dict(
+        stats: dict[str, Any], match: Match, is_home: bool
+    ) -> None:
         goals_for = match.home_goals if is_home else match.away_goals
         goals_against = match.away_goals if is_home else match.home_goals
 
@@ -772,7 +774,9 @@ class StatisticsService:
             stats["matches_with_fouls"] += 1
 
     @staticmethod
-    def update_team_stats_dict(stats: dict, match: Match, is_home: bool):
+    def update_team_stats_dict(
+        stats: dict[str, Any], match: Match, is_home: bool
+    ) -> None:
         """Update a stats dictionary with a new match result (includes context splitting)."""
         # Update global blended stats
         StatisticsService._update_raw_stats_dict(stats, match, is_home)

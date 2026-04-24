@@ -37,7 +37,7 @@ class PredictionService:
         pass
 
     @functools.lru_cache(maxsize=32)
-    def _get_model(self, league_id: str, model_type: str):
+    def _get_model(self, league_id: str, model_type: str) -> Any:
         """
         Load ML model for a specific league and type (cached).
         Args:

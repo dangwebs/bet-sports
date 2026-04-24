@@ -8,8 +8,9 @@ Includes strict financial circuit breakers and EV validation.
 
 import logging
 import math
-from typing import Dict, List
+from typing import Any, Dict, List
 
+from src.domain.entities.entities import Match
 from src.domain.entities.suggested_pick import SuggestedPick
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,8 @@ class RiskManager:
     MAX_SINGLE_STAKE = 0.05
 
     def apply_portfolio_constraints(
-        self, all_picks: List[Dict[str, any]]  # List of {match_id, pick, league_id}
-    ) -> List[Dict[str, any]]:
+        self, all_picks: List[Dict[str, Any]]  # List of {match_id, pick, league_id}
+    ) -> List[Dict[str, Any]]:
         """
         Takes a raw list of potential picks and filters/reduces stakes
         to fit within the global risk budget.
@@ -112,11 +113,12 @@ class RiskManager:
 
         approved_picks = []
         current_daily_exposure = 0.0
-        league_exposure = {}
+        league_exposure: Dict[str, float] = {}
 
         for item in sorted_candidates:
             pick: SuggestedPick = item["pick"]
-            league_id = item["match"].league.id
+            match: Match = item["match"]
+            league_id = match.league.id
 
             # Safe retrieval of stake
             stake_pct = pick.kelly_percentage
