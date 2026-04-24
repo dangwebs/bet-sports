@@ -7,9 +7,8 @@ Persists learning weights to JSON file for cross-restart learning.
 
 import json
 import logging
-import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from pytz import timezone
 

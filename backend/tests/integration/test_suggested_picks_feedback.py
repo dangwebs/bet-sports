@@ -1,4 +1,3 @@
-import src.api.routers.picks as picks_module
 from fastapi.testclient import TestClient
 from src.api.main import app
 
