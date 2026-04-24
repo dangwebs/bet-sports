@@ -14,13 +14,13 @@ from __future__ import annotations
 import logging
 import os
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from bson.binary import Binary
 from pymongo import UpdateOne
 
 try:
-    from motor.motor_asyncio import AsyncIOMotorClient  # type: ignore
+    from motor.motor_asyncio import AsyncIOMotorClient
 
     HAS_MOTOR = True
 except Exception:
@@ -34,7 +34,7 @@ try:
     from src.infrastructure.repositories.mongo_repository import _to_bson_friendly
 except Exception:
     # Fallback: minimal serializer if import fails for some reason
-    def _to_bson_friendly(value: Any) -> Any:  # type: ignore
+    def _to_bson_friendly(value: Any) -> Any:
         return value
 
 
@@ -60,6 +60,10 @@ class AsyncMongoRepository:
         db_name = db_name or os.getenv("MONGO_DB_NAME", "bjj_betsports")
 
         self.client = AsyncIOMotorClient(mongo_uri)
+        if db_name is None:
+            raise ValueError(
+                "db_name must be provided or set via MONGO_DB_NAME env var"
+            )
         self.db = self.client[db_name]
 
         # Collections
@@ -132,7 +136,7 @@ class AsyncMongoRepository:
     async def get_match_prediction(self, match_id: str) -> Optional[dict]:
         doc = await self.match_predictions.find_one({"match_id": match_id})
         if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
-            return doc.get("data")
+            return cast(Optional[dict], doc.get("data"))
         return None
 
     async def get_match_prediction_document(self, match_id: str) -> Optional[dict]:
@@ -210,7 +214,11 @@ class AsyncMongoRepository:
         return out
 
     async def save_cached_response(
-        self, endpoint: str, data: dict, params: dict = None, ttl_seconds: int = 3600
+        self,
+        endpoint: str,
+        data: dict,
+        params: Optional[dict] = None,
+        ttl_seconds: int = 3600,
     ) -> None:
         key = f"{endpoint}:{str(params)}"
         expires_at = get_current_time() + timedelta(seconds=ttl_seconds)
@@ -221,12 +229,12 @@ class AsyncMongoRepository:
         )
 
     async def get_cached_response(
-        self, endpoint: str, params: dict = None
+        self, endpoint: str, params: Optional[dict] = None
     ) -> Optional[dict]:
         key = f"{endpoint}:{str(params)}"
         doc = await self.api_cache.find_one({"key": key})
         if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
-            return doc.get("data")
+            return cast(Optional[dict], doc.get("data"))
         return None
 
     async def clear_all_predictions(

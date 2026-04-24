@@ -169,7 +169,7 @@ class PredictionService:
         # Extract goals from recent_form to analyze momentum
         # form_factor > 1.0 = hot form, < 1.0 = cold form
         form_factor_attack = 1.0
-        if team_stats.recent_form and len(team_stats.recent_form) >= 3:
+        if team_stats and team_stats.recent_form and len(team_stats.recent_form) >= 3:
             # Estimate recent performance: W=3pts, D=1pt, L=0pts as proxy for goals
             recent_points = sum(
                 3 if r == "W" else 1 if r == "D" else 0
@@ -689,20 +689,21 @@ class PredictionService:
                     expected_value=0.0,
                 )
 
-                extractor = MLFeatureExtractor()
-                # Extract features
-                features = extractor.extract_features(
-                    pick=dummy_pick,
-                    match=match,
-                    home_stats=home_stats,
-                    away_stats=away_stats,
-                )
+                # Extract features (Guard against None)
+                if match and home_stats and away_stats:
+                    extractor = MLFeatureExtractor()
+                    features = extractor.extract_features(
+                        pick=dummy_pick,
+                        match=match,
+                        home_stats=home_stats,
+                        away_stats=away_stats,
+                    )
 
-                # Predict
-                # Reshape for single sample
-                prediction = model.predict([features])[0]
-                total_expected = float(prediction)
-                ml_success = True
+                    # Predict
+                    # Reshape for single sample
+                    prediction = model.predict([features])[0]
+                    total_expected = float(prediction)
+                    ml_success = True
 
             except Exception:
                 # Fallback silently to heuristic if ML fails
@@ -833,18 +834,19 @@ class PredictionService:
                     expected_value=0.0,
                 )
 
-                extractor = MLFeatureExtractor()
-                features = extractor.extract_features(
-                    pick=dummy_pick,
-                    match=match,
-                    home_stats=home_stats,
-                    away_stats=away_stats,
-                )
+                if match and home_stats and away_stats:
+                    extractor = MLFeatureExtractor()
+                    features = extractor.extract_features(
+                        pick=dummy_pick,
+                        match=match,
+                        home_stats=home_stats,
+                        away_stats=away_stats,
+                    )
 
-                # Predict
-                prediction = model.predict([features])[0]
-                total_expected = float(prediction)
-                ml_success = True
+                    # Predict
+                    prediction = model.predict([features])[0]
+                    total_expected = float(prediction)
+                    ml_success = True
 
             except Exception:
                 # Fallback silently to heuristic if ML fails
@@ -1144,7 +1146,9 @@ class PredictionService:
         _market_probs = None
         if match.home_odds and match.draw_odds and match.away_odds:
             odds = Odds(
-                home=match.home_odds, draw=match.draw_odds, away=match.away_odds
+                home=match.home_odds if match.home_odds is not None else 0.0,
+                draw=match.draw_odds if match.draw_odds is not None else 0.0,
+                away=match.away_odds if match.away_odds is not None else 0.0,
             )
             _market_probs = odds.to_probabilities()
             if not data_sources:
@@ -1176,7 +1180,9 @@ class PredictionService:
 
         if opening_odds and match.home_odds and match.away_odds:
             current_odds = Odds(
-                home=match.home_odds, draw=match.draw_odds, away=match.away_odds
+                home=match.home_odds if match.home_odds is not None else 0.0,
+                draw=match.draw_odds if match.draw_odds is not None else 0.0,
+                away=match.away_odds if match.away_odds is not None else 0.0,
             )
 
             # Home Sentiment: If odds drop (e.g. 2.0 -> 1.8), factor > 1 (Positive)
@@ -1217,7 +1223,7 @@ class PredictionService:
             elif elo_home_prob < 0.4:  # Away is strong favorite
                 away_expected *= 1.1
 
-            if "ClubElo" not in data_sources:
+            if data_sources is not None and "ClubElo" not in data_sources:
                 data_sources.append("ClubElo")
 
         # Calculate outcome probabilities (Poisson Base)
@@ -1278,7 +1284,7 @@ class PredictionService:
                     draw /= total_p
                     away_win /= total_p
 
-                if "RandomForest" not in data_sources:
+                if data_sources is not None and "RandomForest" not in data_sources:
                     data_sources.append("RandomForest")
 
             except Exception:
@@ -1294,7 +1300,9 @@ class PredictionService:
         odds_obj = None
         if match.home_odds and match.draw_odds and match.away_odds:
             odds_obj = Odds(
-                home=match.home_odds, draw=match.draw_odds, away=match.away_odds
+                home=match.home_odds if match.home_odds is not None else 0.0,
+                draw=match.draw_odds if match.draw_odds is not None else 0.0,
+                away=match.away_odds if match.away_odds is not None else 0.0,
             )
 
         # Calculate Over/Under Corners (9.5) and Expected Values

@@ -8,9 +8,10 @@ Persists learning weights to JSON file for cross-restart learning.
 import json
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from pytz import timezone
+from pytz import timezone  # type: ignore
 
 from src.core.paths import BACKEND_ROOT, PROJECT_ROOT
 from src.domain.entities.betting_feedback import (
@@ -143,6 +144,8 @@ class LearningService:
 
     def _save_to_db(self, weights: LearningWeights) -> None:
         """Save weights to MongoDB."""
+        if not self.repo:
+            return
         try:
             data = self._serialize_weights(weights)
             self.repo.save_app_state(self.MONGO_KEY, data)
@@ -150,9 +153,9 @@ class LearningService:
         except Exception as e:
             logger.error(f"Failed to save weights to DB: {e}")
 
-    def _serialize_weights(self, weights: LearningWeights) -> dict:
+    def _serialize_weights(self, weights: LearningWeights) -> Dict[str, Any]:
         """Helper to serialize LearningWeights to dict."""
-        data = {
+        data: Dict[str, Any] = {
             "market_performances": {},
             "global_adjustments": weights.global_adjustments,
             "version": weights.version,
@@ -188,17 +191,28 @@ class LearningService:
             f"{'correct' if feedback.was_correct else 'incorrect'}"
         )
 
-    def get_market_adjustment(self, market_type: str) -> float:
+    def get_market_adjustment(self, market: str) -> float:
         """
-        Get confidence adjustment for a market type.
+        Get the current confidence adjustment for a specific market.
 
         Args:
-            market_type: Type of market
+            market: Market identifier (e.g., 'O2.5', 'Match Winner')
 
         Returns:
-            Adjustment multiplier (0.5 - 1.3)
+            Adjustment factor (0.0 to 1.0)
         """
-        return self.learning_weights.get_market_adjustment(market_type)
+        if not self._learning_weights:
+            self._load_weights()
+
+        if not self._learning_weights:
+            return 1.0
+
+        market_perf = self._learning_weights.market_performances.get(market)
+        if not market_perf:
+            return 1.0
+
+        # Adjust based on accuracy (normalized)
+        return float(market_perf.success_rate)
 
     def get_market_stats(self, market_type: str) -> Optional[MarketPerformance]:
         """
@@ -212,13 +226,19 @@ class LearningService:
         """
         return self.learning_weights.market_performances.get(market_type)
 
-    def get_all_stats(self) -> dict[str, MarketPerformance]:
+    def get_all_stats(self) -> Dict[str, MarketPerformance]:
         """Get all market performance statistics."""
         return self.learning_weights.market_performances
 
-    def get_learning_weights(self) -> LearningWeights:
-        """Get the current learning weights object."""
-        return self.learning_weights
+    def get_learning_weights(self) -> Dict[str, Any]:
+        """Get the current learning weights as a dictionary."""
+        if not self._learning_weights:
+            self._load_weights()
+
+        if not self._learning_weights:
+            return {}
+
+        return self._serialize_weights(self._learning_weights)
 
     def reset_weights(self) -> None:
         """Reset all learning weights to default."""

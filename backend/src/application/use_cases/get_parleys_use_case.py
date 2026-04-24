@@ -1,6 +1,9 @@
 import logging
 from dataclasses import dataclass
-from typing import List
+from typing import TYPE_CHECKING, Any, List
+
+if TYPE_CHECKING:
+    from src.domain.entities.suggested_pick import SuggestedPick
 
 from src.domain.services.parley_service import ParleyConfig, ParleyService
 
@@ -75,7 +78,7 @@ class GetParleysUseCase:
 
         return parleys
 
-    def _map_dto_to_match(self, dto) -> Match:
+    def _map_dto_to_match(self, dto: Any) -> Match:
         return Match(
             id=dto.id,
             home_team=Team(
@@ -113,7 +116,7 @@ class GetParleysUseCase:
             away_odds=dto.away_odds,
         )
 
-    def _map_dto_to_prediction(self, dto) -> Prediction:
+    def _map_dto_to_prediction(self, dto: Any) -> Prediction:
         return Prediction(
             match_id=dto.match_id,
             home_win_probability=dto.home_win_probability,
@@ -129,7 +132,7 @@ class GetParleysUseCase:
             suggested_picks=self._map_dto_picks_to_entity(dto.suggested_picks),
         )
 
-    def _map_dto_picks_to_entity(self, pick_dtos) -> List["SuggestedPick"]:
+    def _map_dto_picks_to_entity(self, pick_dtos: List[Any]) -> List["SuggestedPick"]:
         from src.domain.entities.suggested_pick import (
             ConfidenceLevel,
             MarketType,

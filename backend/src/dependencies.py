@@ -124,7 +124,7 @@ def get_parley_service() -> ParleyService:
 def get_picks_service() -> AIPicksService:
     """Get AI picks service (cached)."""
     return AIPicksService(
-        learning_weights=get_learning_service().get_learning_weights(),
+        learning_weights=get_learning_service().learning_weights,
         persistence_repo=get_persistence_repository(),
     )
 
@@ -156,7 +156,7 @@ def get_persistence_repository() -> MongoRepository:
     return get_mongo_repository()
 
 
-def get_async_persistence_repository() -> object:
+def get_async_persistence_repository() -> Any:
     """Return an async-friendly persistence repository (Motor-native when available).
 
     Use this in FastAPI async handlers to avoid blocking the event loop.
@@ -182,9 +182,9 @@ async def get_async_learning_service() -> "LearningService":
         try:
             svc._learning_weights = svc._reconstruct_weights(data)
         except Exception:
-            svc._learning_weights = svc.get_learning_weights()
+            svc._learning_weights = svc.learning_weights
     else:
-        svc._learning_weights = svc.get_learning_weights()
+        svc._learning_weights = svc.learning_weights
 
     return svc
 

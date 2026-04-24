@@ -2,7 +2,7 @@ import asyncio
 import concurrent.futures
 import logging
 import multiprocessing
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.domain.entities.entities import Match, TeamStatistics
 from src.domain.services.ai_picks_service import AIPicksService
@@ -34,10 +34,10 @@ def _process_match_task(
     match: Match,
     home_stats: Optional[TeamStatistics],
     away_stats: Optional[TeamStatistics],
-    league_averages: Optional[any],  # localized type issue, passing object
-    h2h_stats: Optional[any],
-    prediction_data: dict,
-):
+    league_averages: Optional[Any],  # localized type issue, passing object
+    h2h_stats: Optional[Any],
+    prediction_data: Dict[str, Any],
+) -> Any:
     """
     Worker function to process a single match.
     Uses the global _picks_service instance.
@@ -79,7 +79,7 @@ class BackgroundProcessor:
     Service to handle background processing and parallel execution.
     """
 
-    def __init__(self, max_workers: int = None):
+    def __init__(self, max_workers: Optional[int] = None) -> None:
         # Default to CPU count or 4
         self.max_workers = max_workers or multiprocessing.cpu_count()
         self.executor = concurrent.futures.ProcessPoolExecutor(
@@ -90,7 +90,9 @@ class BackgroundProcessor:
             self.max_workers,
         )
 
-    async def process_matches_parallel(self, match_tasks: List[dict]) -> List[any]:
+    async def process_matches_parallel(
+        self, match_tasks: List[Dict[str, Any]]
+    ) -> List[Any]:
         """
         Process a batch of matches in parallel.
 

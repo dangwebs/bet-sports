@@ -153,7 +153,7 @@ class Match:
     @property
     def outcome(self) -> Optional[MatchOutcome]:
         """Get the match outcome if played."""
-        if not self.is_played:
+        if self.home_goals is None or self.away_goals is None:
             return None
         if self.home_goals > self.away_goals:
             return MatchOutcome.HOME_WIN
@@ -164,7 +164,7 @@ class Match:
     @property
     def total_goals(self) -> Optional[int]:
         """Get total goals scored in the match."""
-        if not self.is_played:
+        if self.home_goals is None or self.away_goals is None:
             return None
         return self.home_goals + self.away_goals
 

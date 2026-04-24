@@ -21,7 +21,7 @@ import asyncio
 import logging
 import os
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from src.utils.time_utils import get_current_time
 
@@ -55,6 +55,8 @@ class AsyncMongoAdapter:
 
         if self._use_motor:
             try:
+                if db_name is None:
+                    raise ValueError("db_name must be provided")
                 self._motor_client = MotorClient(mongo_uri)
                 self._db = self._motor_client[db_name]
                 # Note: indexes are expected to exist already (created by sync repo),
@@ -89,9 +91,11 @@ class AsyncMongoAdapter:
         if self._use_motor:
             doc = await self.api_cache.find_one({"key": key})
             if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
-                return doc.get("data")
+                return cast(Optional[dict], doc.get("data"))
             return None
         else:
+            if not self._sync_repo:
+                return None
             return await asyncio.to_thread(
                 self._sync_repo.get_cached_response, endpoint, params
             )
@@ -112,21 +116,24 @@ class AsyncMongoAdapter:
                 upsert=True,
             )
         else:
-            await asyncio.to_thread(
-                self._sync_repo.save_cached_response,
-                endpoint,
-                data,
-                params,
-                ttl_seconds,
-            )
+            if self._sync_repo:
+                await asyncio.to_thread(
+                    self._sync_repo.save_cached_response,
+                    endpoint,
+                    data,
+                    params,
+                    ttl_seconds,
+                )
 
     async def get_match_prediction(self, match_id: str) -> Optional[dict]:
         if self._use_motor:
             doc = await self.match_predictions.find_one({"match_id": match_id})
             if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
-                return doc.get("data")
+                return cast(Optional[dict], doc.get("data"))
             return None
         else:
+            if not self._sync_repo:
+                return None
             return await asyncio.to_thread(
                 self._sync_repo.get_match_prediction, match_id
             )
@@ -137,10 +144,15 @@ class AsyncMongoAdapter:
             doc = await self.match_predictions.find_one({"match_id": match_id})
             return doc
         else:
+            if not self._sync_repo:
+                return None
+
             # Fallback: call sync repo in thread and return the raw document
-            def _get_doc():
-                return self._sync_repo.match_predictions.find_one(
-                    {"match_id": match_id}
+            def _get_doc() -> Optional[dict]:
+                assert self._sync_repo is not None
+                return cast(
+                    Optional[dict],
+                    self._sync_repo.match_predictions.find_one({"match_id": match_id}),
                 )
 
             return await asyncio.to_thread(_get_doc)
@@ -163,6 +175,8 @@ class AsyncMongoAdapter:
                     result[mid] = doc.get("data")
             return result
         else:
+            if not self._sync_repo:
+                return {}
             return await asyncio.to_thread(
                 self._sync_repo.get_match_predictions_bulk, match_ids
             )
@@ -185,13 +199,14 @@ class AsyncMongoAdapter:
                 upsert=True,
             )
         else:
-            await asyncio.to_thread(
-                self._sync_repo.save_match_prediction,
-                match_id,
-                league_id,
-                data,
-                ttl_seconds,
-            )
+            if self._sync_repo:
+                await asyncio.to_thread(
+                    self._sync_repo.save_match_prediction,
+                    match_id,
+                    league_id,
+                    data,
+                    ttl_seconds,
+                )
 
     async def bulk_save_predictions(self, predictions_data: List[dict]) -> None:
         if not predictions_data:
@@ -216,19 +231,22 @@ class AsyncMongoAdapter:
                     upsert=True,
                 )
         else:
-            await asyncio.to_thread(
-                self._sync_repo.bulk_save_predictions, predictions_data
-            )
+            if self._sync_repo:
+                await asyncio.to_thread(
+                    self._sync_repo.bulk_save_predictions, predictions_data
+                )
 
     async def get_training_result_with_timestamp(
         self, key: str
-    ) -> (Optional[dict], Optional[Any]):
+    ) -> Tuple[Optional[dict], Optional[Any]]:
         if self._use_motor:
             doc = await self.training_results.find_one({"key": key})
             if doc:
                 return doc.get("data"), doc.get("last_updated")
             return None, None
         else:
+            if not self._sync_repo:
+                return None, None
             return await asyncio.to_thread(
                 self._sync_repo.get_training_result_with_timestamp, key
             )
@@ -242,7 +260,8 @@ class AsyncMongoAdapter:
                 upsert=True,
             )
         else:
-            await asyncio.to_thread(self._sync_repo.save_training_result, key, data)
+            if self._sync_repo:
+                await asyncio.to_thread(self._sync_repo.save_training_result, key, data)
 
 
 # Singleton factory
@@ -252,7 +271,7 @@ _async_mongo_repo: Optional[Any] = None
 _MONGO_ASYNC_MODE: Optional[bool] = None
 
 
-def _load_async_mode_flag() -> bool:
+def _load_async_mode_flag() -> Optional[bool]:
     """Load MONGO_ASYNC_MODE env flag with proper type coercion."""
     global _MONGO_ASYNC_MODE
     if _MONGO_ASYNC_MODE is not None:

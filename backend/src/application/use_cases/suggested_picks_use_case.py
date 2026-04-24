@@ -4,14 +4,13 @@ Suggested Picks Use Case Module
 Use case for generating AI-suggested betting picks for a match.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Dict, List, Optional
 
-import asyncio
-
-from pytz import timezone
+from pytz import timezone  # type: ignore
 from src.application.dtos.dtos import (
     BettingFeedbackRequestDTO,
     BettingFeedbackResponseDTO,
@@ -19,6 +18,7 @@ from src.application.dtos.dtos import (
     MarketPerformanceDTO,
     MatchSuggestedPicksDTO,
     SuggestedPickDTO,
+    TopMLPicksDTO,
 )
 from src.domain.entities.betting_feedback import BettingFeedback
 from src.domain.entities.entities import League, Match, Team
@@ -57,8 +57,9 @@ class GetSuggestedPicksUseCase:
         self.club_elo = getattr(data_sources, "club_elo", None) or ClubEloSource()
 
         # Upgrade to AI Picks Service
+        weights = learning_service.get_learning_weights()
         self.picks_service = AIPicksService(
-            learning_weights=learning_service.get_learning_weights()
+            learning_weights=weights if weights else None
         )
 
     async def execute(
@@ -550,7 +551,9 @@ class GetSuggestedPicksUseCase:
             logger.warning("OpenFootball fetch failed for %s: %s", league_code, exc)
         return []
 
-    async def _fetch_team_history_apis(self, match: Match) -> list[Match]:
+    async def _fetch_team_history_apis(
+        self, match: Match, bulk_history: Optional[Dict[str, List[Match]]] = None
+    ) -> List[Match]:
         """Fetch history specifically for the two teams from APIs."""
         team_matches = []
 
@@ -784,7 +787,10 @@ class GetTopMLPicksUseCase:
                             )
                             continue
                         if m_date.tzinfo is None:
-                            m_date = now.tzinfo.localize(m_date)
+                            # Use now.tzinfo if it's not None, otherwise default to COLOMBIA_TZ from utils
+                            from src.utils.time_utils import COLOMBIA_TZ
+
+                            m_date = (now.tzinfo or COLOMBIA_TZ).localize(m_date)
                         else:
                             m_date = m_date.astimezone(now.tzinfo)
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pytz import timezone, utc
+from pytz import timezone, utc  # type: ignore
 
 # Colombia timezone constant
 COLOMBIA_TZ = timezone("America/Bogota")

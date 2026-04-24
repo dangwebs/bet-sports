@@ -1,8 +1,11 @@
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.value_objects import LeagueAverages
 
 # ML Imports
 try:
@@ -29,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def _build_league_averages(
     all_matches: List[Any], statistics_service: StatisticsService
-) -> Dict[str, dict]:
+) -> Dict[str, "LeagueAverages"]:
     league_matches_map: Dict[str, List[Any]] = {}
     for m in all_matches:
         league_matches_map.setdefault(m.league.id, []).append(m)
@@ -239,7 +242,7 @@ def _process_match_for_dataset(
     resolution_service: PickResolutionService,
     feature_extractor: MLFeatureExtractor,
     statistics_service: StatisticsService,
-    league_averages_map: Dict[str, dict],
+    league_averages_map: Dict[str, "LeagueAverages"],
 ):
     """Process a single match into ML-ready features, targets and a history entry.
 
@@ -347,12 +350,12 @@ async def prepare_datasets(
     List[int],
     Dict[str, dict],
     List[dict],
-    dict,
+    Dict[str, dict],
     int,
     int,
     float,
     float,
-    dict,
+    Dict[str, "LeagueAverages"],
 ]:
     """Fetches matches and processes them into ML-ready datasets.
 

@@ -9,7 +9,7 @@ import functools
 import logging
 import math
 import os
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from src.domain.entities.betting_feedback import LearningWeights
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
@@ -557,7 +557,8 @@ class PicksService:
         picks = MatchSuggestedPicks(match_id=match.id)
 
         # Analyze Context
-        self.context_analyzer.analyze_match_context(match, home_stats, away_stats)
+        if home_stats and away_stats:
+            self.context_analyzer.analyze_match_context(match, home_stats, away_stats)
 
         # Analyze H2H Dominance
         h2h_factor = 1.0
@@ -601,7 +602,7 @@ class PicksService:
         )
 
         # --- REFACTORING: Refine Expectations using League Avgs & Weighted Strength ---
-        if league_averages and has_home_stats and has_away_stats:
+        if league_averages and home_stats and away_stats:
             # Calculate refined expected goals
             ref_home, ref_away = self._calculate_dynamic_expected_goals(
                 home_stats, away_stats, league_averages
@@ -622,7 +623,7 @@ class PicksService:
 
         # Check if this is a low-scoring context
         is_low_scoring = False
-        if has_home_stats and has_away_stats:
+        if home_stats and away_stats:
             is_low_scoring = self._is_low_scoring_context(
                 home_stats, away_stats, predicted_home_goals, predicted_away_goals
             )
@@ -634,9 +635,7 @@ class PicksService:
         # teams.
         # NOW RELAXED: If we have predictions (which use league avg fallback), we can
         # generate picks too.
-        if (
-            home_stats is not None and home_stats.matches_played > 0
-        ) or has_prediction_data:
+        if home_stats and away_stats:
             corners_picks = self._generate_corners_picks(
                 home_stats,
                 away_stats,
@@ -767,7 +766,7 @@ class PicksService:
             # Generate Team Goals (Relaxed: Use prediction data if stats are partial)
             # We only need team names and predicted goals, which we have if
             # has_prediction_data is True
-            if has_prediction_data:
+            if has_prediction_data and home_stats and away_stats:
                 tg_picks = self._generate_team_goals_picks(
                     home_stats, away_stats, predicted_home_goals, predicted_away_goals
                 )
@@ -1025,7 +1024,7 @@ class PicksService:
         Generic generator for match total statistics (Over/Under).
         Strictly DRY: Processes both markets in a single loop using tuple configuration.
         """
-        picks = []
+        picks: List[SuggestedPick] = []
         if stat_avg <= 0:
             return picks
 
@@ -1089,7 +1088,7 @@ class PicksService:
         """
         Generic generator for individual team statistics (Over/Under).
         """
-        picks = []
+        picks: List[SuggestedPick] = []
         if stat_avg <= 0:
             return picks
 
@@ -2171,7 +2170,7 @@ class PicksService:
         pred_away_cards: float,
     ) -> list[SuggestedPick]:
         """Generate Team Specific Card Picks."""
-        picks = []
+        picks: List[SuggestedPick] = []
         # NOTE: Over/Under logic moved to _generate_single_team_cards (Step 6)
         # to avoid duplicates.
         return picks

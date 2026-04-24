@@ -206,7 +206,10 @@ class GetPredictionsUseCase:
             m_date = m.match_date
             if m_date.tzinfo is None:
                 try:
-                    m_date = now.tzinfo.localize(m_date)
+                    from pytz import timezone as pytz_tz
+
+                    tz = pytz_tz("America/Bogota")
+                    m_date = tz.localize(m_date)
                 except Exception:
                     m_date = m_date
             else:
@@ -1052,7 +1055,7 @@ class GetPredictionsUseCase:
         )
 
     def _prediction_to_dto(
-        self, prediction: "Prediction", picks: list = None
+        self, prediction: "Prediction", picks: Optional[list] = None
     ) -> "PredictionDTO":
         pick_dtos = []
         if picks:
@@ -1146,7 +1149,10 @@ class GetPredictionsUseCase:
         for p in predictions:
             m_date = p.match.match_date
             if m_date.tzinfo is None:
-                m_date = now.tzinfo.localize(m_date)
+                from pytz import timezone as pytz_tz
+
+                tz = pytz_tz("America/Bogota")
+                m_date = tz.localize(m_date)
             else:
                 m_date = m_date.astimezone(now.tzinfo)
 
@@ -1184,7 +1190,7 @@ class GetMatchDetailsUseCase:
             learning_weights=get_learning_service().get_learning_weights()
         )
 
-    async def execute(self, match_id: str) -> "MatchPredictionDTO":
+    async def execute(self, match_id: str) -> Optional["MatchPredictionDTO"]:
         match = await self._get_match_from_sources(match_id)
         if not match:
             return None
@@ -1196,9 +1202,11 @@ class GetMatchDetailsUseCase:
 
         # 3. Get historical data context
         internal_league_code = self._get_internal_league_code(match)
-        historical_matches = await self._fetch_historical_matches(
-            internal_league_code, match
-        )
+        historical_matches = []
+        if internal_league_code:
+            historical_matches = await self._fetch_historical_matches(
+                internal_league_code, match
+            )
 
         # 4. Calculate stats using whatever history we found (or empty list)
         home_stats = self.statistics_service.calculate_team_statistics(
@@ -1298,7 +1306,7 @@ class GetMatchDetailsUseCase:
         )
 
     def _prediction_to_dto(
-        self, prediction: Prediction, picks: list = None
+        self, prediction: Prediction, picks: Optional[list] = None
     ) -> PredictionDTO:
         # Map suggested picks to DTOs
         from src.application.dtos.dtos import PredictionDTO, SuggestedPickDTO
@@ -1605,9 +1613,11 @@ class GetTeamPredictionsUseCase:
 
         # 1. Get historical context
         internal_league_code = self._get_internal_league_code(match)
-        historical_matches = await self._fetch_historical_matches(
-            internal_league_code, match
-        )
+        historical_matches = []
+        if internal_league_code:
+            historical_matches = await self._fetch_historical_matches(
+                internal_league_code, match
+            )
 
         # 2. Calculate stats
         home_stats = self.statistics_service.calculate_team_statistics(
@@ -1732,6 +1742,8 @@ class GetTeamPredictionsUseCase:
         match_dto.home_red_cards = int(round(h_red))
         match_dto.away_red_cards = int(round(a_red))
 
+        return match_dto
+
     def _match_to_dto(self, match: Match) -> MatchDTO:
         # Duplicated helper for now to avoid cross-cutting refactor
         from src.application.dtos.dtos import LeagueDTO, MatchDTO, TeamDTO
@@ -1793,7 +1805,7 @@ class GetTeamPredictionsUseCase:
         )
 
     def _prediction_to_dto(
-        self, prediction: Prediction, picks: list = None
+        self, prediction: Prediction, picks: Optional[list] = None
     ) -> PredictionDTO:
         from src.application.dtos.dtos import PredictionDTO, SuggestedPickDTO
 

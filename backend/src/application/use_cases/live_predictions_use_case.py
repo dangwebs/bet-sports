@@ -9,9 +9,9 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from pytz import timezone
+from pytz import timezone  # type: ignore
 from src.application.dtos.dtos import (
     LeagueDTO,
     MatchDTO,
@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 
 
 def _determine_data_sources(
-    cache_service,
-    statistics_service,
-    data_sources,
-    match,
-    bulk_history,
-):
+    cache_service: CacheService,
+    statistics_service: StatisticsService,
+    data_sources: DataSources,
+    match: Match,
+    bulk_history: Optional[Dict[str, List[Match]]],
+) -> Tuple[Any, Any, Any, Any, Any, List[str]]:
     """Determine available data sources and load deep training stats
     if present.
     """
@@ -266,8 +266,10 @@ class GetLivePredictionsUseCase:
 
         return matches, False, cache_key, source_used
 
-    async def _prefetch_bulk_history(self, matches: List[Match]) -> dict:
-        bulk_history = {}
+    async def _prefetch_bulk_history(
+        self, matches: List[Match]
+    ) -> Dict[str, List[Match]]:
+        bulk_history: Dict[str, List[Match]] = {}
         if not self.data_sources.football_data_org.is_configured:
             return bulk_history
 
@@ -434,7 +436,7 @@ class GetLivePredictionsUseCase:
         return filtered_results
 
     async def _generate_prediction(
-        self, match: Match, bulk_history: dict = None
+        self, match: Match, bulk_history: Optional[Dict[str, List[Match]]] = None
     ) -> PredictionDTO:
         """
         Generate prediction for a single match.
@@ -519,7 +521,9 @@ class GetLivePredictionsUseCase:
         )
 
         # Convert to DTO and cache
-        prediction_dto = self._prediction_to_dto(prediction, picks_container.picks)
+        prediction_dto = self._prediction_to_dto(
+            prediction, picks_container.suggested_picks
+        )
         await self.cache_service.aset_predictions(match.id, prediction_dto)
 
         return prediction_dto
@@ -528,9 +532,9 @@ class GetLivePredictionsUseCase:
     async def _process_single_live_match(
         self,
         match: Match,
-        bulk_history: dict,
+        bulk_history: Dict[str, List[Match]],
         start_time: float,
-        pre_calculated_map: dict = None,
+        pre_calculated_map: Optional[Dict[str, Any]] = None,
     ) -> MatchPredictionDTO:
         """Process a single live match: try DB lookup, otherwise run realtime inference.
 
@@ -608,7 +612,7 @@ class GetLivePredictionsUseCase:
             )
 
     async def _get_aggregated_history(
-        self, match: Match, bulk_history: dict = None
+        self, match: Match, bulk_history: Optional[Dict[str, List[Match]]] = None
     ) -> List[Match]:
         """
         Get historical matches from ALL available sources and unify them.
@@ -680,7 +684,7 @@ class GetLivePredictionsUseCase:
         return []
 
     async def _fetch_team_history_apis(
-        self, match: Match, bulk_history: dict = None
+        self, match: Match, bulk_history: Optional[Dict[str, List[Match]]] = None
     ) -> list[Match]:
         team_matches = []
 

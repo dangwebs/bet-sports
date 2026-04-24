@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from fastapi import APIRouter, Depends
 from src.api.schemas.auxiliary import (
     BettingFeedbackRequest,
@@ -29,11 +30,11 @@ router = APIRouter(prefix="/api/v1/suggested-picks", tags=["suggested-picks"])
 @router.get("/match/{match_id}", response_model=MatchSuggestedPicksResponse)
 async def get_suggested_picks(
     match_id: str,
-    data_sources=Depends(get_data_sources),
-    prediction_service=Depends(get_prediction_service),
-    statistics_service=Depends(get_statistics_service),
+    data_sources: Any = Depends(get_data_sources),
+    prediction_service: Any = Depends(get_prediction_service),
+    statistics_service: Any = Depends(get_statistics_service),
     learning_service: LearningService = Depends(get_async_learning_service),
-    cache_service=Depends(get_cache_service),
+    cache_service: Any = Depends(get_cache_service),
 ) -> MatchSuggestedPicksResponse:
     """Generate suggested picks using the real use case and services."""
     use_case = GetSuggestedPicksUseCase(
@@ -44,6 +45,13 @@ async def get_suggested_picks(
         cache_service,
     )
     dto = await use_case.execute(match_id)
+    if not dto:
+        return MatchSuggestedPicksResponse(
+            match_id=match_id,
+            suggested_picks=[],
+            combination_warning="No se pudieron generar sugerencias para este partido.",
+            generated_at=_utc_now_iso(),
+        )
 
     picks = [p.model_dump() for p in dto.suggested_picks] if dto.suggested_picks else []
     generated_at = (
