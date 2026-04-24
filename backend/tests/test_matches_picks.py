@@ -55,10 +55,26 @@ def test_live_matches_with_doc():
 
 
 def test_suggested_picks_endpoints():
+    from src.dependencies import get_learning_service
+
+    class DummyLearningService:
+        def register_feedback(self, feedback):
+            from src.application.use_cases.suggested_picks_use_case import FeedbackResponse
+            return FeedbackResponse(
+                success=True,
+                message="ok",
+                market_type=feedback.market_type,
+                new_confidence_adjustment=1.0,
+            )
+        def get_all_stats(self):
+            return {}
+
+    app.dependency_overrides[get_learning_service] = lambda: DummyLearningService()
     client = TestClient(app)
-    r = client.get("/api/v1/suggested-picks/match/foo")
-    assert r.status_code == 200
-    assert r.json()["match_id"] == "foo"
+    try:
+        r = client.get("/api/v1/suggested-picks/match/foo")
+        assert r.status_code == 200
+        assert r.json()["match_id"] == "foo"
 
     payload = {
         "match_id": "foo",
@@ -68,12 +84,14 @@ def test_suggested_picks_endpoints():
         "was_correct": True,
         "odds": 1.5,
     }
-    r2 = client.post("/api/v1/suggested-picks/feedback", json=payload)
-    assert r2.status_code == 200
-    assert r2.json()["success"] is True
+        r2 = client.post("/api/v1/suggested-picks/feedback", json=payload)
+        assert r2.status_code == 200
+        assert r2.json()["success"] is True
 
-    r3 = client.get("/api/v1/suggested-picks/learning-stats")
-    assert r3.status_code == 200
+        r3 = client.get("/api/v1/suggested-picks/learning-stats")
+        assert r3.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_daily_and_team_endpoints():
