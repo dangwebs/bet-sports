@@ -100,9 +100,9 @@ def get_learning_stats(
                 "avg_odds": perf.avg_odds,
                 "total_profit_loss": perf.total_profit_loss,
                 "confidence_adjustment": perf.confidence_adjustment,
-                "last_updated": perf.last_updated.isoformat()
-                if perf.last_updated
-                else None,
+                "last_updated": (
+                    perf.last_updated.isoformat() if perf.last_updated else None
+                ),
             }
         )
 

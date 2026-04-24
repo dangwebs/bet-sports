@@ -114,11 +114,11 @@ class TheSportsDBClient:
             "COL1": "4367",  # Colombia Primera A
             "ARG1": "4393",  # Argentina Primera Division
             "BRA1": "4351",  # Brasil Serie A
-            "LIB": "4430",   # Copa Libertadores
-            "SUD": "4431",   # Copa Sudamericana
-            "WC": "4362",    # FIFA World Cup
-            "UCL": "4480",   # UEFA Champions League
-            "UEL": "4481",   # UEFA Europa League
+            "LIB": "4430",  # Copa Libertadores
+            "SUD": "4431",  # Copa Sudamericana
+            "WC": "4362",  # FIFA World Cup
+            "UCL": "4480",  # UEFA Champions League
+            "UEL": "4481",  # UEFA Europa League
             "UECL": "4843",  # UEFA Conference League
             "EURO": "4326",  # UEFA European Championship
         }
@@ -262,15 +262,19 @@ class TheSportsDBClient:
                 away_team=away_team,
                 league=league,
                 match_date=match_date,
-                status="NS"
-                if not event.get("intHomeScore")
-                else "FT",  # Simplified status
-                home_goals=int(event.get("intHomeScore"))
-                if event.get("intHomeScore")
-                else None,
-                away_goals=int(event.get("intAwayScore"))
-                if event.get("intAwayScore")
-                else None,
+                status=(
+                    "NS" if not event.get("intHomeScore") else "FT"
+                ),  # Simplified status
+                home_goals=(
+                    int(event.get("intHomeScore"))
+                    if event.get("intHomeScore")
+                    else None
+                ),
+                away_goals=(
+                    int(event.get("intAwayScore"))
+                    if event.get("intAwayScore")
+                    else None
+                ),
             )
         except Exception as e:
             logger.error(f"Error parsing TheSportsDB match details: {e}")

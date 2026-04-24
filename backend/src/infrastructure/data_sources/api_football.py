@@ -35,6 +35,6 @@ LEAGUE_ID_MAPPING = {
     "COL1": 239,  # Colombia Primera A
     "ARG1": 128,  # Argentina Primera Division
     "BRA1": 71,  # Brasil Serie A
-    "LIB": 13,   # Copa Libertadores
-    "SUD": 11,   # Copa Sudamericana
+    "LIB": 13,  # Copa Libertadores
+    "SUD": 11,  # Copa Sudamericana
 }

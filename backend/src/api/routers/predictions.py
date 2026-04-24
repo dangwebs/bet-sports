@@ -5,7 +5,9 @@ from src.api.mappers.league_mapper import find_league
 from src.api.mappers.prediction_mapper import normalize_prediction_document
 from src.api.schemas.predictions import MatchPredictionModel, PredictionsResponse
 from src.api.utils.serializers import _utc_now_iso
-from src.infrastructure.repositories.async_mongo_adapter import get_async_mongo_repository
+from src.infrastructure.repositories.async_mongo_adapter import (
+    get_async_mongo_repository,
+)
 
 router = APIRouter(prefix="/api/v1/predictions", tags=["predictions"])
 
@@ -16,14 +18,25 @@ async def get_predictions_by_league(league_id: str) -> PredictionsResponse:
     docs = await repo.get_all_active_predictions()
     league = find_league(league_id)
     # Filter by league
-    filtered = [d for d in docs if d.get("prediction", d.get("data", {})).get("match", {}).get("league", {}).get("id", league_id) == league_id or d.get("league_id") == league_id]
+    filtered = [
+        d
+        for d in docs
+        if d.get("prediction", d.get("data", {}))
+        .get("match", {})
+        .get("league", {})
+        .get("id", league_id)
+        == league_id
+        or d.get("league_id") == league_id
+    ]
     # Normalize
     normalized = []
     for doc in filtered:
         parsed = normalize_prediction_document(doc, league)
         if parsed is not None:
             normalized.append(parsed)
-    return PredictionsResponse(league=league, predictions=normalized, generated_at=_utc_now_iso())
+    return PredictionsResponse(
+        league=league, predictions=normalized, generated_at=_utc_now_iso()
+    )
 
 
 @router.get("/match/{match_id}", response_model=MatchPredictionModel)

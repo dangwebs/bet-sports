@@ -87,7 +87,9 @@ class GetSuggestedPicksUseCase:
                 )
 
             # 1.5 Fetch Global Averages (async-safe)
-            global_avg_data = await self.cache_service.aget("global_statistical_averages")
+            global_avg_data = await self.cache_service.aget(
+                "global_statistical_averages"
+            )
             global_averages = None
             if global_avg_data:
                 from src.domain.value_objects.value_objects import LeagueAverages
@@ -179,12 +181,16 @@ class GetSuggestedPicksUseCase:
             suggested_picks_container = await asyncio.to_thread(
                 lambda: self.picks_service.generate_suggested_picks(
                     match=match,
-                    home_stats=home_stats
-                    if home_stats and home_stats.matches_played > 0
-                    else None,
-                    away_stats=away_stats
-                    if away_stats and away_stats.matches_played > 0
-                    else None,
+                    home_stats=(
+                        home_stats
+                        if home_stats and home_stats.matches_played > 0
+                        else None
+                    ),
+                    away_stats=(
+                        away_stats
+                        if away_stats and away_stats.matches_played > 0
+                        else None
+                    ),
                     league_averages=league_averages,
                     predicted_home_goals=prediction.predicted_home_goals,
                     predicted_away_goals=prediction.predicted_away_goals,

@@ -8,6 +8,7 @@ Endpoints:
 - Scoreboard: http://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard
 - Summary: http://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary
 """
+
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -344,17 +345,21 @@ class ESPNSource:
             async with semaphore:
                 url = f"{self.BASE_URL}/{slug}/scoreboard"
                 data = await self._make_request(url, {"dates": date_str})
-            
+
             if not data or "events" not in data:
                 return []
-            
+
             event_tasks = []
             for event in data["events"]:
                 status = event.get("status", {}).get("type", {}).get("state")
                 if status == "post":
                     match_id = event.get("id")
-                    event_tasks.append(self._get_match_details_atomic(slug, match_id, event, code, semaphore))
-            
+                    event_tasks.append(
+                        self._get_match_details_atomic(
+                            slug, match_id, event, code, semaphore
+                        )
+                    )
+
             return await asyncio.gather(*event_tasks)
 
         # 1. Parallel Scoreboard Fetching
@@ -362,10 +367,12 @@ class ESPNSource:
         for code in leagues_to_fetch:
             for date_str in date_range:
                 tasks.append(fetch_scoreboard(code, date_str))
-        
-        logger.info(f"ESPN: Fetching history for {len(leagues_to_fetch)} leagues across {len(date_range)} days...")
+
+        logger.info(
+            f"ESPN: Fetching history for {len(leagues_to_fetch)} leagues across {len(date_range)} days..."
+        )
         results = await asyncio.gather(*tasks)
-        
+
         # Flatten results
         for day_results in results:
             for match in day_results:
@@ -376,11 +383,18 @@ class ESPNSource:
         return matches
 
     async def _get_match_details_atomic(
-        self, slug: str, match_id: str, event_summary: dict, league_code: str, semaphore: asyncio.Semaphore
+        self,
+        slug: str,
+        match_id: str,
+        event_summary: dict,
+        league_code: str,
+        semaphore: asyncio.Semaphore,
     ) -> Optional[Match]:
         """Atomic helper for concurrent match details fetching."""
         async with semaphore:
-            return await self._get_match_details(slug, match_id, event_summary, league_code)
+            return await self._get_match_details(
+                slug, match_id, event_summary, league_code
+            )
 
     async def _get_match_details(
         self, slug: str, match_id: str, event_summary: dict, league_code: str
@@ -431,9 +445,11 @@ class ESPNSource:
             odds = ESPNOdds(
                 home_odds=home_odds_data.get("moneyLine")
                 or home_odds_data.get("value"),
-                draw_odds=pick.get("drawOdds", {}).get("value")
-                if pick.get("drawOdds")
-                else None,
+                draw_odds=(
+                    pick.get("drawOdds", {}).get("value")
+                    if pick.get("drawOdds")
+                    else None
+                ),
                 away_odds=away_odds_data.get("moneyLine")
                 or away_odds_data.get("value"),
             )
@@ -582,21 +598,25 @@ class ESPNSource:
             url = f"{self.BASE_URL}/{slug}/scoreboard"
             async with semaphore:
                 data = await self._make_request(url, {"dates": date_str})
-            
+
             if not data or "events" not in data:
                 return []
-            
+
             match_tasks = []
             for event in data["events"]:
                 status = event.get("status", {}).get("type", {}).get("state")
                 if status in ["pre"]:
                     match_id = event.get("id")
-                    match_tasks.append(self._fetch_upcoming_match_details(slug, match_id, event, league_code, semaphore))
-            
+                    match_tasks.append(
+                        self._fetch_upcoming_match_details(
+                            slug, match_id, event, league_code, semaphore
+                        )
+                    )
+
             return await asyncio.gather(*match_tasks)
 
         results = await asyncio.gather(*[fetch_day_upcoming(d) for d in dates_to_fetch])
-        
+
         for day_matches in results:
             for m in day_matches:
                 if m:
@@ -605,7 +625,12 @@ class ESPNSource:
         return matches
 
     async def _fetch_upcoming_match_details(
-        self, slug: str, match_id: str, event: dict, league_code: str, semaphore: asyncio.Semaphore
+        self,
+        slug: str,
+        match_id: str,
+        event: dict,
+        league_code: str,
+        semaphore: asyncio.Semaphore,
     ) -> Optional[Match]:
         """Fetch summary to get Odds (pickcenter) in parallel."""
         async with semaphore:

@@ -14,6 +14,7 @@ DEPRECATION NOTE:
     Una vez que el benchmark y staged rollout confirmen estabilidad, usar
     solo AsyncMongoRepository (Motor-native) y remover este fallback.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
+
     HAS_MOTOR = True
 except Exception:
     HAS_MOTOR = False
@@ -64,7 +66,9 @@ class AsyncMongoAdapter:
                 self.binary_artifacts = self._db["binary_artifacts"]
                 logger.info("AsyncMongoAdapter: using Motor (async) MongoDB client")
             except Exception as e:
-                logger.warning("AsyncMongoAdapter: Motor init failed, falling back: %s", e)
+                logger.warning(
+                    "AsyncMongoAdapter: Motor init failed, falling back: %s", e
+                )
                 self._use_motor = False
 
         if not self._use_motor:
@@ -74,9 +78,13 @@ class AsyncMongoAdapter:
             )
 
             self._sync_repo = get_mongo_repository()
-            logger.info("AsyncMongoAdapter: using sync MongoRepository wrapped with to_thread")
+            logger.info(
+                "AsyncMongoAdapter: using sync MongoRepository wrapped with to_thread"
+            )
 
-    async def get_cached_response(self, endpoint: str, params: dict | None = None) -> Optional[dict]:
+    async def get_cached_response(
+        self, endpoint: str, params: dict | None = None
+    ) -> Optional[dict]:
         key = f"{endpoint}:{str(params)}"
         if self._use_motor:
             doc = await self.api_cache.find_one({"key": key})
@@ -84,17 +92,33 @@ class AsyncMongoAdapter:
                 return doc.get("data")
             return None
         else:
-            return await asyncio.to_thread(self._sync_repo.get_cached_response, endpoint, params)
+            return await asyncio.to_thread(
+                self._sync_repo.get_cached_response, endpoint, params
+            )
 
-    async def save_cached_response(self, endpoint: str, data: dict, params: dict | None = None, ttl_seconds: int = 3600) -> None:
+    async def save_cached_response(
+        self,
+        endpoint: str,
+        data: dict,
+        params: dict | None = None,
+        ttl_seconds: int = 3600,
+    ) -> None:
         key = f"{endpoint}:{str(params)}"
         expires_at = get_current_time() + timedelta(seconds=ttl_seconds)
         if self._use_motor:
             await self.api_cache.update_one(
-                {"key": key}, {"$set": {"data": data, "expires_at": expires_at}}, upsert=True
+                {"key": key},
+                {"$set": {"data": data, "expires_at": expires_at}},
+                upsert=True,
             )
         else:
-            await asyncio.to_thread(self._sync_repo.save_cached_response, endpoint, data, params, ttl_seconds)
+            await asyncio.to_thread(
+                self._sync_repo.save_cached_response,
+                endpoint,
+                data,
+                params,
+                ttl_seconds,
+            )
 
     async def get_match_prediction(self, match_id: str) -> Optional[dict]:
         if self._use_motor:
@@ -103,7 +127,9 @@ class AsyncMongoAdapter:
                 return doc.get("data")
             return None
         else:
-            return await asyncio.to_thread(self._sync_repo.get_match_prediction, match_id)
+            return await asyncio.to_thread(
+                self._sync_repo.get_match_prediction, match_id
+            )
 
     async def get_match_prediction_document(self, match_id: str) -> Optional[dict]:
         """Return the full match_predictions document (including league_id)."""
@@ -113,7 +139,9 @@ class AsyncMongoAdapter:
         else:
             # Fallback: call sync repo in thread and return the raw document
             def _get_doc():
-                return self._sync_repo.match_predictions.find_one({"match_id": match_id})
+                return self._sync_repo.match_predictions.find_one(
+                    {"match_id": match_id}
+                )
 
             return await asyncio.to_thread(_get_doc)
 
@@ -123,7 +151,10 @@ class AsyncMongoAdapter:
 
         if self._use_motor:
             docs = await self.match_predictions.find(
-                {"match_id": {"$in": match_ids}, "expires_at": {"$gt": get_current_time()} }
+                {
+                    "match_id": {"$in": match_ids},
+                    "expires_at": {"$gt": get_current_time()},
+                }
             ).to_list(length=None)
             result: Dict[str, dict] = {}
             for doc in docs:
@@ -132,18 +163,35 @@ class AsyncMongoAdapter:
                     result[mid] = doc.get("data")
             return result
         else:
-            return await asyncio.to_thread(self._sync_repo.get_match_predictions_bulk, match_ids)
+            return await asyncio.to_thread(
+                self._sync_repo.get_match_predictions_bulk, match_ids
+            )
 
-    async def save_match_prediction(self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400) -> None:
+    async def save_match_prediction(
+        self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400
+    ) -> None:
         expires_at = get_current_time() + timedelta(seconds=ttl_seconds)
         if self._use_motor:
             await self.match_predictions.update_one(
                 {"match_id": match_id},
-                {"$set": {"league_id": league_id, "data": data, "expires_at": expires_at, "last_updated": get_current_time()}},
+                {
+                    "$set": {
+                        "league_id": league_id,
+                        "data": data,
+                        "expires_at": expires_at,
+                        "last_updated": get_current_time(),
+                    }
+                },
                 upsert=True,
             )
         else:
-            await asyncio.to_thread(self._sync_repo.save_match_prediction, match_id, league_id, data, ttl_seconds)
+            await asyncio.to_thread(
+                self._sync_repo.save_match_prediction,
+                match_id,
+                league_id,
+                data,
+                ttl_seconds,
+            )
 
     async def bulk_save_predictions(self, predictions_data: List[dict]) -> None:
         if not predictions_data:
@@ -152,29 +200,46 @@ class AsyncMongoAdapter:
             # Perform bulk updates sequentially to avoid complex bulk API differences
             for p in predictions_data:
                 data_payload = p.get("data") or {}
-                expires_at = get_current_time() + timedelta(seconds=p.get("ttl_seconds", 86400))
+                expires_at = get_current_time() + timedelta(
+                    seconds=p.get("ttl_seconds", 86400)
+                )
                 await self.match_predictions.update_one(
                     {"match_id": p["match_id"]},
-                    {"$set": {"league_id": p.get("league_id"), "data": data_payload, "expires_at": expires_at, "last_updated": get_current_time()}},
+                    {
+                        "$set": {
+                            "league_id": p.get("league_id"),
+                            "data": data_payload,
+                            "expires_at": expires_at,
+                            "last_updated": get_current_time(),
+                        }
+                    },
                     upsert=True,
                 )
         else:
-            await asyncio.to_thread(self._sync_repo.bulk_save_predictions, predictions_data)
+            await asyncio.to_thread(
+                self._sync_repo.bulk_save_predictions, predictions_data
+            )
 
-    async def get_training_result_with_timestamp(self, key: str) -> (Optional[dict], Optional[Any]):
+    async def get_training_result_with_timestamp(
+        self, key: str
+    ) -> (Optional[dict], Optional[Any]):
         if self._use_motor:
             doc = await self.training_results.find_one({"key": key})
             if doc:
                 return doc.get("data"), doc.get("last_updated")
             return None, None
         else:
-            return await asyncio.to_thread(self._sync_repo.get_training_result_with_timestamp, key)
+            return await asyncio.to_thread(
+                self._sync_repo.get_training_result_with_timestamp, key
+            )
 
     async def save_training_result(self, key: str, data: dict) -> None:
         """Save training result document with timestamp."""
         if self._use_motor:
             await self.training_results.update_one(
-                {"key": key}, {"$set": {"data": data, "last_updated": get_current_time()}}, upsert=True
+                {"key": key},
+                {"$set": {"data": data, "last_updated": get_current_time()}},
+                upsert=True,
             )
         else:
             await asyncio.to_thread(self._sync_repo.save_training_result, key, data)
@@ -229,7 +294,9 @@ def get_async_mongo_repository() -> Any:
         if async_flag is False:
             # Explicitly disabled: use sync fallback
             _async_mongo_repo = AsyncMongoAdapter()
-            logger.info("get_async_mongo_repository: MONGO_ASYNC_MODE=off, using AsyncMongoAdapter (sync)")
+            logger.info(
+                "get_async_mongo_repository: MONGO_ASYNC_MODE=off, using AsyncMongoAdapter (sync)"
+            )
         elif async_flag is True:
             # Explicitly enabled: require Motor
             try:
@@ -238,16 +305,16 @@ def get_async_mongo_repository() -> Any:
                 )
 
                 _async_mongo_repo = AsyncMongoRepository()
-                logger.info("get_async_mongo_repository: MONGO_ASYNC_MODE=on, using AsyncMongoRepository (Motor)")
+                logger.info(
+                    "get_async_mongo_repository: MONGO_ASYNC_MODE=on, using AsyncMongoRepository (Motor)"
+                )
             except Exception as e:
                 logger.error(
                     "MONGO_ASYNC_MODE=on but AsyncMongoRepository failed: %s. "
                     "Set MONGO_ASYNC_MODE=off to use sync fallback.",
                     e,
                 )
-                raise RuntimeError(
-                    f"MONGO_ASYNC_MODE=on but motor不可用: {e}"
-                ) from e
+                raise RuntimeError(f"MONGO_ASYNC_MODE=on but motor不可用: {e}") from e
         else:
             # Auto-detect: use Motor if available, fallback otherwise
             if HAS_MOTOR:
@@ -257,7 +324,9 @@ def get_async_mongo_repository() -> Any:
                     )
 
                     _async_mongo_repo = AsyncMongoRepository()
-                    logger.info("get_async_mongo_repository: auto-detect, using AsyncMongoRepository (Motor)")
+                    logger.info(
+                        "get_async_mongo_repository: auto-detect, using AsyncMongoRepository (Motor)"
+                    )
                 except Exception as e:
                     logger.warning(
                         "AsyncMongoRepository initialization failed (%s). Falling back to AsyncMongoAdapter.",
@@ -266,5 +335,7 @@ def get_async_mongo_repository() -> Any:
                     _async_mongo_repo = AsyncMongoAdapter()
             else:
                 _async_mongo_repo = AsyncMongoAdapter()
-                logger.info("get_async_mongo_repository: auto-detect, motor not available, using AsyncMongoAdapter (sync)")
+                logger.info(
+                    "get_async_mongo_repository: auto-detect, motor not available, using AsyncMongoAdapter (sync)"
+                )
     return _async_mongo_repo

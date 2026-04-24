@@ -4,6 +4,7 @@ This module contains small, well-tested functions that derive per-market
 labels (winner, over/under) from a persisted prediction document and the
 final match object returned by external data sources.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional

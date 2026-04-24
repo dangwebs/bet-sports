@@ -197,9 +197,13 @@ class FootballDataOrgSource:
                     self._memory_cache[cache_key] = data
                     if use_cache and repo:
                         try:
-                            await repo.save_cached_response(endpoint, data, params, ttl_seconds)
+                            await repo.save_cached_response(
+                                endpoint, data, params, ttl_seconds
+                            )
                         except Exception as e:
-                            logger.debug("Failed to persist cached response async: %s", e)
+                            logger.debug(
+                                "Failed to persist cached response async: %s", e
+                            )
 
                     return data
 

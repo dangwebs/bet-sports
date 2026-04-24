@@ -4,6 +4,7 @@ Minimal metrics baseline service
 Computes simple baseline metrics (90-day window) from labeled predictions
 persisted in the Explorer DB (MongoRepository.match_predictions).
 """
+
 from datetime import timedelta
 from typing import Dict
 

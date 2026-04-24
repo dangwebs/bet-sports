@@ -388,10 +388,13 @@ class GetLivePredictionsUseCase:
             if self.persistence_repository:
                 try:
                     pre_calculated_map = await asyncio.to_thread(
-                        self.persistence_repository.get_match_predictions_bulk, [m.id for m in matches]
+                        self.persistence_repository.get_match_predictions_bulk,
+                        [m.id for m in matches],
                     )
                 except Exception as e2:
-                    logger.warning("Bulk prefetch predictions (threaded) failed: %s", e2)
+                    logger.warning(
+                        "Bulk prefetch predictions (threaded) failed: %s", e2
+                    )
 
         # Generate predictions for each match
         results: List[MatchPredictionDTO] = []

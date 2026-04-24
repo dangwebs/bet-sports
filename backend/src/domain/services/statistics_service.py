@@ -779,15 +779,21 @@ class StatisticsService:
 
         # Update contextual stats
         is_intl = match.league.id in ["UCL", "UEL", "UECL", "WC", "EURO", "LIB", "SUD"]
-        
+
         if is_intl:
             if "international_stats" not in stats:
-                stats["international_stats"] = StatisticsService.create_empty_stats_dict()
-            StatisticsService._update_raw_stats_dict(stats["international_stats"], match, is_home)
+                stats["international_stats"] = (
+                    StatisticsService.create_empty_stats_dict()
+                )
+            StatisticsService._update_raw_stats_dict(
+                stats["international_stats"], match, is_home
+            )
         else:
             if "domestic_stats" not in stats:
                 stats["domestic_stats"] = StatisticsService.create_empty_stats_dict()
-            StatisticsService._update_raw_stats_dict(stats["domestic_stats"], match, is_home)
+            StatisticsService._update_raw_stats_dict(
+                stats["domestic_stats"], match, is_home
+            )
 
     @staticmethod
     def convert_to_domain_stats(team_name: str, raw_stats: dict) -> TeamStatistics:
@@ -870,12 +876,14 @@ class StatisticsService:
             avg_home_goals=total_home_goals / matches_with_goals,
             avg_away_goals=total_away_goals / matches_with_goals,
             avg_total_goals=(total_home_goals + total_away_goals) / matches_with_goals,
-            avg_corners=total_corners / matches_with_corners
-            if matches_with_corners > 0
-            else 9.5,
-            avg_cards=total_cards / matches_with_cards
-            if matches_with_cards > 0
-            else 4.5,
+            avg_corners=(
+                total_corners / matches_with_corners
+                if matches_with_corners > 0
+                else 9.5
+            ),
+            avg_cards=(
+                total_cards / matches_with_cards if matches_with_cards > 0 else 4.5
+            ),
         )
 
     @staticmethod
@@ -937,11 +945,11 @@ class StatisticsService:
                         "home": match.home_team.name,
                         "away": match.away_team.name,
                         "score": f"{a_score}-{b_score}",
-                        "winner": "A"
-                        if a_score > b_score
-                        else "B"
-                        if b_score > a_score
-                        else "Draw",
+                        "winner": (
+                            "A"
+                            if a_score > b_score
+                            else "B" if b_score > a_score else "Draw"
+                        ),
                     }
                 )
             elif is_b_home and is_a_away:
@@ -955,11 +963,11 @@ class StatisticsService:
                         "home": match.home_team.name,
                         "away": match.away_team.name,
                         "score": f"{b_score}-{a_score}",
-                        "winner": "B"
-                        if b_score > a_score
-                        else "A"
-                        if a_score > b_score
-                        else "Draw",
+                        "winner": (
+                            "B"
+                            if b_score > a_score
+                            else "A" if a_score > b_score else "Draw"
+                        ),
                     }
                 )
 

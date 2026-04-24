@@ -59,13 +59,17 @@ def test_suggested_picks_endpoints():
 
     class DummyLearningService:
         def register_feedback(self, feedback):
-            from src.application.use_cases.suggested_picks_use_case import FeedbackResponse
+            from src.application.use_cases.suggested_picks_use_case import (
+                FeedbackResponse,
+            )
+
             return FeedbackResponse(
                 success=True,
                 message="ok",
                 market_type=feedback.market_type,
                 new_confidence_adjustment=1.0,
             )
+
         def get_all_stats(self):
             return {}
 

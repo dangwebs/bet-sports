@@ -75,19 +75,21 @@ class LearningService:
                     logger.info(f"🔄 Legacy weights file found at {path}. Migrating...")
                     with open(path, "r") as f:
                         data = json.load(f)
-                    
+
                     legacy_weights = self._reconstruct_weights(data)
-                    
+
                     # Save to DB immediately to finalize migration
                     if self.repo:
                         self._save_to_db(legacy_weights)
                         # Cleanup local file
                         try:
                             path.unlink()
-                            logger.info(f"🗑️ Cleaned up legacy file after migration: {path}")
+                            logger.info(
+                                f"🗑️ Cleaned up legacy file after migration: {path}"
+                            )
                         except Exception as del_err:
                             logger.warning(f"Failed to remove migrated file: {del_err}")
-                    
+
                     # If we found and processed a legacy file, we use it as truth
                     return legacy_weights
                 except Exception as e:
@@ -111,7 +113,9 @@ class LearningService:
         market_perfs = {}
         for market_type, perf_data in data.get("market_performances", {}).items():
             # Handle datetime field
-            if "last_updated" in perf_data and isinstance(perf_data["last_updated"], str):
+            if "last_updated" in perf_data and isinstance(
+                perf_data["last_updated"], str
+            ):
                 perf_data["last_updated"] = datetime.fromisoformat(
                     perf_data["last_updated"]
                 )

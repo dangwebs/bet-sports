@@ -5,12 +5,38 @@ Centralized constants for the BJJ-BetSports backend.
 # Default leagues used for training and predictions (§15.B compliant)
 DEFAULT_LEAGUES = [
     # Top Tier
-    "E0", "SP1", "D1", "I1", "F1", "N1", "B1", "P1",
+    "E0",
+    "SP1",
+    "D1",
+    "I1",
+    "F1",
+    "N1",
+    "B1",
+    "P1",
     # Second/Third Tier
-    "E1", "E2", "E3", "E_FA", "SP2", "SP_C", "D2", "I2", "F2", "N2", "B2", "P2",
+    "E1",
+    "E2",
+    "E3",
+    "E_FA",
+    "SP2",
+    "SP_C",
+    "D2",
+    "I2",
+    "F2",
+    "N2",
+    "B2",
+    "P2",
     # International & South America
-    "UCL", "UEL", "UECL", "EURO", "WC", "LIB", "SUD",
-    "COL1", "ARG1", "BRA1"
+    "UCL",
+    "UEL",
+    "UECL",
+    "EURO",
+    "WC",
+    "LIB",
+    "SUD",
+    "COL1",
+    "ARG1",
+    "BRA1",
 ]
 
 # ML Model Configuration

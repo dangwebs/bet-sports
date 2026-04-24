@@ -1,7 +1,7 @@
 """
 Pick Resolution Service
 
-Centralizes the logic for determining the result (WIN/LOSS/VOID) 
+Centralizes the logic for determining the result (WIN/LOSS/VOID)
 and payout of a suggested pick based on the actual match outcome.
 """
 

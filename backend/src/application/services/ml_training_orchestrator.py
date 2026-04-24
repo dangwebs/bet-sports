@@ -52,13 +52,13 @@ def _ensure_team_stats(
     team_stats_cache: dict, statistics_service: StatisticsService, match: Any
 ):
     if match.home_team.name not in team_stats_cache:
-        team_stats_cache[
-            match.home_team.name
-        ] = statistics_service.create_empty_stats_dict()
+        team_stats_cache[match.home_team.name] = (
+            statistics_service.create_empty_stats_dict()
+        )
     if match.away_team.name not in team_stats_cache:
-        team_stats_cache[
-            match.away_team.name
-        ] = statistics_service.create_empty_stats_dict()
+        team_stats_cache[match.away_team.name] = (
+            statistics_service.create_empty_stats_dict()
+        )
     return (
         team_stats_cache[match.home_team.name],
         team_stats_cache[match.away_team.name],
@@ -119,9 +119,11 @@ def _compute_picks_metrics(
         is_won = result_str == "WIN"
 
         p_detail = {
-            "market_type": pick.market_type.value
-            if hasattr(pick.market_type, "value")
-            else str(pick.market_type),
+            "market_type": (
+                pick.market_type.value
+                if hasattr(pick.market_type, "value")
+                else str(pick.market_type)
+            ),
             "market_label": pick.market_label,
             "was_correct": is_won,
             "probability": float(pick.probability),
@@ -474,7 +476,9 @@ async def prepare_datasets(
 
 def train_league_models(ml_features: List[Any], ml_targets: List[int]):
     """Train a RandomForestClassifier on the provided features/targets and return it."""
-    clf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+    clf = RandomForestClassifier(
+        n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
+    )
     clf.fit(ml_features, ml_targets)
     return clf
 

@@ -2,7 +2,7 @@
 Match Enrichment Service
 
 This service provides logic to merge match data from multiple sources.
-It helps fill in missing statistics (corners, cards, shots) by finding the 
+It helps fill in missing statistics (corners, cards, shots) by finding the
 same match in different data sources (e.g., CSV vs API).
 """
 

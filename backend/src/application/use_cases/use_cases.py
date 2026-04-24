@@ -491,27 +491,27 @@ class GetPredictionsUseCase:
                 "league_averages": league_averages,
                 "h2h_stats": h2h_stats,
                 "prediction_data": {
-                    "predicted_home_goals": prediction.predicted_home_goals
-                    if prediction
-                    else 0.0,
-                    "predicted_away_goals": prediction.predicted_away_goals
-                    if prediction
-                    else 0.0,
-                    "home_win_probability": prediction.home_win_probability
-                    if prediction
-                    else 0.0,
-                    "draw_probability": prediction.draw_probability
-                    if prediction
-                    else 0.0,
-                    "away_win_probability": prediction.away_win_probability
-                    if prediction
-                    else 0.0,
-                    "predicted_home_corners": prediction.predicted_home_corners
-                    if prediction
-                    else 0.0,
-                    "predicted_away_corners": prediction.predicted_away_corners
-                    if prediction
-                    else 0.0,
+                    "predicted_home_goals": (
+                        prediction.predicted_home_goals if prediction else 0.0
+                    ),
+                    "predicted_away_goals": (
+                        prediction.predicted_away_goals if prediction else 0.0
+                    ),
+                    "home_win_probability": (
+                        prediction.home_win_probability if prediction else 0.0
+                    ),
+                    "draw_probability": (
+                        prediction.draw_probability if prediction else 0.0
+                    ),
+                    "away_win_probability": (
+                        prediction.away_win_probability if prediction else 0.0
+                    ),
+                    "predicted_home_corners": (
+                        prediction.predicted_home_corners if prediction else 0.0
+                    ),
+                    "predicted_away_corners": (
+                        prediction.predicted_away_corners if prediction else 0.0
+                    ),
                     "predicted_home_yellow_cards": (
                         prediction.predicted_home_yellow_cards if prediction else 0.0
                     ),
@@ -556,13 +556,14 @@ class GetPredictionsUseCase:
                 )
 
                 async_repo = get_async_mongo_repository()
-                db_data, db_last_updated = await async_repo.get_training_result_with_timestamp(
-                    cache_key
+                db_data, db_last_updated = (
+                    await async_repo.get_training_result_with_timestamp(cache_key)
                 )
             except Exception:
                 # Fallback to threaded sync repo
                 db_data, db_last_updated = await asyncio.to_thread(
-                    self.persistence_repository.get_training_result_with_timestamp, cache_key
+                    self.persistence_repository.get_training_result_with_timestamp,
+                    cache_key,
                 )
 
         # 0.2 Try Ephemeral Cache (Memory/Disk)
@@ -591,7 +592,9 @@ class GetPredictionsUseCase:
         if db_data:
             logger.info("Serving persistent (PostgreSQL) predictions for %s", league_id)
             # Warm up ephemeral cache for next time (offload to thread)
-            await asyncio.to_thread(cache_service.set, cache_key, db_data, ttl_seconds=86400)
+            await asyncio.to_thread(
+                cache_service.set, cache_key, db_data, ttl_seconds=86400
+            )
             response = PredictionsResponseDTO(**db_data)
 
             # STRICT DATE FILTERING
@@ -745,7 +748,9 @@ class GetPredictionsUseCase:
         """
         try:
             # 1. Ephemeral Cache (offload to thread if implementation is blocking)
-            await asyncio.to_thread(cache_service.set, cache_key, response.model_dump(), ttl_seconds=86400)
+            await asyncio.to_thread(
+                cache_service.set, cache_key, response.model_dump(), ttl_seconds=86400
+            )
 
             # 2. Persistent DB (Fallback for restarts/deployments)
             if self.persistence_repository:
@@ -765,7 +770,9 @@ class GetPredictionsUseCase:
                     )
 
                     async_repo = get_async_mongo_repository()
-                    await async_repo.save_training_result(cache_key, response.model_dump())
+                    await async_repo.save_training_result(
+                        cache_key, response.model_dump()
+                    )
                     await async_repo.bulk_save_predictions(prediction_batch)
                     logger.info(
                         "✓ Massively saved %s pre-calculated predictions for league %s (async)",
@@ -773,10 +780,19 @@ class GetPredictionsUseCase:
                         league_id,
                     )
                 except Exception as e:
-                    logger.warning("Async persist failed, falling back to threaded sync: %s", e)
+                    logger.warning(
+                        "Async persist failed, falling back to threaded sync: %s", e
+                    )
                     # Fallback to threaded sync calls
-                    await asyncio.to_thread(self.persistence_repository.save_training_result, cache_key, response.model_dump())
-                    await asyncio.to_thread(self.persistence_repository.bulk_save_predictions, prediction_batch)
+                    await asyncio.to_thread(
+                        self.persistence_repository.save_training_result,
+                        cache_key,
+                        response.model_dump(),
+                    )
+                    await asyncio.to_thread(
+                        self.persistence_repository.bulk_save_predictions,
+                        prediction_batch,
+                    )
                     logger.info(
                         "✓ Massively saved %s pre-calculated predictions for league %s (threaded)",
                         len(predictions),
@@ -1041,14 +1057,18 @@ class GetPredictionsUseCase:
         if picks:
             pick_dtos = [
                 SuggestedPickDTO(
-                    market_type=p.market_type.value
-                    if hasattr(p.market_type, "value")
-                    else p.market_type,
+                    market_type=(
+                        p.market_type.value
+                        if hasattr(p.market_type, "value")
+                        else p.market_type
+                    ),
                     market_label=p.market_label,
                     probability=p.probability,
-                    confidence_level=p.confidence_level.value
-                    if hasattr(p.confidence_level, "value")
-                    else p.confidence_level,
+                    confidence_level=(
+                        p.confidence_level.value
+                        if hasattr(p.confidence_level, "value")
+                        else p.confidence_level
+                    ),
                     reasoning=p.reasoning,
                     risk_level=p.risk_level,
                     is_recommended=p.is_recommended,
@@ -1286,14 +1306,18 @@ class GetMatchDetailsUseCase:
         if picks:
             pick_dtos = [
                 SuggestedPickDTO(
-                    market_type=p.market_type.value
-                    if hasattr(p.market_type, "value")
-                    else p.market_type,
+                    market_type=(
+                        p.market_type.value
+                        if hasattr(p.market_type, "value")
+                        else p.market_type
+                    ),
                     market_label=p.market_label,
                     probability=p.probability,
-                    confidence_level=p.confidence_level.value
-                    if hasattr(p.confidence_level, "value")
-                    else p.confidence_level,
+                    confidence_level=(
+                        p.confidence_level.value
+                        if hasattr(p.confidence_level, "value")
+                        else p.confidence_level
+                    ),
                     reasoning=p.reasoning,
                     risk_level=p.risk_level,
                     is_recommended=p.is_recommended,
@@ -1776,14 +1800,18 @@ class GetTeamPredictionsUseCase:
         if picks:
             pick_dtos = [
                 SuggestedPickDTO(
-                    market_type=p.market_type.value
-                    if hasattr(p.market_type, "value")
-                    else p.market_type,
+                    market_type=(
+                        p.market_type.value
+                        if hasattr(p.market_type, "value")
+                        else p.market_type
+                    ),
                     market_label=p.market_label,
                     probability=p.probability,
-                    confidence_level=p.confidence_level.value
-                    if hasattr(p.confidence_level, "value")
-                    else p.confidence_level,
+                    confidence_level=(
+                        p.confidence_level.value
+                        if hasattr(p.confidence_level, "value")
+                        else p.confidence_level
+                    ),
                     reasoning=p.reasoning,
                     risk_level=p.risk_level,
                     is_recommended=p.is_recommended,

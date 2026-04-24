@@ -8,6 +8,7 @@ guarded so importing the module does not raise if `motor` is not installed
 
 The repository mirrors the sync `MongoRepository` API but with async methods.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,7 @@ from pymongo import UpdateOne
 
 try:
     from motor.motor_asyncio import AsyncIOMotorClient  # type: ignore
+
     HAS_MOTOR = True
 except Exception:
     AsyncIOMotorClient = None  # type: ignore
@@ -35,6 +37,7 @@ except Exception:
     def _to_bson_friendly(value: Any) -> Any:  # type: ignore
         return value
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,9 +50,13 @@ class AsyncMongoRepository:
 
     def __init__(self, mongo_uri: Optional[str] = None, db_name: Optional[str] = None):
         if not HAS_MOTOR or AsyncIOMotorClient is None:
-            raise RuntimeError("motor (AsyncIOMotorClient) is not available; install motor to use AsyncMongoRepository")
+            raise RuntimeError(
+                "motor (AsyncIOMotorClient) is not available; install motor to use AsyncMongoRepository"
+            )
 
-        mongo_uri = mongo_uri or os.getenv("MONGO_URI", "mongodb://admin:adminpassword@localhost:27017/")
+        mongo_uri = mongo_uri or os.getenv(
+            "MONGO_URI", "mongodb://admin:adminpassword@localhost:27017/"
+        )
         db_name = db_name or os.getenv("MONGO_DB_NAME", "bjj_betsports")
 
         self.client = AsyncIOMotorClient(mongo_uri)
@@ -67,14 +74,18 @@ class AsyncMongoRepository:
     async def save_training_result(self, key: str, data: dict) -> None:
         normalized = _to_bson_friendly(data)
         await self.training_results.update_one(
-            {"key": key}, {"$set": {"data": normalized, "last_updated": get_current_time()}}, upsert=True
+            {"key": key},
+            {"$set": {"data": normalized, "last_updated": get_current_time()}},
+            upsert=True,
         )
 
     async def get_training_result(self, key: str) -> Optional[dict]:
         doc = await self.training_results.find_one({"key": key})
         return doc.get("data") if doc else None
 
-    async def get_training_result_with_timestamp(self, key: str) -> Tuple[Optional[dict], Optional[Any]]:
+    async def get_training_result_with_timestamp(
+        self, key: str
+    ) -> Tuple[Optional[dict], Optional[Any]]:
         doc = await self.training_results.find_one({"key": key})
         if doc:
             return doc.get("data"), doc.get("last_updated")
@@ -88,7 +99,9 @@ class AsyncMongoRepository:
             out[doc["key"]] = doc["data"]
         return out
 
-    async def save_match_prediction(self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400) -> None:
+    async def save_match_prediction(
+        self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400
+    ) -> None:
         try:
             if not isinstance(data, dict):
                 data = {"payload": data}
@@ -105,7 +118,14 @@ class AsyncMongoRepository:
         expires_at = get_current_time() + timedelta(seconds=ttl_seconds)
         await self.match_predictions.update_one(
             {"match_id": match_id},
-            {"$set": {"league_id": league_id, "data": data, "expires_at": expires_at, "last_updated": get_current_time()}},
+            {
+                "$set": {
+                    "league_id": league_id,
+                    "data": data,
+                    "expires_at": expires_at,
+                    "last_updated": get_current_time(),
+                }
+            },
             upsert=True,
         )
 
@@ -123,7 +143,9 @@ class AsyncMongoRepository:
     async def get_match_predictions_bulk(self, match_ids: List[str]) -> Dict[str, dict]:
         if not match_ids:
             return {}
-        cursor = self.match_predictions.find({"match_id": {"$in": match_ids}, "expires_at": {"$gt": get_current_time()}})
+        cursor = self.match_predictions.find(
+            {"match_id": {"$in": match_ids}, "expires_at": {"$gt": get_current_time()}}
+        )
         result: Dict[str, dict] = {}
         async for doc in cursor:
             mid = doc.get("match_id")
@@ -151,11 +173,20 @@ class AsyncMongoRepository:
             except Exception:
                 pass
 
-            expires_at = get_current_time() + timedelta(seconds=p.get("ttl_seconds", 86400))
+            expires_at = get_current_time() + timedelta(
+                seconds=p.get("ttl_seconds", 86400)
+            )
             operations.append(
                 UpdateOne(
                     {"match_id": p["match_id"]},
-                    {"$set": {"league_id": p.get("league_id"), "data": data_payload, "expires_at": expires_at, "last_updated": get_current_time()}},
+                    {
+                        "$set": {
+                            "league_id": p.get("league_id"),
+                            "data": data_payload,
+                            "expires_at": expires_at,
+                            "last_updated": get_current_time(),
+                        }
+                    },
                     upsert=True,
                 )
             )
@@ -164,29 +195,43 @@ class AsyncMongoRepository:
             await self.match_predictions.bulk_write(operations)
 
     async def get_all_active_predictions(self) -> List[dict]:
-        cursor = self.match_predictions.find({"expires_at": {"$gt": get_current_time()}})
+        cursor = self.match_predictions.find(
+            {"expires_at": {"$gt": get_current_time()}}
+        )
         out = []
         async for doc in cursor:
-            out.append({
-                "match_id": doc["match_id"],
-                "prediction": doc["data"],
-                "last_updated": doc.get("last_updated"),
-            })
+            out.append(
+                {
+                    "match_id": doc["match_id"],
+                    "prediction": doc["data"],
+                    "last_updated": doc.get("last_updated"),
+                }
+            )
         return out
 
-    async def save_cached_response(self, endpoint: str, data: dict, params: dict = None, ttl_seconds: int = 3600) -> None:
+    async def save_cached_response(
+        self, endpoint: str, data: dict, params: dict = None, ttl_seconds: int = 3600
+    ) -> None:
         key = f"{endpoint}:{str(params)}"
         expires_at = get_current_time() + timedelta(seconds=ttl_seconds)
-        await self.api_cache.update_one({"key": key}, {"$set": {"data": data, "expires_at": expires_at}}, upsert=True)
+        await self.api_cache.update_one(
+            {"key": key},
+            {"$set": {"data": data, "expires_at": expires_at}},
+            upsert=True,
+        )
 
-    async def get_cached_response(self, endpoint: str, params: dict = None) -> Optional[dict]:
+    async def get_cached_response(
+        self, endpoint: str, params: dict = None
+    ) -> Optional[dict]:
         key = f"{endpoint}:{str(params)}"
         doc = await self.api_cache.find_one({"key": key})
         if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
             return doc.get("data")
         return None
 
-    async def clear_all_predictions(self, league_ids: Optional[List[str]] = None) -> bool:
+    async def clear_all_predictions(
+        self, league_ids: Optional[List[str]] = None
+    ) -> bool:
         if league_ids:
             await self.match_predictions.delete_many({"league_id": {"$in": league_ids}})
         else:
@@ -195,7 +240,9 @@ class AsyncMongoRepository:
 
     async def clear_all_data(self) -> Dict[str, int]:
         training_deleted = (await self.training_results.delete_many({})).deleted_count
-        predictions_deleted = (await self.match_predictions.delete_many({})).deleted_count
+        predictions_deleted = (
+            await self.match_predictions.delete_many({})
+        ).deleted_count
         cache_deleted = (await self.api_cache.delete_many({})).deleted_count
         app_state_deleted = (await self.app_state.delete_many({})).deleted_count
         artifacts_deleted = (await self.binary_artifacts.delete_many({})).deleted_count
@@ -210,14 +257,22 @@ class AsyncMongoRepository:
 
     async def save_app_state(self, key: str, data: dict) -> None:
         normalized = _to_bson_friendly(data)
-        await self.app_state.update_one({"key": key}, {"$set": {"data": normalized, "last_updated": get_current_time()}}, upsert=True)
+        await self.app_state.update_one(
+            {"key": key},
+            {"$set": {"data": normalized, "last_updated": get_current_time()}},
+            upsert=True,
+        )
 
     async def get_app_state(self, key: str) -> Optional[dict]:
         doc = await self.app_state.find_one({"key": key})
         return doc.get("data") if doc else None
 
     async def save_binary_artifact(self, key: str, binary_data: bytes) -> None:
-        await self.binary_artifacts.update_one({"key": key}, {"$set": {"data": Binary(binary_data), "last_updated": get_current_time()}}, upsert=True)
+        await self.binary_artifacts.update_one(
+            {"key": key},
+            {"$set": {"data": Binary(binary_data), "last_updated": get_current_time()}},
+            upsert=True,
+        )
 
     async def get_binary_artifact(self, key: str) -> Optional[bytes]:
         doc = await self.binary_artifacts.find_one({"key": key})

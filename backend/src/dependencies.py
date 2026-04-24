@@ -4,6 +4,7 @@ API Dependencies Module
 Provides dependency injection for FastAPI routes.
 Contains factory functions for creating use case dependencies.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -24,7 +25,9 @@ from src.domain.services.prediction_service import PredictionService
 from src.domain.services.risk_management.risk_manager import RiskManager
 from src.domain.services.statistics_service import StatisticsService
 from src.infrastructure.cache.cache_service import get_cache_service
-from src.infrastructure.repositories.async_mongo_adapter import get_async_mongo_repository
+from src.infrastructure.repositories.async_mongo_adapter import (
+    get_async_mongo_repository,
+)
 from src.infrastructure.data_sources.espn import ESPNSource
 from src.infrastructure.data_sources.football_data_org import FootballDataOrgSource
 from src.infrastructure.data_sources.football_data_uk import FootballDataUKSource

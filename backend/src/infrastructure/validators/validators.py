@@ -4,6 +4,7 @@ These are intentionally conservative and dependency-light: they avoid optional
 heavy libraries and provide safe fallbacks so the API can run in minimal
 environments.
 """
+
 from __future__ import annotations
 
 import json

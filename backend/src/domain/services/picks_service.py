@@ -326,9 +326,11 @@ class PicksService:
 
         # 2. Home Attack Strength
         home_att = self._calculate_weighted_strength(
-            home_stats.home_goals_per_match
-            if home_stats.home_matches_played > 3
-            else home_stats.goals_per_match,
+            (
+                home_stats.home_goals_per_match
+                if home_stats.home_matches_played > 3
+                else home_stats.goals_per_match
+            ),
             avg_home_goals,
             home_stats.recent_form,
         )
@@ -337,27 +339,33 @@ class PicksService:
         # Conceded relative to League Home Avg (they are playing away vs home).
         # Defense strength: Goals Conceded / Avg Goals Conceded by Away Teams.
         away_def = self._calculate_weighted_strength(
-            away_stats.away_goals_conceded_per_match
-            if away_stats.away_matches_played > 3
-            else away_stats.goals_conceded_per_match,
+            (
+                away_stats.away_goals_conceded_per_match
+                if away_stats.away_matches_played > 3
+                else away_stats.goals_conceded_per_match
+            ),
             avg_home_goals,
             away_stats.recent_form,
         )
 
         # 4. Away Attack Strength
         away_att = self._calculate_weighted_strength(
-            away_stats.away_goals_per_match
-            if away_stats.away_matches_played > 3
-            else away_stats.goals_per_match,
+            (
+                away_stats.away_goals_per_match
+                if away_stats.away_matches_played > 3
+                else away_stats.goals_per_match
+            ),
             avg_away_goals,
             away_stats.recent_form,
         )
 
         # 5. Home Defense Strength
         home_def = self._calculate_weighted_strength(
-            home_stats.home_goals_conceded_per_match
-            if home_stats.home_matches_played > 3
-            else home_stats.goals_conceded_per_match,
+            (
+                home_stats.home_goals_conceded_per_match
+                if home_stats.home_matches_played > 3
+                else home_stats.goals_conceded_per_match
+            ),
             avg_away_goals,
             home_stats.recent_form,
         )
@@ -1853,12 +1861,16 @@ class PicksService:
             stat_avg=avg,
             lines=[2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5],
             market_types=(
-                MarketType.HOME_CORNERS_OVER
-                if is_home
-                else MarketType.AWAY_CORNERS_OVER,
-                MarketType.HOME_CORNERS_UNDER
-                if is_home
-                else MarketType.AWAY_CORNERS_UNDER,
+                (
+                    MarketType.HOME_CORNERS_OVER
+                    if is_home
+                    else MarketType.AWAY_CORNERS_OVER
+                ),
+                (
+                    MarketType.HOME_CORNERS_UNDER
+                    if is_home
+                    else MarketType.AWAY_CORNERS_UNDER
+                ),
             ),
             label_formats=(
                 f"{team_name} - Más de {{}} córners",
