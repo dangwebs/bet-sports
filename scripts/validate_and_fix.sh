@@ -39,6 +39,9 @@ else
         python3 -m black src/ tests/ || echo "❌ Falló Black. Asegúrate de tenerlo instalado."
         echo "Corriendo Ruff (auto-fix)..."
         python3 -m ruff check --fix src/ tests/ || echo "⚠️  Ruff no encontrado o falló."
+        
+        echo "Corriendo Mypy (Types)..."
+        python3 -m mypy src/ --ignore-missing-imports --follow-imports=skip || { echo "❌ Mypy detectó errores. Por favor corrígelos antes de subir."; exit 1; }
         cd ..
     fi
 
