@@ -18,9 +18,9 @@ class DummyLearningService:
 
 
 def test_feedback_endpoint_registers_and_returns_adjustment(monkeypatch):
-    from src.dependencies import get_learning_service
+    import src.dependencies as deps
     
-    app.dependency_overrides[get_learning_service] = lambda: DummyLearningService()
+    app.dependency_overrides[deps.get_learning_service] = lambda: DummyLearningService()
 
     client = TestClient(app)
 

@@ -55,7 +55,7 @@ def test_live_matches_with_doc():
 
 
 def test_suggested_picks_endpoints():
-    from src.dependencies import get_learning_service
+    import src.dependencies as deps
 
     class DummyLearningService:
         def register_feedback(self, feedback):
@@ -69,7 +69,7 @@ def test_suggested_picks_endpoints():
         def get_all_stats(self):
             return {}
 
-    app.dependency_overrides[get_learning_service] = lambda: DummyLearningService()
+    app.dependency_overrides[deps.get_learning_service] = lambda: DummyLearningService()
     client = TestClient(app)
     try:
         r = client.get("/api/v1/suggested-picks/match/foo")
