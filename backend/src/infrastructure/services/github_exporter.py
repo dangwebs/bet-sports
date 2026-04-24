@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class GithubExporterService:
     """Exports ML JSON predictions to a GitHub repository using GitOps."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.github_token = os.getenv("GITHUB_TOKEN")
         self.github_username = os.getenv("GITHUB_USERNAME", "Worker-Bot")
         self.github_email = os.getenv("GITHUB_EMAIL", "worker@bjj-betsports.local")
@@ -47,7 +47,7 @@ class GithubExporterService:
             logger.error(f"❌ Failed to push to GitHub: {e}")
             return False
 
-    def _configure_git(self):
+    def _configure_git(self) -> None:
         """Sets global git config inside the container."""
         subprocess.run(
             ["git", "config", "--global", "user.name", self.github_username],
@@ -66,7 +66,7 @@ class GithubExporterService:
             capture_output=True,
         )
 
-    def _sync_repo(self):
+    def _sync_repo(self) -> None:
         """Clones the repo if it doesn't exist, else pulls latest changes."""
         repo_url = f"https://{self.github_token}@github.com/{self.github_repo}.git"
 

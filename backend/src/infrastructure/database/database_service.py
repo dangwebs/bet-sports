@@ -1,8 +1,9 @@
 import logging
 import os
+from typing import Optional
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +15,11 @@ class DatabaseService:
     Service for managing database connections and sessions.
     """
 
-    def __init__(self, db_url: str = None):
+    db_url: str
+
+    def __init__(self, db_url: Optional[str] = None) -> None:
         # Priority: db_url param -> DATABASE_URL env
-        self.db_url = db_url or os.getenv("DATABASE_URL")
+        self.db_url = str(db_url or os.getenv("DATABASE_URL") or "")
 
         if not self.db_url:
             # Fail Fast: The application must not run without a configured PostgreSQL
@@ -39,7 +42,7 @@ class DatabaseService:
 
         self._initialize_engine()
 
-    def _initialize_engine(self):
+    def _initialize_engine(self) -> None:
         try:
             # Create engine
             # pool_pre_ping=True helps with dropped connections (common in cloud envs)
@@ -70,7 +73,7 @@ class DatabaseService:
             )
             raise e  # Re-raise the exception to stop the application startup
 
-    def create_tables(self):
+    def create_tables(self) -> None:
         """Create all tables defined in Base."""
         try:
             Base.metadata.create_all(bind=self.engine)
@@ -79,7 +82,7 @@ class DatabaseService:
             logger.error("Failed to create database tables: %s", e)
             raise e
 
-    def get_session(self):
+    def get_session(self) -> Session:
         """Get a new database session."""
         return self.SessionLocal()
 

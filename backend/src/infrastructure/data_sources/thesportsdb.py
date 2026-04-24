@@ -27,7 +27,7 @@ class TheSportsDBConfig:
     base_url: str = "https://www.thesportsdb.com/api/v1/json/3"
     timeout: int = 30
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.api_key is None:
             # '3' is a common free tier key for testing
             self.api_key = os.getenv("THESPORTSDB_KEY", "3")
@@ -40,7 +40,7 @@ class TheSportsDBClient:
 
     SOURCE_NAME = "TheSportsDB"
 
-    def __init__(self, config: Optional[TheSportsDBConfig] = None):
+    def __init__(self, config: Optional[TheSportsDBConfig] = None) -> None:
         self.config = config or TheSportsDBConfig()
 
     async def _make_request(
@@ -55,7 +55,7 @@ class TheSportsDBClient:
                     url, params=params, timeout=self.config.timeout
                 )
                 response.raise_for_status()
-                return response.json()
+                return dict(response.json())
         except Exception as e:
             logger.error(f"TheSportsDB request error: {e}")
             return None
@@ -99,7 +99,7 @@ class TheSportsDBClient:
         """
         # Map internal ID to TheSportsDB ID
         # Values from: https://www.thesportsdb.com/api/v1/json/3/all_leagues.php
-        INTERNAL_TO_TSDB = {
+        INTERNAL_TO_TSDB: dict[str, str] = {
             "E0": "4328",  # Premier League
             "E1": "4329",  # Championship
             "SP1": "4335",  # La Liga
@@ -294,7 +294,7 @@ class TheSportsDBClient:
             List of finished Match objects with results
         """
         # Map internal ID to TheSportsDB ID
-        INTERNAL_TO_TSDB = {
+        INTERNAL_TO_TSDB: dict[str, str] = {
             # "E0": "4328",   # Premier League
             # "SP1": "4335",  # La Liga
             # "D1": "4331",   # Bundesliga
