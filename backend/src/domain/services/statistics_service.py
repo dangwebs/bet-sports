@@ -782,9 +782,9 @@ class StatisticsService:
 
         if is_intl:
             if "international_stats" not in stats:
-                stats["international_stats"] = (
-                    StatisticsService.create_empty_stats_dict()
-                )
+                stats[
+                    "international_stats"
+                ] = StatisticsService.create_empty_stats_dict()
             StatisticsService._update_raw_stats_dict(
                 stats["international_stats"], match, is_home
             )
@@ -948,7 +948,9 @@ class StatisticsService:
                         "winner": (
                             "A"
                             if a_score > b_score
-                            else "B" if b_score > a_score else "Draw"
+                            else "B"
+                            if b_score > a_score
+                            else "Draw"
                         ),
                     }
                 )
@@ -966,7 +968,9 @@ class StatisticsService:
                         "winner": (
                             "B"
                             if b_score > a_score
-                            else "A" if a_score > b_score else "Draw"
+                            else "A"
+                            if a_score > b_score
+                            else "Draw"
                         ),
                     }
                 )

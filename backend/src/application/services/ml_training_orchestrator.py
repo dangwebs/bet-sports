@@ -52,13 +52,13 @@ def _ensure_team_stats(
     team_stats_cache: dict, statistics_service: StatisticsService, match: Any
 ):
     if match.home_team.name not in team_stats_cache:
-        team_stats_cache[match.home_team.name] = (
-            statistics_service.create_empty_stats_dict()
-        )
+        team_stats_cache[
+            match.home_team.name
+        ] = statistics_service.create_empty_stats_dict()
     if match.away_team.name not in team_stats_cache:
-        team_stats_cache[match.away_team.name] = (
-            statistics_service.create_empty_stats_dict()
-        )
+        team_stats_cache[
+            match.away_team.name
+        ] = statistics_service.create_empty_stats_dict()
     return (
         team_stats_cache[match.home_team.name],
         team_stats_cache[match.away_team.name],

@@ -556,9 +556,10 @@ class GetPredictionsUseCase:
                 )
 
                 async_repo = get_async_mongo_repository()
-                db_data, db_last_updated = (
-                    await async_repo.get_training_result_with_timestamp(cache_key)
-                )
+                (
+                    db_data,
+                    db_last_updated,
+                ) = await async_repo.get_training_result_with_timestamp(cache_key)
             except Exception:
                 # Fallback to threaded sync repo
                 db_data, db_last_updated = await asyncio.to_thread(
