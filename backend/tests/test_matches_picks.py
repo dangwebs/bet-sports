@@ -59,19 +59,18 @@ def test_suggested_picks_endpoints():
 
     class DummyLearningService:
         def register_feedback(self, feedback):
-            from src.application.use_cases.suggested_picks_use_case import (
-                FeedbackResponse,
-            )
+            pass
 
-            return FeedbackResponse(
-                success=True,
-                message="ok",
-                market_type=feedback.market_type,
-                new_confidence_adjustment=1.0,
-            )
+        def get_market_adjustment(self, market_type):
+            return 1.0
 
         def get_all_stats(self):
             return {}
+
+        def get_learning_weights(self):
+            from src.domain.entities.betting_feedback import LearningWeights
+
+            return LearningWeights()
 
     app.dependency_overrides[deps.get_learning_service] = lambda: DummyLearningService()
     client = TestClient(app)
