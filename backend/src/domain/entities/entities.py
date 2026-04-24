@@ -42,7 +42,7 @@ class Team:
     country: Optional[str] = None
     logo_url: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("Team name cannot be empty")
 
@@ -64,7 +64,7 @@ class League:
     country: str
     season: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.name or not self.country:
             raise ValueError("League name and country are required")
 
@@ -122,7 +122,7 @@ class Match:
     events: list["MatchEvent"] = field(default_factory=list)
     data_fetched_at: Optional[datetime] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Ensure data consistency logic."""
         # 1. Shots on target must be at least goals scored
         if self.home_goals is not None and self.home_goals > 0:
@@ -243,7 +243,7 @@ class Prediction:
     # Traceability metadata for the model that generated this prediction
     model_metadata: dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate probability values."""
         probs = [
             self.home_win_probability,
@@ -272,7 +272,7 @@ class Prediction:
             "Draw (X)": self.draw_probability,
             "Away Win (2)": self.away_win_probability,
         }
-        return max(probs, key=probs.get)
+        return max(probs, key=lambda k: probs[k])
 
     @property
     def over_under_recommendation(self) -> str:
