@@ -165,6 +165,9 @@ class DummyCache:
     def get_live_matches(self, key):
         return None
 
+    async def aget_live_matches(self, key):
+        return self.get_live_matches(key)
+
     def set_live_matches(self, value, key):
         self._live = (value, key)
 
