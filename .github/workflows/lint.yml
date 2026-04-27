@@ -19,7 +19,7 @@ jobs:
 
       - name: Install Python tools
         run: |
-          pip install ruff black isort
+          pip install ruff black isort mypy==1.8.0 pytz types-pytz
 
       - name: Run Python linters and type check
         run: |

@@ -18,24 +18,38 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 from bson.binary import Binary
 from pymongo import UpdateOne
-
-try:
-    from motor.motor_asyncio import AsyncIOMotorClient
-
-    HAS_MOTOR = True
-except Exception:
-    AsyncIOMotorClient = None  # type: ignore
-    HAS_MOTOR = False
-
 from src.utils.time_utils import get_current_time
+
+_mongo_to_bson_friendly: Any
 
 try:
     # reuse helper to normalize data
-    from src.infrastructure.repositories.mongo_repository import _to_bson_friendly
+    from src.infrastructure.repositories.mongo_repository import (
+        _to_bson_friendly as _mongo_to_bson_friendly_impl,
+    )
+
+    _mongo_to_bson_friendly = _mongo_to_bson_friendly_impl
 except Exception:
-    # Fallback: minimal serializer if import fails for some reason
+    _mongo_to_bson_friendly = None
+
+_MotorAsyncIOMotorClient: Any
+
+try:
+    from motor.motor_asyncio import AsyncIOMotorClient as _MotorAsyncIOMotorClientImpl
+
+    _MotorAsyncIOMotorClient = _MotorAsyncIOMotorClientImpl
+except Exception:
+    _MotorAsyncIOMotorClient = None
+
+MotorAsyncIOMotorClient: Any = _MotorAsyncIOMotorClient
+HAS_MOTOR = _MotorAsyncIOMotorClient is not None
+
+if _mongo_to_bson_friendly is None:
+    # Fallback: minimal serializer if import fails for some reason.
     def _to_bson_friendly(value: Any) -> Any:
         return value
+else:
+    _to_bson_friendly = _mongo_to_bson_friendly
 
 
 logger = logging.getLogger(__name__)
@@ -49,7 +63,7 @@ class AsyncMongoRepository:
     """
 
     def __init__(self, mongo_uri: Optional[str] = None, db_name: Optional[str] = None):
-        if not HAS_MOTOR or AsyncIOMotorClient is None:
+        if not HAS_MOTOR or MotorAsyncIOMotorClient is None:
             raise RuntimeError(
                 "motor (AsyncIOMotorClient) is not available; install motor "
                 "to use AsyncMongoRepository"
@@ -60,7 +74,7 @@ class AsyncMongoRepository:
         )
         db_name = db_name or os.getenv("MONGO_DB_NAME", "bjj_betsports")
 
-        self.client = AsyncIOMotorClient(mongo_uri)
+        self.client = MotorAsyncIOMotorClient(mongo_uri)
         if db_name is None:
             raise ValueError(
                 "db_name must be provided or set via MONGO_DB_NAME env var"
@@ -143,7 +157,7 @@ class AsyncMongoRepository:
     async def get_match_prediction_document(self, match_id: str) -> Optional[dict]:
         """Return the full match_predictions document (including league_id)."""
         doc = await self.match_predictions.find_one({"match_id": match_id})
-        return doc
+        return cast(Optional[dict], doc)
 
     async def get_match_predictions_bulk(self, match_ids: List[str]) -> Dict[str, dict]:
         if not match_ids:

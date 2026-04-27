@@ -142,7 +142,7 @@ class AsyncMongoAdapter:
         """Return the full match_predictions document (including league_id)."""
         if self._use_motor:
             doc = await self.match_predictions.find_one({"match_id": match_id})
-            return doc
+            return cast(Optional[dict], doc)
         else:
             if not self._sync_repo:
                 return None
