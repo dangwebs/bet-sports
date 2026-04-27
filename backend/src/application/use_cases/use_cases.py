@@ -5,10 +5,14 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import joblib
 from pytz import timezone
+
+if TYPE_CHECKING:
+    from src.domain.entities.entities import TeamStatistics
+
 from src.application.dtos.dtos import (
     CountryDTO,
     LeagueDTO,
@@ -287,7 +291,7 @@ class GetPredictionsUseCase:
             )
             features_batch.append(feat)
 
-        return features_batch
+        return list(features_batch)
 
     def _normalize_and_apply_probs(
         self, prediction: Prediction, ml_probs: list[float]
@@ -415,7 +419,7 @@ class GetPredictionsUseCase:
                 results.append(res)
             except Exception as e:
                 logger.error(f"Error generating picks sync: {e}")
-                results.append(getattr(pick_res, "suggested_picks", []))
+                results.append([])
 
         return results
 
@@ -727,7 +731,7 @@ class GetPredictionsUseCase:
                 )
             )
 
-        return predictions
+        return list(predictions)
 
     def _is_cached_response_stale(
         self, db_last_updated: datetime, cached_response: dict[str, Any]
@@ -743,9 +747,9 @@ class GetPredictionsUseCase:
             if isinstance(gen_at_val, dt):
                 gen_at = gen_at_val
             else:
-                if isinstance(gen_at_val, str) and gen_at_val.endswith("Z"):
-                    gen_at_val = gen_at_val[:-1] + "+00:00"
-                gen_at = dt.fromisoformat(gen_at_val)
+                if not gen_at_val:
+                    return True
+                gen_at = dt.fromisoformat(str(gen_at_val))
 
             if gen_at.tzinfo is None:
                 gen_at = gen_at.replace(tzinfo=dt_timezone.utc)
@@ -1529,42 +1533,56 @@ class GetMatchDetailsUseCase:
         )
 
     def _enrich_match_dto_with_projections(
-        self, match: Any, home_stats: Any, away_stats: Any, prediction: Any
-    ) -> Any:
+        self,
+        match: Match,
+        home_stats: TeamStatistics | None,
+        away_stats: TeamStatistics | None,
+        prediction: Prediction | None,
+    ) -> MatchDTO:
         """Add projected statistics to MatchDTO for non-started matches."""
         match_dto = self._match_to_dto(match)
         if match.status not in ["NS", "TIMED", "SCHEDULED"]:
             return match_dto
 
         # Extract projected values using averages or direct predictions
-        def get_stat(stats, attr, pred_val):
-            val = getattr(stats, attr, 0) if stats and stats.matches_played > 0 else 0
-            if val == 0 and prediction:
+        def get_stat(stats: TeamStatistics | None, attr: str, pred_val: float) -> float:
+            val = float(
+                getattr(stats, attr, 0.0) if stats and stats.matches_played > 0 else 0.0
+            )
+            if val == 0.0 and prediction:
                 return pred_val
             return val
 
         h_corners = get_stat(
-            home_stats, "avg_corners_per_match", prediction.predicted_home_corners
+            home_stats,
+            "avg_corners_per_match",
+            prediction.predicted_home_corners if prediction else 0.0,
         )
         h_yellow = get_stat(
             home_stats,
             "avg_yellow_cards_per_match",
-            prediction.predicted_home_yellow_cards,
+            prediction.predicted_home_yellow_cards if prediction else 0.0,
         )
         h_red = get_stat(
-            home_stats, "avg_red_cards_per_match", prediction.predicted_home_red_cards
+            home_stats,
+            "avg_red_cards_per_match",
+            prediction.predicted_home_red_cards if prediction else 0.0,
         )
 
         a_corners = get_stat(
-            away_stats, "avg_corners_per_match", prediction.predicted_away_corners
+            away_stats,
+            "avg_corners_per_match",
+            prediction.predicted_away_corners if prediction else 0.0,
         )
         a_yellow = get_stat(
             away_stats,
             "avg_yellow_cards_per_match",
-            prediction.predicted_away_yellow_cards,
+            prediction.predicted_away_yellow_cards if prediction else 0.0,
         )
         a_red = get_stat(
-            away_stats, "avg_red_cards_per_match", prediction.predicted_away_red_cards
+            away_stats,
+            "avg_red_cards_per_match",
+            prediction.predicted_away_red_cards if prediction else 0.0,
         )
 
         match_dto.home_corners = int(round(h_corners))
@@ -1722,52 +1740,6 @@ class GetTeamPredictionsUseCase:
         if historical_matches:
             sources.append("Football-Data.co.uk")
         return sources
-
-    def _enrich_match_dto_with_projections(
-        self, match, home_stats, away_stats, prediction
-    ) -> MatchDTO:
-        match_dto = self._match_to_dto(match)
-        if match.status not in ["NS", "TIMED", "SCHEDULED"]:
-            return match_dto
-
-        def get_stat(stats, attr, pred_val):
-            val = getattr(stats, attr, 0) if stats and stats.matches_played > 0 else 0
-            if val == 0 and prediction:
-                return pred_val
-            return val
-
-        h_corners = get_stat(
-            home_stats, "avg_corners_per_match", prediction.predicted_home_corners
-        )
-        h_yellow = get_stat(
-            home_stats,
-            "avg_yellow_cards_per_match",
-            prediction.predicted_home_yellow_cards,
-        )
-        h_red = get_stat(
-            home_stats, "avg_red_cards_per_match", prediction.predicted_home_red_cards
-        )
-
-        a_corners = get_stat(
-            away_stats, "avg_corners_per_match", prediction.predicted_away_corners
-        )
-        a_yellow = get_stat(
-            away_stats,
-            "avg_yellow_cards_per_match",
-            prediction.predicted_away_yellow_cards,
-        )
-        a_red = get_stat(
-            away_stats, "avg_red_cards_per_match", prediction.predicted_away_red_cards
-        )
-
-        match_dto.home_corners = int(round(h_corners))
-        match_dto.away_corners = int(round(a_corners))
-        match_dto.home_yellow_cards = int(round(h_yellow))
-        match_dto.away_yellow_cards = int(round(a_yellow))
-        match_dto.home_red_cards = int(round(h_red))
-        match_dto.away_red_cards = int(round(a_red))
-
-        return match_dto
 
     def _match_to_dto(self, match: Match) -> MatchDTO:
         # Duplicated helper for now to avoid cross-cutting refactor
