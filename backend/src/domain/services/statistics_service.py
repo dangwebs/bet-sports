@@ -402,7 +402,7 @@ class StatisticsService:
 
         return name
 
-    _normalization_cache = {}
+    _normalization_cache: dict[str, str] = {}
 
     @staticmethod
     def normalize_team_name(name: str) -> str:

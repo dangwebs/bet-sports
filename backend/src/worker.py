@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def run_worker():
+async def run_worker() -> None:
     logger.info("🚀 Starting Football ML Training Worker...")
     mongo_repo = get_mongo_repository()
 

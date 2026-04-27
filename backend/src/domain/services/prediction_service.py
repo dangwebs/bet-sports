@@ -8,10 +8,12 @@ This domain service contains the core prediction logic using:
 This is a pure domain service with no external dependencies.
 """
 
+from __future__ import annotations
+
 import functools
 import math
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from src.domain.entities.entities import Match, Prediction, TeamStatistics
 from src.domain.exceptions import InsufficientDataException

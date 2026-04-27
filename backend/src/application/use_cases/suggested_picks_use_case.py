@@ -8,9 +8,13 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from pytz import timezone  # type: ignore
+
+if TYPE_CHECKING:
+    from src.application.use_cases.use_cases import DataSources
+
 from src.application.dtos.dtos import (
     BettingFeedbackRequestDTO,
     BettingFeedbackResponseDTO,
@@ -41,12 +45,12 @@ class GetSuggestedPicksUseCase:
 
     def __init__(
         self,
-        data_sources,  # DataSources from use_cases.py
+        data_sources: "DataSources",  # DataSources from use_cases.py
         prediction_service: PredictionService,
         statistics_service: StatisticsService,
         learning_service: LearningService,
         cache_service: CacheService,
-    ):
+    ) -> None:
         self.data_sources = data_sources
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
