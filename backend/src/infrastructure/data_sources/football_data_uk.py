@@ -113,9 +113,9 @@ class FootballDataUKSource:
     def __init__(self, config: Optional[FootballDataConfig] = None):
         """Initialize the data source."""
         self.config = config or FootballDataConfig()
-        self._cache: dict[str, tuple[Any, datetime]] = (
-            {}
-        )  # Any instead of pd.DataFrame for lazy import
+        self._cache: dict[
+            str, tuple[Any, datetime]
+        ] = {}  # Any instead of pd.DataFrame for lazy import
 
     def _get_csv_url(self, league_code: str, season: str) -> str:
         """
