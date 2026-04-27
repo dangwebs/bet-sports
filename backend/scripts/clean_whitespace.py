@@ -4,6 +4,7 @@
 Usage:
     python3 backend/scripts/clean_whitespace.py <file-path>
 """
+
 import sys
 from pathlib import Path
 

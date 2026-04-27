@@ -302,22 +302,28 @@ async def generate_league_predictions(
                 for p in picks_container.suggested_picks:
                     pick_dtos.append(
                         SuggestedPickDTO(
-                            market_type=p.market_type.value
-                            if hasattr(p.market_type, "value")
-                            else str(p.market_type),
+                            market_type=(
+                                p.market_type.value
+                                if hasattr(p.market_type, "value")
+                                else str(p.market_type)
+                            ),
                             market_label=p.market_label,
                             probability=p.probability,
                             odds=p.odds,
-                            confidence_level=p.confidence_level.value
-                            if hasattr(p.confidence_level, "value")
-                            else str(p.confidence_level),
+                            confidence_level=(
+                                p.confidence_level.value
+                                if hasattr(p.confidence_level, "value")
+                                else str(p.confidence_level)
+                            ),
                             reasoning=p.reasoning,
                             priority_score=p.priority_score,
                             is_recommended=p.is_recommended,
                             expected_value=p.expected_value,
-                            risk_level=p.risk_level.value
-                            if hasattr(p.risk_level, "value")
-                            else str(p.risk_level),
+                            risk_level=(
+                                p.risk_level.value
+                                if hasattr(p.risk_level, "value")
+                                else str(p.risk_level)
+                            ),
                         )
                     )
 

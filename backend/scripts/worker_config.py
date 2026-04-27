@@ -2,6 +2,7 @@
 Worker Configuration
 Configuration settings for the prediction worker script.
 """
+
 import os
 
 from dotenv import load_dotenv

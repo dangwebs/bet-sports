@@ -3,6 +3,7 @@
 desde los datos de muestra en `sample_data` o desde un JSON similar.
 Guarda resultado en `backend/output/baseline_90d.json`.
 """
+
 from __future__ import annotations
 
 import json

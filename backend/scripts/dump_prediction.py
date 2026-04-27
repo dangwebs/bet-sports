@@ -5,6 +5,7 @@ Dump a prediction document for inspection by match_id.
 Usage:
   python3 backend/scripts/dump_prediction.py espn_746962
 """
+
 import json
 import os
 import sys

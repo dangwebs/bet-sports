@@ -7,6 +7,7 @@ Usage:
 The script imports `src.api.main:app` and runs concurrent requests against
 the provided endpoints. Results are printed and saved to `backend/tmp/`.
 """
+
 from __future__ import annotations
 
 import argparse

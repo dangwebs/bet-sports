@@ -13,6 +13,7 @@ Usage:
     python scripts/benchmark_async_mongo.py -n 100 -c 10
     python scripts/benchmark_async_mongo.py --sync  # compare with sync repo
 """
+
 from __future__ import annotations
 
 import argparse
