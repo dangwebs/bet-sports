@@ -100,7 +100,9 @@ def clear_stale_predictions(repo: Any, league_ids: Optional[List[str]] = None) -
     if success:
         target = f"for leagues: {league_ids}" if league_ids else "for ALL leagues"
         logger.info(
-            f"🗑️  Cleared old match predictions from database {target} to force regeneration."
+            "🗑️  Cleared old match predictions from database %s "
+            "to force regeneration.",
+            target,
         )
     else:
         logger.warning("⚠️  Failed to clear old predictions. Stale data might persist.")
@@ -249,10 +251,10 @@ async def generate_league_predictions(
             a_name = stats_service.normalize_team_name(match.away_team.name)
 
             # Use current state of stats (after all history processed)
-            raw_home = global_team_stats_cache.get(
+            raw_home = team_stats_cache.get(
                 h_name, stats_service.create_empty_stats_dict()
             )
-            raw_away = global_team_stats_cache.get(
+            raw_away = team_stats_cache.get(
                 a_name, stats_service.create_empty_stats_dict()
             )
 
@@ -536,7 +538,7 @@ async def train_for_league(
     predicted_batch = await generate_league_predictions(
         league_id,
         league_matches,
-        team_stats_cache,
+        global_team_stats_cache,
         league_avgs,
         aggregator,
         stats_service,

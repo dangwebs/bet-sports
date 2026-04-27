@@ -42,10 +42,10 @@ Comandos principales (local)
 source backend/.venv/bin/activate
 ```
 
-- Ejecutar todos los hooks de `pre-commit` (aplica `black`, `isort` y otras correcciones automáticas):
+- Ejecutar todos los hooks de `pre-commit` desde la raíz sin depender de `PATH`:
 
 ```bash
-cd backend && .venv/bin/pre-commit run --all-files
+./scripts/pre_commit.sh run --all-files
 ```
 
 - Ejecutar ruff para ver todos los errores de lint:
@@ -86,7 +86,7 @@ cd frontend && npm run lint && npm run build && npx vitest run
 
 Qué hacer si hay fallos
 -----------------------
-- Para problemas de formato e imports: ejecutar el check concreto afectado o `cd backend && .venv/bin/pre-commit run --all-files`, luego volver a hacer `git add` + `git commit`.
+- Para problemas de formato e imports: ejecutar el check concreto afectado o `./scripts/pre_commit.sh run --all-files`, luego volver a hacer `git add` + `git commit`.
 - Para reglas de `ruff` (p. ej. E402, F821): revisar los imports y las anotaciones de tipos. Las correcciones no triviales (p. ej. C901) requieren un spec y refactor controlado.
 
 CI

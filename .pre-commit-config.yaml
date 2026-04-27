@@ -28,7 +28,7 @@ repos:
         name: Frontend ESLint (local)
         entry: bash -c 'cd frontend && exec npm run lint -- "${@#frontend/}"' --
         language: system
-        files: ^frontend/.*
+        files: ^frontend/.*\.(ts|tsx)$
       - id: ruff-local
         name: Ruff (local)
         entry: bash -c "cd backend && ./.venv/bin/ruff check --fix"
