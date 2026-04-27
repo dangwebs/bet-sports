@@ -9,7 +9,7 @@ import functools
 import logging
 import math
 import os
-from typing import Any, List, Optional
+from typing import Any, List, Optional, cast
 
 from src.domain.entities.betting_feedback import LearningWeights
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
@@ -194,7 +194,7 @@ class PicksService:
                 if model_bytes:
                     model = joblib.load(BytesIO(model_bytes))
                     logger.info("ML Model loaded successfully from Database")
-                    return model
+                    return cast(object, model)
             except Exception as e:
                 logger.warning(f"Failed to load model from Database: {e}")
 
@@ -207,7 +207,7 @@ class PicksService:
             # pipeline
             model = joblib.load(model_path)
             logger.info(f"ML Model loaded successfully from {model_path} (Disk)")
-            return model
+            return cast(object, model)
         except (FileNotFoundError, ImportError) as e:
             logger.warning(f"Technical failure loading ML model: {e}")
         except Exception as e:
@@ -873,11 +873,11 @@ class PicksService:
     def _apply_ml_refinement(
         self,
         picks_container: MatchSuggestedPicks,
-        model_instance,
+        model_instance: Any,
         match: Match,
         home_stats: Optional[TeamStatistics],
         away_stats: Optional[TeamStatistics],
-    ):
+    ) -> None:
         """
         Uses the trained ML model to adjust confidence/priority of picks.
 
@@ -1590,7 +1590,7 @@ class PicksService:
         limit = 10
 
         # Precompute individual Poisson masses
-        def poisson_pmf(lam, k):
+        def poisson_pmf(lam: float, k: int) -> float:
             return (math.exp(-lam) * (lam**k)) / math.factorial(k)
 
         home_probs = [poisson_pmf(expected_home, i) for i in range(limit)]
@@ -2175,7 +2175,13 @@ class PicksService:
         # to avoid duplicates.
         return picks
 
-    def _build_simple_pick(self, market_type, label, prob, reasoning):
+    def _build_simple_pick(
+        self,
+        market_type: Any,
+        label: str,
+        prob: float,
+        reasoning: str,
+    ) -> SuggestedPick:
         """Helper to build a simple pick object."""
         prob = min(0.98, prob)
         return SuggestedPick(

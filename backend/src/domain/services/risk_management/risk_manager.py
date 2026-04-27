@@ -43,23 +43,23 @@ class RiskManager:
         # 1. Filter Invalid Picks (Pre-Sort)
         valid_picks = []
         for item in all_picks:
-            pick: SuggestedPick = item["pick"]
+            current_pick: SuggestedPick = item["pick"]
 
             # --- CIRCUIT BREAKERS & DATA SANITY ---
-            if not self._validate_financial_integrity(pick):
+            if not self._validate_financial_integrity(current_pick):
                 # Instead of dropping, we keep them for ACCURACY tracking but disable
                 # financial recommendation
                 # This ensures we have "Stats" even if we don't have "Bets"
                 logger.info(
                     "Pick retained for TRACKING only (Financial Invalid): %s | "
                     "Odds: %s",
-                    pick.market_type,
-                    pick.odds,
+                    current_pick.market_type,
+                    current_pick.odds,
                 )
-                pick.is_recommended = False
-                pick.suggested_stake = 0.0
-                pick.kelly_percentage = 0.0
-                pick.reasoning += " (Tracking Only: No Financial Value)"
+                current_pick.is_recommended = False
+                current_pick.suggested_stake = 0.0
+                current_pick.kelly_percentage = 0.0
+                current_pick.reasoning += " (Tracking Only: No Financial Value)"
                 # valid_picks.append(item)
                 # Proceed to next check or append?
                 # If we append here and continue, we skip EV check which is good.
@@ -69,30 +69,30 @@ class RiskManager:
             # --- EV+ VALIDATION ---
             # Rule: prob * odds > 1.0 (unless Hedging)
             # pick.probability is the calculated probability (0.0 - 1.0)
-            _implied_prob = 1.0 / pick.odds if pick.odds > 0 else 0
-            ev = (pick.probability * pick.odds) - 1.0
+            _implied_prob = 1.0 / current_pick.odds if current_pick.odds > 0 else 0
+            ev = (current_pick.probability * current_pick.odds) - 1.0
 
             # Strict > 0 check (floating point safe)
             if ev <= 0.0001:
                 # Same here: High confidence picks might be getting dropped due to bad
                 # odds.
                 # We keep them for tracking if probability is decent (e.g. > 50%)
-                if pick.probability > 0.50:
+                if current_pick.probability > 0.50:
                     logger.info(
                         "Pick retained for TRACKING only (Low EV): %s | EV=%0.4f",
-                        pick.market_type,
+                        current_pick.market_type,
                         ev,
                     )
-                    pick.is_recommended = False
-                    pick.suggested_stake = 0.0
-                    pick.kelly_percentage = 0.0
-                    pick.reasoning += " (Tracking Only: Low EV)"
+                    current_pick.is_recommended = False
+                    current_pick.suggested_stake = 0.0
+                    current_pick.kelly_percentage = 0.0
+                    current_pick.reasoning += " (Tracking Only: Low EV)"
                     valid_picks.append(item)
                     continue
                 else:
                     logger.info(
                         "Pick rejected (Low EV & Low Prob): %s. EV=%0.4f",
-                        pick.market_type,
+                        current_pick.market_type,
                         ev,
                     )
                     continue
@@ -116,38 +116,44 @@ class RiskManager:
         league_exposure: Dict[str, float] = {}
 
         for item in sorted_candidates:
-            pick: SuggestedPick = item["pick"]
+            candidate_pick: SuggestedPick = item["pick"]
             match: Match = item["match"]
             league_id = match.league.id
 
             # Safe retrieval of stake
-            stake_pct = pick.kelly_percentage
+            stake_pct = candidate_pick.kelly_percentage
 
             # --- HARD CAP ENFORCEMENT ---
             if stake_pct > self.MAX_SINGLE_STAKE:
                 reason = f" (Stake Capped: Exceeds {self.MAX_SINGLE_STAKE*100}% Limit)"
-                pick.reasoning += reason
-                pick.kelly_percentage = self.MAX_SINGLE_STAKE
-                pick.suggested_stake = round(pick.kelly_percentage * 100, 2)
+                candidate_pick.reasoning += reason
+                candidate_pick.kelly_percentage = self.MAX_SINGLE_STAKE
+                candidate_pick.suggested_stake = round(
+                    candidate_pick.kelly_percentage * 100, 2
+                )
                 stake_pct = self.MAX_SINGLE_STAKE
 
             # Check constraints
             if current_daily_exposure + stake_pct > self.MAX_DAILY_EXPOSURE:
                 remaining = self.MAX_DAILY_EXPOSURE - current_daily_exposure
                 if remaining < 0.005:  # Less than 0.5% left? Stop.
-                    pick.reasoning += " (Rechazado: Límite Diario de Riesgo alcanzado)."
+                    candidate_pick.reasoning += (
+                        " (Rechazado: Límite Diario de Riesgo alcanzado)."
+                    )
                     continue
 
                 # Cap stake to fit budget
                 stake_pct = remaining
-                pick.kelly_percentage = round(stake_pct, 4)
-                pick.suggested_stake = round(stake_pct * 100, 2)
-                pick.reasoning += " (Stake Reducido: Límite Diario)."
+                candidate_pick.kelly_percentage = round(stake_pct, 4)
+                candidate_pick.suggested_stake = round(stake_pct * 100, 2)
+                candidate_pick.reasoning += " (Stake Reducido: Límite Diario)."
 
             # Check League Limits
             current_league_exp = league_exposure.get(league_id, 0.0)
             if current_league_exp + stake_pct > self.MAX_LEAGUE_EXPOSURE:
-                pick.reasoning += " (Rechazado: Límite de Exposición por Liga)."
+                candidate_pick.reasoning += (
+                    " (Rechazado: Límite de Exposición por Liga)."
+                )
                 continue
 
             # Approve

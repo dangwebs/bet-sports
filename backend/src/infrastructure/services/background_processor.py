@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 _picks_service: Optional[AIPicksService] = None
 
 
-def _init_worker():
+def _init_worker() -> None:
     """
     Initialize the worker process.
     This runs once per process to load the ML model and heavy dependencies.
@@ -132,5 +132,5 @@ class BackgroundProcessor:
 
         return valid_results
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self.executor.shutdown()

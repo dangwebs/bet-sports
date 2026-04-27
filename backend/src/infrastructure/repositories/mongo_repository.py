@@ -138,7 +138,10 @@ class MongoRepository:
         return None
 
     def get_match_predictions_bulk(self, match_ids: List[str]) -> Dict[str, dict]:
-        """Return a dict mapping match_id -> prediction data for active (non-expired) docs."""
+        """Return active prediction data keyed by match id.
+
+        Expired documents are excluded from the result.
+        """
         if not match_ids:
             return {}
         docs = self.match_predictions.find(

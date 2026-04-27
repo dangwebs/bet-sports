@@ -9,9 +9,9 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
-from pytz import timezone  # type: ignore
+from pytz import timezone
 from src.core.paths import BACKEND_ROOT, PROJECT_ROOT
 from src.domain.entities.betting_feedback import (
     BettingFeedback,
@@ -227,7 +227,10 @@ class LearningService:
 
     def get_all_stats(self) -> Dict[str, MarketPerformance]:
         """Get all market performance statistics."""
-        return self.learning_weights.market_performances
+        return cast(
+            Dict[str, MarketPerformance],
+            self.learning_weights.market_performances,
+        )
 
     def get_learning_weights(self) -> Dict[str, Any]:
         """Get the current learning weights as a dictionary."""

@@ -314,7 +314,10 @@ def get_async_mongo_repository() -> Any:
             # Explicitly disabled: use sync fallback
             _async_mongo_repo = AsyncMongoAdapter()
             logger.info(
-                "get_async_mongo_repository: MONGO_ASYNC_MODE=off, using AsyncMongoAdapter (sync)"
+                (
+                    "get_async_mongo_repository: MONGO_ASYNC_MODE=off, using "
+                    "AsyncMongoAdapter (sync)"
+                )
             )
         elif async_flag is True:
             # Explicitly enabled: require Motor
@@ -325,7 +328,10 @@ def get_async_mongo_repository() -> Any:
 
                 _async_mongo_repo = AsyncMongoRepository()
                 logger.info(
-                    "get_async_mongo_repository: MONGO_ASYNC_MODE=on, using AsyncMongoRepository (Motor)"
+                    (
+                        "get_async_mongo_repository: MONGO_ASYNC_MODE=on, using "
+                        "AsyncMongoRepository (Motor)"
+                    )
                 )
             except Exception as e:
                 logger.error(
@@ -344,17 +350,26 @@ def get_async_mongo_repository() -> Any:
 
                     _async_mongo_repo = AsyncMongoRepository()
                     logger.info(
-                        "get_async_mongo_repository: auto-detect, using AsyncMongoRepository (Motor)"
+                        (
+                            "get_async_mongo_repository: auto-detect, using "
+                            "AsyncMongoRepository (Motor)"
+                        )
                     )
                 except Exception as e:
                     logger.warning(
-                        "AsyncMongoRepository initialization failed (%s). Falling back to AsyncMongoAdapter.",
+                        (
+                            "AsyncMongoRepository initialization failed (%s). "
+                            "Falling back to AsyncMongoAdapter."
+                        ),
                         e,
                     )
                     _async_mongo_repo = AsyncMongoAdapter()
             else:
                 _async_mongo_repo = AsyncMongoAdapter()
                 logger.info(
-                    "get_async_mongo_repository: auto-detect, motor not available, using AsyncMongoAdapter (sync)"
+                    (
+                        "get_async_mongo_repository: auto-detect, motor not "
+                        "available, using AsyncMongoAdapter (sync)"
+                    )
                 )
     return _async_mongo_repo

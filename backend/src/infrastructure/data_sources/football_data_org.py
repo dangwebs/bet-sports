@@ -14,7 +14,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from src.domain.entities.entities import League, Match, Team
@@ -31,7 +31,7 @@ class FootballDataOrgConfig:
     timeout: int = 30
     min_wait_seconds: float = 6.5  # Optimized for Free Tier (10 req/min = 1 per 6s)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.api_key is None:
             self.api_key = os.getenv("FOOTBALL_DATA_ORG_KEY")
 
@@ -71,11 +71,11 @@ class FootballDataOrgSource:
 
     SOURCE_NAME = "Football-Data.org"
 
-    def __init__(self, config: Optional[FootballDataOrgConfig] = None):
+    def __init__(self, config: Optional[FootballDataOrgConfig] = None) -> None:
         """Initialize the data source."""
         self.config = config or FootballDataOrgConfig()
         self._request_times: list[datetime] = []
-        self._memory_cache: dict = {}
+        self._memory_cache: dict[str, dict[str, Any]] = {}
         self._last_request_time: Optional[datetime] = None
         self._blocked_until: Optional[datetime] = None
         self._lock: Optional[asyncio.Lock] = None
@@ -85,7 +85,7 @@ class FootballDataOrgSource:
         """Check if API key is configured."""
         return bool(self.config.api_key)
 
-    async def _wait_strict(self):
+    async def _wait_strict(self) -> None:
         """
         Strict rate limiting: 10 req/min = 1 req every 6 seconds.
         Uses a Lock to ensure task safety in async contexts.
@@ -124,10 +124,10 @@ class FootballDataOrgSource:
     async def _make_request(
         self,
         endpoint: str,
-        params: Optional[dict] = None,
+        params: Optional[dict[str, Any]] = None,
         use_cache: bool = True,
         ttl_seconds: int = 86400,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """
         Make authenticated request with Multi-Level Caching:
         1. Memory Cache (Session)
@@ -151,7 +151,7 @@ class FootballDataOrgSource:
 
                 repo = get_async_mongo_repository()
                 cached_data = await repo.get_cached_response(endpoint, params)
-                if cached_data:
+                if isinstance(cached_data, dict):
                     self._memory_cache[cache_key] = cached_data
                     return cached_data
             except Exception as e:
@@ -193,6 +193,8 @@ class FootballDataOrgSource:
 
                     response.raise_for_status()
                     data = response.json()
+                    if not isinstance(data, dict):
+                        return None
 
                     self._memory_cache[cache_key] = data
                     if use_cache and repo:
@@ -215,12 +217,17 @@ class FootballDataOrgSource:
                     return None
         return None
 
-    async def get_competitions(self) -> list[dict]:
+    async def get_competitions(self) -> list[dict[str, Any]]:
         """Get list of available competitions."""
         data = await self._make_request("/competitions", ttl_seconds=604800)
         if not data:
             return []
-        return data.get("competitions", [])
+        competitions = data.get("competitions")
+        if not isinstance(competitions, list):
+            return []
+        return [
+            competition for competition in competitions if isinstance(competition, dict)
+        ]
 
     async def get_league_teams(self, league_code: str) -> list[Team]:
         """Get teams for a league."""
@@ -257,7 +264,7 @@ class FootballDataOrgSource:
             return []
 
         comp_code = COMPETITION_CODE_MAPPING[league_code]
-        params = {"status": "SCHEDULED,TIMED,IN_PLAY,LIVE"}
+        params: dict[str, str | int] = {"status": "SCHEDULED,TIMED,IN_PLAY,LIVE"}
         if matchday:
             params["matchday"] = matchday
 
@@ -447,7 +454,7 @@ class FootballDataOrgSource:
         )
         return all_matches
 
-    async def get_standings(self, league_code: str) -> Optional[dict]:
+    async def get_standings(self, league_code: str) -> Optional[list[dict[str, Any]]]:
         """Get current standings for a league."""
         if league_code not in COMPETITION_CODE_MAPPING:
             return None
@@ -456,7 +463,10 @@ class FootballDataOrgSource:
         data = await self._make_request(f"/competitions/{comp_code}/standings")
         if not data:
             return None
-        return data.get("standings", [])
+        standings = data.get("standings")
+        if not isinstance(standings, list):
+            return None
+        return [standing for standing in standings if isinstance(standing, dict)]
 
     async def get_match_details(self, match_id: str) -> Optional[Match]:
         """Get details for a specific match."""

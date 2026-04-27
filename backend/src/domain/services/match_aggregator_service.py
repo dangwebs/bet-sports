@@ -180,7 +180,7 @@ class MatchAggregatorService:
             a_norm = StatisticsService.normalize_team_name(m.away_team.name)
             return f"{date_str}_{h_norm}_{a_norm}"
 
-        def enrich_match(target: Match, source: Match):
+        def enrich_match(target: Match, source: Match) -> None:
             # Fill missing core stats
             if target.home_corners is None and source.home_corners is not None:
                 target.home_corners = source.home_corners
@@ -213,7 +213,7 @@ class MatchAggregatorService:
             if not target.referee and source.referee:
                 target.referee = source.referee
 
-        def process_list(matches, source_tag):
+        def process_list(matches: List[Match] | None, source_tag: str) -> int:
             count = 0
             if not matches:
                 return count

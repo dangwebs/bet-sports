@@ -11,7 +11,7 @@ Endpoints:
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -117,11 +117,7 @@ class ESPNLineup:
     team_id: str
     team_name: str
     formation: Optional[str] = None
-    starters: List[Dict[str, Any]] = None
-
-    def __post_init__(self):
-        if self.starters is None:
-            self.starters = []
+    starters: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class ESPNSource:
@@ -132,17 +128,18 @@ class ESPNSource:
     SOURCE_NAME = "ESPN"
     BASE_URL = "http://site.api.espn.com/apis/site/v2/sports/soccer"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._client = httpx.AsyncClient(timeout=30.0)
 
     async def _make_request(
-        self, url: str, params: Optional[dict] = None
-    ) -> Optional[dict]:
+        self, url: str, params: Optional[dict[str, Any]] = None
+    ) -> Optional[dict[str, Any]]:
         """Make HTTP request to ESPN."""
         try:
             response = await self._client.get(url, params=params)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            return data if isinstance(data, dict) else None
         except Exception as e:
             logger.error(f"ESPN request failed: {e}")
             return None
@@ -179,10 +176,11 @@ class ESPNSource:
         def get_stat(team_data: dict, stat_name: str) -> Optional[str]:
             for s in team_data.get("statistics", []):
                 if s.get("name") == stat_name:
-                    return s.get("displayValue")
+                    display_value = s.get("displayValue")
+                    return display_value if isinstance(display_value, str) else None
             return None
 
-        def p_int(val: str) -> Optional[int]:
+        def p_int(val: Optional[str]) -> Optional[int]:
             try:
                 return int(float(val)) if val else None
             except Exception:
@@ -338,7 +336,7 @@ class ESPNSource:
 
         semaphore = asyncio.Semaphore(10)  # Rate limit concurrency
 
-        async def fetch_scoreboard(code: str, date_str: str):
+        async def fetch_scoreboard(code: str, date_str: str) -> list[Optional[Match]]:
             slug = ESPN_LEAGUE_MAPPING.get(code)
             if not slug:
                 return []
@@ -369,7 +367,9 @@ class ESPNSource:
                 tasks.append(fetch_scoreboard(code, date_str))
 
         logger.info(
-            f"ESPN: Fetching history for {len(leagues_to_fetch)} leagues across {len(date_range)} days..."
+            "ESPN: Fetching history for %s leagues across %s days...",
+            len(leagues_to_fetch),
+            len(date_range),
         )
         results = await asyncio.gather(*tasks)
 
@@ -484,6 +484,8 @@ class ESPNSource:
 
             # Date
             date_str = event.get("date")  # "2024-12-01T13:30Z"
+            if not isinstance(date_str, str):
+                return None
             match_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ").replace(
                 tzinfo=timezone.utc
             )
@@ -514,7 +516,7 @@ class ESPNSource:
             away_goals = int(away_comp["score"])
 
             # Stats (parse strings to ints)
-            def p_int(val):
+            def p_int(val: Optional[str]) -> Optional[int]:
                 try:
                     return int(float(val)) if val else None
                 except Exception:
@@ -594,7 +596,7 @@ class ESPNSource:
 
         semaphore = asyncio.Semaphore(5)
 
-        async def fetch_day_upcoming(date_str: str):
+        async def fetch_day_upcoming(date_str: str) -> list[Optional[Match]]:
             url = f"{self.BASE_URL}/{slug}/scoreboard"
             async with semaphore:
                 data = await self._make_request(url, {"dates": date_str})
@@ -657,6 +659,8 @@ class ESPNSource:
 
             # Date
             date_str = event.get("date")
+            if not isinstance(date_str, str):
+                return None
             match_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ").replace(
                 tzinfo=timezone.utc
             )

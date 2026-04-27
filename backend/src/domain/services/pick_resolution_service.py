@@ -40,6 +40,8 @@ class PickResolutionService:
             else str(pick.market_type)
         )
         was_correct = False
+        home_goals = match.home_goals
+        away_goals = match.away_goals
 
         try:
             threshold = 0.0
@@ -55,10 +57,15 @@ class PickResolutionService:
                     threshold = float(found[0])
 
             if market_type_str in ["winner", "draw", "result_1x2"]:
+                if home_goals is None or away_goals is None:
+                    return "UNKNOWN", 0.0
+                resolved_home_goals = home_goals
+                resolved_away_goals = away_goals
+
                 actual = "X"
-                if match.home_goals > match.away_goals:
+                if resolved_home_goals > resolved_away_goals:
                     actual = "1"
-                elif match.away_goals > match.home_goals:
+                elif resolved_away_goals > resolved_home_goals:
                     actual = "2"
 
                 predicted = "X"
@@ -99,9 +106,17 @@ class PickResolutionService:
                 was_correct = total < threshold
 
             elif "btts_yes" in market_type_str:
-                was_correct = match.home_goals > 0 and match.away_goals > 0
+                if home_goals is None or away_goals is None:
+                    return "UNKNOWN", 0.0
+                resolved_home_goals = home_goals
+                resolved_away_goals = away_goals
+                was_correct = resolved_home_goals > 0 and resolved_away_goals > 0
             elif "btts_no" in market_type_str:
-                was_correct = not (match.home_goals > 0 and match.away_goals > 0)
+                if home_goals is None or away_goals is None:
+                    return "UNKNOWN", 0.0
+                resolved_home_goals = home_goals
+                resolved_away_goals = away_goals
+                was_correct = not (resolved_home_goals > 0 and resolved_away_goals > 0)
 
             result = "WIN" if was_correct else "LOSS"
             return result, self._calculate_payout_for_result(result, pick)

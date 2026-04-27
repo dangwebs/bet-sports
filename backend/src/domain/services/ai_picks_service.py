@@ -208,11 +208,6 @@ class AIPicksService(PicksService):
             semantics["defensive_struggle"] = True
 
         # One-Sided: Large probability gap
-        _prob_gap = (
-            abs(match.home_win_prob - match.away_win_prob)
-            if hasattr(match, "home_win_prob")
-            else 0.0
-        )
         # Or calculate from extracted features if available, or implied from stats
         # We start with stats gap
         if home_stats.matches_played > 0 and away_stats.matches_played > 0:
@@ -265,10 +260,11 @@ class AIPicksService(PicksService):
         # Pre-compute ML predictions in batch to avoid repeated Python->C crossing
         target_model = ml_model if ml_model else self.ml_model
         ml_confidences = None
-        if target_model:
+        predict_proba = getattr(target_model, "predict_proba", None)
+        if callable(predict_proba):
             try:
                 features_batch = [MLFeatureExtractor.extract_features(p) for p in picks]
-                probs = target_model.predict_proba(features_batch)
+                probs = predict_proba(features_batch)
                 ml_confidences = []
                 for p in probs:
                     if len(p) > 1:
@@ -435,9 +431,9 @@ class AIPicksService(PicksService):
         # 3. NO está descalificado por ser línea baja de Under
         # NOTA: La validación ML es un BOOST, no un requisito bloqueante.
 
-        IA_CONFIRMED_THRESHOLD = 0.90
-        ML_HIGH_THRESHOLD = 0.75
-        NORMAL_THRESHOLD = 0.65
+        ia_confirmed_threshold = 0.90
+        ml_high_threshold = 0.75
+        normal_threshold = 0.65
 
         # REMOVED: Do NOT filter out picks below Normal threshold.
         # We want to show all valid markets, just classified differently.
@@ -462,7 +458,7 @@ class AIPicksService(PicksService):
                 # CAMBIO: IA CONFIRMED ya no requiere was_ml_validated
                 # El pick de mayor probabilidad >= 80% obtiene IA CONFIRMED
                 if (
-                    p.probability >= IA_CONFIRMED_THRESHOLD
+                    p.probability >= ia_confirmed_threshold
                     and not ia_confirmed_assigned
                     and not is_disqualified_for_ia
                 ):
@@ -474,7 +470,7 @@ class AIPicksService(PicksService):
                     if "[🎯 IA CONFIRMED]" not in p.reasoning:
                         p.reasoning = f"[🎯 IA CONFIRMED] {p.reasoning}"
                     ia_confirmed_assigned = True
-                elif p.probability >= ML_HIGH_THRESHOLD:
+                elif p.probability >= ml_high_threshold:
                     # Tier 2: ML High Confidence (75%-79%)
                     p.is_ia_confirmed = False
                     p.is_ml_confirmed = (
@@ -484,7 +480,7 @@ class AIPicksService(PicksService):
                     p.confidence_level = ConfidenceLevel.HIGH
                     if "[⭐ ML ALTA CONFIANZA]" not in p.reasoning:
                         p.reasoning = f"[⭐ ML ALTA CONFIANZA] {p.reasoning}"
-                elif p.probability >= NORMAL_THRESHOLD:
+                elif p.probability >= normal_threshold:
                     # Tier 3: Normal (65%+)
                     p.is_ia_confirmed = False
                     # Mantener is_ml_confirmed si ya lo tenía de PHASE D
@@ -498,7 +494,7 @@ class AIPicksService(PicksService):
 
         return refined_picks
 
-    def _apply_narrative_coherence(self, picks: List[SuggestedPick]):
+    def _apply_narrative_coherence(self, picks: List[SuggestedPick]) -> None:
         """
         Boosts picks that align with the dominant narrative of the generated set.
         Example: If 'Over 2.5 Goals' is very likely, boost 'BTTS Yes'.

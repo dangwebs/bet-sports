@@ -99,7 +99,7 @@ class TheSportsDBClient:
         """
         # Map internal ID to TheSportsDB ID
         # Values from: https://www.thesportsdb.com/api/v1/json/3/all_leagues.php
-        INTERNAL_TO_TSDB: dict[str, str] = {
+        internal_to_tsdb: dict[str, str] = {
             "E0": "4328",  # Premier League
             "E1": "4329",  # Championship
             "SP1": "4335",  # La Liga
@@ -123,7 +123,7 @@ class TheSportsDBClient:
             "EURO": "4326",  # UEFA European Championship
         }
 
-        tsdb_id = INTERNAL_TO_TSDB.get(league_id)
+        tsdb_id = internal_to_tsdb.get(league_id)
         if not tsdb_id:
             logger.warning(f"No TheSportsDB mapping for league {league_id}")
             return []
@@ -294,7 +294,7 @@ class TheSportsDBClient:
             List of finished Match objects with results
         """
         # Map internal ID to TheSportsDB ID
-        INTERNAL_TO_TSDB: dict[str, str] = {
+        internal_to_tsdb: dict[str, str] = {
             # "E0": "4328",   # Premier League
             # "SP1": "4335",  # La Liga
             # "D1": "4331",   # Bundesliga
@@ -303,7 +303,7 @@ class TheSportsDBClient:
             # "N1": "4337",   # Eredivisie
         }
 
-        tsdb_id = INTERNAL_TO_TSDB.get(league_id)
+        tsdb_id = internal_to_tsdb.get(league_id)
         if not tsdb_id:
             logger.debug(f"No TheSportsDB mapping for league {league_id}")
             return []

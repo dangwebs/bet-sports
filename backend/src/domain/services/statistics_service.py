@@ -7,12 +7,10 @@ Handles calculation of team statistics from match history.
 from __future__ import annotations
 
 import unicodedata
-from typing import TYPE_CHECKING, List, Optional
+from typing import Any, List, Optional
 
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
-
-if TYPE_CHECKING:
-    from src.domain.value_objects.value_objects import LeagueAverages
+from src.domain.value_objects.value_objects import LeagueAverages
 
 
 class StatisticsService:
@@ -777,7 +775,10 @@ class StatisticsService:
     def update_team_stats_dict(
         stats: dict[str, Any], match: Match, is_home: bool
     ) -> None:
-        """Update a stats dictionary with a new match result (includes context splitting)."""
+        """Update a stats dictionary with a new match result.
+
+        Includes context splitting for home and away views.
+        """
         # Update global blended stats
         StatisticsService._update_raw_stats_dict(stats, match, is_home)
 
@@ -831,7 +832,7 @@ class StatisticsService:
             international_stats=raw_stats.get("international_stats"),
         )
 
-    def calculate_league_averages(self, matches: List[Match]) -> "LeagueAverages":
+    def calculate_league_averages(self, matches: List[Match]) -> LeagueAverages:
         """
         Calculate league-wide averages from match history.
 
@@ -870,11 +871,14 @@ class StatisticsService:
                 total_cards += match.home_yellow_cards + match.away_yellow_cards
                 matches_with_cards += 1
 
-        # Calculate averages with fallbacks
-        from src.domain.value_objects.value_objects import LeagueAverages
-
         if matches_with_goals == 0:
-            return None
+            return LeagueAverages(
+                avg_home_goals=0.0,
+                avg_away_goals=0.0,
+                avg_total_goals=0.0,
+                avg_corners=9.5,
+                avg_cards=4.5,
+            )
 
         return LeagueAverages(
             avg_home_goals=total_home_goals / matches_with_goals,

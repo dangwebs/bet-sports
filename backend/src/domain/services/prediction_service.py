@@ -34,7 +34,7 @@ class PredictionService:
     - Prohibited to use placeholders or simulated data for probabilities.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the prediction service."""
         pass
 
@@ -80,7 +80,12 @@ class PredictionService:
         if weight <= 0:
             return calculated_probs
         if weight >= 1:
-            return odds.to_probabilities()
+            home_odds_prob, draw_odds_prob, away_odds_prob = odds.to_probabilities()
+            return (
+                float(home_odds_prob),
+                float(draw_odds_prob),
+                float(away_odds_prob),
+            )
 
         odds_probs = odds.to_probabilities()
 
@@ -90,7 +95,7 @@ class PredictionService:
 
         # Normalize
         total = home + draw + away
-        return (home / total, draw / total, away / total)
+        return (float(home / total), float(draw / total), float(away / total))
 
     def calculate_team_strength(
         self,
@@ -227,7 +232,7 @@ class PredictionService:
         weighted_sum = sum(v * w for v, w in zip(values, weights))
         weight_total = sum(weights)
 
-        return weighted_sum / weight_total if weight_total > 0 else 0.0
+        return float(weighted_sum / weight_total) if weight_total > 0 else 0.0
 
     @staticmethod
     def calculate_form_factor(
@@ -581,7 +586,7 @@ class PredictionService:
 
         # We cap the impact to avoid overreacting to volatility
         sentiment = opening_odds.home / current_odds.home
-        return max(0.8, min(1.2, sentiment))
+        return float(max(0.8, min(1.2, sentiment)))
 
     def _calculate_form_consistency(
         self,
@@ -992,14 +997,13 @@ class PredictionService:
         data_quality = self._calculate_data_quality(home_stats, away_stats)
 
         # Calculate availability flags
-        has_stats = (home_stats is not None) and (away_stats is not None)
         has_odds_data = odds is not None
         has_recent_form = False
-        if has_stats:
+        if home_stats is not None and away_stats is not None:
             has_recent_form = bool(home_stats.recent_form and away_stats.recent_form)
 
         form_score = 0.5
-        if has_recent_form:
+        if has_recent_form and home_stats is not None and away_stats is not None:
             form_score = self._calculate_form_consistency(home_stats, away_stats)
 
         odds_agreement = 0.5

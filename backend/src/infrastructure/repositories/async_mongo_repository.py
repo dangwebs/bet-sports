@@ -51,7 +51,8 @@ class AsyncMongoRepository:
     def __init__(self, mongo_uri: Optional[str] = None, db_name: Optional[str] = None):
         if not HAS_MOTOR or AsyncIOMotorClient is None:
             raise RuntimeError(
-                "motor (AsyncIOMotorClient) is not available; install motor to use AsyncMongoRepository"
+                "motor (AsyncIOMotorClient) is not available; install motor "
+                "to use AsyncMongoRepository"
             )
 
         mongo_uri = mongo_uri or os.getenv(
