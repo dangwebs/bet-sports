@@ -25,14 +25,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from src.infrastructure.repositories.async_mongo_repository import (
+        AsyncMongoRepository,
+    )
+    from src.infrastructure.repositories.mongo_repository import MongoRepository
 
 # Setup path
 project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(project_root))
-
-from src.infrastructure.repositories.async_mongo_repository import AsyncMongoRepository
-from src.infrastructure.repositories.mongo_repository import MongoRepository
 
 
 @dataclass
@@ -68,6 +71,20 @@ class BenchmarkResult:
     @property
     def max(self) -> float:
         return max(self.durations_ms) if self.durations_ms else 0
+
+
+def create_async_repo() -> "AsyncMongoRepository":
+    from src.infrastructure.repositories.async_mongo_repository import (
+        AsyncMongoRepository,
+    )
+
+    return AsyncMongoRepository()
+
+
+def create_sync_repo() -> "MongoRepository":
+    from src.infrastructure.repositories.mongo_repository import MongoRepository
+
+    return MongoRepository()
 
 
 def percentile(data: List[float], p: float) -> float:
@@ -257,7 +274,10 @@ async def run_async_benchmarks(
         )
         results[op] = result
         print(
-            f"    p50: {result.p50:.2f}ms, p95: {result.p95:.2f}ms, errors: {result.errors}"
+            "    p50: "
+            f"{result.p50:.2f}ms, "
+            f"p95: {result.p95:.2f}ms, "
+            f"errors: {result.errors}"
         )
 
     return results
@@ -292,7 +312,7 @@ async def main():
         f"Benchmarking AsyncMongoRepository (n={args.iterations}, c={args.concurrency})"
     )
 
-    repo = AsyncMongoRepository()
+    repo = create_async_repo()
     async_results = await run_async_benchmarks(
         repo, operations, args.iterations, args.concurrency
     )
@@ -302,7 +322,10 @@ async def main():
     total_p50 = 0
     for op, res in async_results.items():
         print(
-            f"{op}: p50={res.p50:.2f}ms p95={res.p95:.2f}ms p99={res.p99:.2f} errors={res.errors}"
+            f"{op}: p50={res.p50:.2f}ms "
+            f"p95={res.p95:.2f}ms "
+            f"p99={res.p99:.2f}ms "
+            f"errors={res.errors}"
         )
         total_p50 += res.p50
 
@@ -312,12 +335,16 @@ async def main():
     # Sync comparison if requested
     if args.sync:
         print("\n=== Sync Comparison ===")
-        sync_repo = MongoRepository()
+        sync_repo = create_sync_repo()
         for op in operations:
             res = run_sync_comparison(
                 sync_repo, op, {}, args.iterations, args.concurrency
             )
-            print(f"{op}: p50={res.p50:.2f}ms p95={res.p95:.2f}ms errors={res.errors}")
+            print(
+                f"{op}: p50={res.p50:.2f}ms "
+                f"p95={res.p95:.2f}ms "
+                f"errors={res.errors}"
+            )
 
     # Save results
     output_data = {

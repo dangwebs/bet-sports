@@ -4,6 +4,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PRE_COMMIT_WRAPPER="$SCRIPT_DIR/pre_commit.sh"
+
 # --- DETECCIÓN DE ENTORNO VIRTUAL ---
 VENV_PATHS=(".venv" "venv" "backend/.venv" "backend/venv")
 VENV_ACTIVATE=""
@@ -25,8 +28,11 @@ echo "============================================="
 echo "🛠️  Paso 1: Detectando y corrigiendo formato y linting (Auto-fix)..."
 echo "============================================="
 
-# Si pre-commit está instalado en el entorno o sistema, lo usamos
-if command -v pre-commit &> /dev/null; then
+# Si existe el wrapper repo-local, lo usamos como fuente de verdad.
+if [ -x "$PRE_COMMIT_WRAPPER" ]; then
+    echo "Running pre-commit via repo wrapper..."
+    "$PRE_COMMIT_WRAPPER" run --all-files || echo "⚠️  pre-commit modificó archivos. Por favor haz un commit con estos cambios."
+elif command -v pre-commit &> /dev/null; then
     echo "Running pre-commit..."
     pre-commit run --all-files || echo "⚠️  pre-commit modificó archivos. Por favor haz un commit con estos cambios."
 else
