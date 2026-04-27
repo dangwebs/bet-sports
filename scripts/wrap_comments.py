@@ -4,6 +4,7 @@ wrap_comments.py
 Utility to wrap leading comment lines to a given width.
 Usage: python scripts/wrap_comments.py path/to/file.py [width]
 """
+
 import sys
 import textwrap
 from pathlib import Path

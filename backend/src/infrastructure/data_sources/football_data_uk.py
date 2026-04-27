@@ -32,14 +32,16 @@ class FootballDataConfig:
     timeout: int = 30
 
 
-def retry_async(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
+def retry_async(
+    retries: int = 3, delay: float = 1.0, backoff: float = 2.0
+) -> Callable[..., Any]:
     """
     Retry decorator for async functions.
     """
 
-    def decorator(func: Callable):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             current_delay = delay
             for i in range(retries):
                 try:
@@ -111,9 +113,9 @@ class FootballDataUKSource:
     def __init__(self, config: Optional[FootballDataConfig] = None):
         """Initialize the data source."""
         self.config = config or FootballDataConfig()
-        self._cache: dict[
-            str, tuple[Any, datetime]
-        ] = {}  # Any instead of pd.DataFrame for lazy import
+        self._cache: dict[str, tuple[Any, datetime]] = (
+            {}
+        )  # Any instead of pd.DataFrame for lazy import
 
     def _get_csv_url(self, league_code: str, season: str) -> str:
         """
@@ -307,7 +309,7 @@ class FootballDataUKSource:
         # Lazy import pandas
         import pandas as pd
 
-        matches = []
+        matches: list[Match] = []
 
         # Expected columns
         required_cols = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from src.api.schemas.auxiliary import (
     BettingFeedbackRequest,
@@ -14,6 +16,7 @@ from src.application.use_cases.suggested_picks_use_case import (
     RegisterFeedbackUseCase,
 )
 from src.dependencies import (
+    get_async_learning_service,
     get_cache_service,
     get_data_sources,
     get_learning_service,
@@ -28,11 +31,11 @@ router = APIRouter(prefix="/api/v1/suggested-picks", tags=["suggested-picks"])
 @router.get("/match/{match_id}", response_model=MatchSuggestedPicksResponse)
 async def get_suggested_picks(
     match_id: str,
-    data_sources=Depends(get_data_sources),
-    prediction_service=Depends(get_prediction_service),
-    statistics_service=Depends(get_statistics_service),
-    learning_service: LearningService = Depends(get_learning_service),
-    cache_service=Depends(get_cache_service),
+    data_sources: Any = Depends(get_data_sources),
+    prediction_service: Any = Depends(get_prediction_service),
+    statistics_service: Any = Depends(get_statistics_service),
+    learning_service: LearningService = Depends(get_async_learning_service),
+    cache_service: Any = Depends(get_cache_service),
 ) -> MatchSuggestedPicksResponse:
     """Generate suggested picks using the real use case and services."""
     use_case = GetSuggestedPicksUseCase(
@@ -43,6 +46,13 @@ async def get_suggested_picks(
         cache_service,
     )
     dto = await use_case.execute(match_id)
+    if not dto:
+        return MatchSuggestedPicksResponse(
+            match_id=match_id,
+            suggested_picks=[],
+            combination_warning="No se pudieron generar sugerencias para este partido.",
+            generated_at=_utc_now_iso(),
+        )
 
     picks = [p.model_dump() for p in dto.suggested_picks] if dto.suggested_picks else []
     generated_at = (
@@ -65,7 +75,7 @@ def register_feedback(
     payload: BettingFeedbackRequest,
     learning_service: LearningService = Depends(get_learning_service),
 ) -> BettingFeedbackResponse:
-    """Register feedback using the application use case injected with LearningService."""
+    """Register feedback using the injected application learning service."""
     dto = BettingFeedbackRequestDTO(**payload.model_dump())
     use_case = RegisterFeedbackUseCase(learning_service)
     resp = use_case.execute(dto)
@@ -99,9 +109,9 @@ def get_learning_stats(
                 "avg_odds": perf.avg_odds,
                 "total_profit_loss": perf.total_profit_loss,
                 "confidence_adjustment": perf.confidence_adjustment,
-                "last_updated": perf.last_updated.isoformat()
-                if perf.last_updated
-                else None,
+                "last_updated": (
+                    perf.last_updated.isoformat() if perf.last_updated else None
+                ),
             }
         )
 

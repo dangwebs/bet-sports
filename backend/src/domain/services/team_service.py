@@ -13,7 +13,7 @@ class TeamService:
     Domain service for team-related operations, primarily serving logos.
     """
 
-    _logos: dict = {}
+    _logos: dict[str, str] = {}
     _loaded: bool = False
 
     DATA_FILE = os.path.join(os.path.dirname(__file__), "../../../data/team_logos.json")
@@ -21,11 +21,11 @@ class TeamService:
         os.path.dirname(__file__), "../../../data/team_short_names.json"
     )
 
-    _short_names: dict = {}
+    _short_names: dict[str, str] = {}
     _short_names_loaded: bool = False
 
     @classmethod
-    def load_logos(cls):
+    def load_logos(cls) -> None:
         """Load logos from the JSON file into memory."""
         if cls._loaded:
             return
@@ -45,7 +45,7 @@ class TeamService:
             logger.error(f"Failed to load team logos: {e}")
 
     @classmethod
-    def load_short_names(cls):
+    def load_short_names(cls) -> None:
         """Load short names from the JSON file into memory."""
         if cls._short_names_loaded:
             return

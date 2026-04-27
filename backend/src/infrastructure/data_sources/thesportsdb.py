@@ -27,7 +27,7 @@ class TheSportsDBConfig:
     base_url: str = "https://www.thesportsdb.com/api/v1/json/3"
     timeout: int = 30
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.api_key is None:
             # '3' is a common free tier key for testing
             self.api_key = os.getenv("THESPORTSDB_KEY", "3")
@@ -40,7 +40,7 @@ class TheSportsDBClient:
 
     SOURCE_NAME = "TheSportsDB"
 
-    def __init__(self, config: Optional[TheSportsDBConfig] = None):
+    def __init__(self, config: Optional[TheSportsDBConfig] = None) -> None:
         self.config = config or TheSportsDBConfig()
 
     async def _make_request(
@@ -55,7 +55,7 @@ class TheSportsDBClient:
                     url, params=params, timeout=self.config.timeout
                 )
                 response.raise_for_status()
-                return response.json()
+                return dict(response.json())
         except Exception as e:
             logger.error(f"TheSportsDB request error: {e}")
             return None
@@ -99,21 +99,31 @@ class TheSportsDBClient:
         """
         # Map internal ID to TheSportsDB ID
         # Values from: https://www.thesportsdb.com/api/v1/json/3/all_leagues.php
-        INTERNAL_TO_TSDB = {
-            # "E0": "4328"  # Premier League - disabled to avoid confusion
-            # "E1": "4329"  # Championship
-            # "SP1": "4335"  # La Liga
-            # "D1": "4331"  # Bundesliga
-            # "I1": "4332"  # Serie A - disabled: returns unexpected League One data
-            # "I2": "4333"  # Serie B
-            # "F1": "4334"  # Ligue 1 - disabled: returns unexpected League One data
-            # "F2": "4335"  # Ligue 2
-            # "P1": "4344"  # Primeira Liga - disabled
-            # "N1": "4337"  # Eredivisie - disabled
-            # "B1": "4338"  # Belgium Jupiler Pro League - disabled
+        internal_to_tsdb: dict[str, str] = {
+            "E0": "4328",  # Premier League
+            "E1": "4329",  # Championship
+            "SP1": "4335",  # La Liga
+            "D1": "4331",  # Bundesliga
+            "I1": "4332",  # Serie A
+            "I2": "4333",  # Serie B
+            "F1": "4334",  # Ligue 1
+            "F2": "4351",  # Ligue 2 (Corrected ID mapped to separate source if needed)
+            "P1": "4344",  # Primeira Liga
+            "N1": "4337",  # Eredivisie
+            "B1": "4338",  # Belgium Jupiler Pro League
+            "COL1": "4367",  # Colombia Primera A
+            "ARG1": "4393",  # Argentina Primera Division
+            "BRA1": "4351",  # Brasil Serie A
+            "LIB": "4430",  # Copa Libertadores
+            "SUD": "4431",  # Copa Sudamericana
+            "WC": "4362",  # FIFA World Cup
+            "UCL": "4480",  # UEFA Champions League
+            "UEL": "4481",  # UEFA Europa League
+            "UECL": "4843",  # UEFA Conference League
+            "EURO": "4326",  # UEFA European Championship
         }
 
-        tsdb_id = INTERNAL_TO_TSDB.get(league_id)
+        tsdb_id = internal_to_tsdb.get(league_id)
         if not tsdb_id:
             logger.warning(f"No TheSportsDB mapping for league {league_id}")
             return []
@@ -252,15 +262,19 @@ class TheSportsDBClient:
                 away_team=away_team,
                 league=league,
                 match_date=match_date,
-                status="NS"
-                if not event.get("intHomeScore")
-                else "FT",  # Simplified status
-                home_goals=int(event.get("intHomeScore"))
-                if event.get("intHomeScore")
-                else None,
-                away_goals=int(event.get("intAwayScore"))
-                if event.get("intAwayScore")
-                else None,
+                status=(
+                    "NS" if not event.get("intHomeScore") else "FT"
+                ),  # Simplified status
+                home_goals=(
+                    int(event.get("intHomeScore"))
+                    if event.get("intHomeScore")
+                    else None
+                ),
+                away_goals=(
+                    int(event.get("intAwayScore"))
+                    if event.get("intAwayScore")
+                    else None
+                ),
             )
         except Exception as e:
             logger.error(f"Error parsing TheSportsDB match details: {e}")
@@ -280,7 +294,7 @@ class TheSportsDBClient:
             List of finished Match objects with results
         """
         # Map internal ID to TheSportsDB ID
-        INTERNAL_TO_TSDB = {
+        internal_to_tsdb: dict[str, str] = {
             # "E0": "4328",   # Premier League
             # "SP1": "4335",  # La Liga
             # "D1": "4331",   # Bundesliga
@@ -289,7 +303,7 @@ class TheSportsDBClient:
             # "N1": "4337",   # Eredivisie
         }
 
-        tsdb_id = INTERNAL_TO_TSDB.get(league_id)
+        tsdb_id = internal_to_tsdb.get(league_id)
         if not tsdb_id:
             logger.debug(f"No TheSportsDB mapping for league {league_id}")
             return []

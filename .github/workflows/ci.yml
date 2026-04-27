@@ -28,18 +28,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt
 
-      - name: Lint changed Python files (pre-commit)
+      - name: Mypy (Full Check)
         run: |
-          # Fetch main to compare changes in PRs
-          git fetch origin main || true
-          FILES_CHANGED=$(git diff --name-only origin/main...HEAD || true)
-          PY_FILES=$(echo "$FILES_CHANGED" | tr '\n' ' ' | xargs -n1 | grep -E '\.py$' || true)
-          if [ -z "$PY_FILES" ]; then
-            echo "No Python files changed; skipping lint"
-          else
-            echo "Running pre-commit on: $PY_FILES"
-            pre-commit run --verbose --files $PY_FILES
-          fi
+          cd backend
+          python -m mypy src/ --ignore-missing-imports --follow-imports=skip
 
       - name: Run backend tests
         run: |

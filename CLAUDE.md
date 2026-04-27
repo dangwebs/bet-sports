@@ -4,6 +4,10 @@
 
 Full-stack RPA/automation platform called **HyperGenIA**. Consists of a Next.js frontend and a NestJS microservices backend connected via gRPC, exposed through a GraphQL API Gateway.
 
+## Default Tone
+
+Use caveman full by default: terse, direct, and compact. Keep replies short unless the user explicitly asks for more detail.
+
 ## Repository Structure
 
 ```

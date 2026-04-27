@@ -4,6 +4,7 @@ Use `metrics.get_counter(name, documentation, labelnames=())` to obtain a
 counter-like object with `inc()` method. When `prometheus_client` is not
 installed the wrapper provides noop objects so instrumentation is safe.
 """
+
 from __future__ import annotations
 
 import logging

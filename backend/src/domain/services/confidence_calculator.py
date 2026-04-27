@@ -1,7 +1,7 @@
 """
 Confidence Calculator Service Module
 
-Calculates granular confidence scores for betting picks based on 
+Calculates granular confidence scores for betting picks based on
 data quality, odds alignment, and statistical strength.
 """
 

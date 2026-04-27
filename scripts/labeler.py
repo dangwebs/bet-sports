@@ -4,6 +4,7 @@
 This script supports a `--dry-run` mode which will not persist changes and
 will emit a small JSON/CSV report.
 """
+
 from __future__ import annotations
 
 import argparse

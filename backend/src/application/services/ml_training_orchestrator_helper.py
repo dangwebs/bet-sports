@@ -1,15 +1,18 @@
+from typing import Any
+
+
 def _process_single_match_task(
-    match,
-    raw_home,
-    raw_away,
-    league_averages,
-    global_averages_obj,
-    prediction_service,
-    picks_service,
-    statistics_service,
-    resolution_service,
-    feature_extractor,
-):
+    match: Any,
+    raw_home: Any,
+    raw_away: Any,
+    league_averages: Any,
+    global_averages_obj: Any,
+    prediction_service: Any,
+    picks_service: Any,
+    statistics_service: Any,
+    resolution_service: Any,
+    feature_extractor: Any,
+) -> tuple[Any, Any, Any] | None:
     """
     Standalone function to process a single match for prediction and pick generation.
     Designed to be picklable for parallel execution.

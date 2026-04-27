@@ -15,7 +15,7 @@ export default defineConfig({
             registerType: "autoUpdate",
             includeAssets: ["favicon.svg", "robots.txt"],
             devOptions: {
-                enabled: true, // Enable PWA in development for testing
+                enabled: false, // Disable PWA in development to avoid caching issues with Hot-Reload
             },
             manifest: {
                 id: "/",
@@ -88,6 +88,10 @@ export default defineConfig({
     },
     server: {
         port: 5173,
+        host: "0.0.0.0",
+        watch: {
+            usePolling: true,
+        },
         proxy: {
             "/api": {
                 target: (_a = process.env.VITE_API_PROXY_TARGET) !== null && _a !== void 0 ? _a : "http://localhost:8000",

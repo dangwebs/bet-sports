@@ -21,6 +21,7 @@ aiohttp==3.13.2
 sqlalchemy==2.0.45
 psycopg2-binary==2.9.9  # PostgreSQL driver (required for DATABASE_URL connection)
 pymongo==4.7.0  # MongoDB driver (required by tests)
+motor>=3.2.0  # Async MongoDB driver (Motor) for async repository
 
 # Environment management
 python-dotenv==1.0.0
@@ -49,9 +50,10 @@ pytest-cov==4.1.0
 pytest-asyncio==0.23.3
 
 # Linting
-black==23.12.1
+black==26.3.1
 flake8==7.0.0
 mypy==1.8.0
+types-pytz==2026.1.1.20260408
 
 # =============================================================================
 # NOTES:

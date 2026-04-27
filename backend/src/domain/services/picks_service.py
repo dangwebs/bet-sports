@@ -9,7 +9,7 @@ import functools
 import logging
 import math
 import os
-from typing import Optional
+from typing import Any, List, Optional, cast
 
 from src.domain.entities.betting_feedback import LearningWeights
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
@@ -126,9 +126,14 @@ class PicksService:
         MarketType.AWAY_CARDS_UNDER: 1.1,
     }
 
-    def __init__(self, learning_weights: Optional[LearningWeights] = None):
+    def __init__(
+        self,
+        learning_weights: Optional[LearningWeights] = None,
+        persistence_repo: Optional[Any] = None,
+    ):
         """Initialize with optional learning, context, and confidence services."""
         self.learning_weights = learning_weights or LearningWeights()
+        self.repo = persistence_repo
         self.statistics_service = StatisticsService()
         self.context_analyzer = ContextAnalyzer()
         self.resolution_service = PickResolutionService()  # Centralized validator
@@ -178,6 +183,22 @@ class PicksService:
         if not ML_AVAILABLE:
             return None
 
+        # 1. Try DB first
+        if self.repo:
+            try:
+                from io import BytesIO
+
+                from src.core.constants import ML_MODEL_FILENAME
+
+                model_bytes = self.repo.get_binary_artifact(ML_MODEL_FILENAME)
+                if model_bytes:
+                    model = joblib.load(BytesIO(model_bytes))
+                    logger.info("ML Model loaded successfully from Database")
+                    return cast(object, model)
+            except Exception as e:
+                logger.warning(f"Failed to load model from Database: {e}")
+
+        # 2. Fallback to Disk (Legacy/Migration)
         if not os.path.exists(model_path):
             return None
 
@@ -185,8 +206,8 @@ class PicksService:
             # Note: We trust this local file as it is part of our internal training
             # pipeline
             model = joblib.load(model_path)
-            logger.info(f"ML Model loaded successfully from {model_path}")
-            return model
+            logger.info(f"ML Model loaded successfully from {model_path} (Disk)")
+            return cast(object, model)
         except (FileNotFoundError, ImportError) as e:
             logger.warning(f"Technical failure loading ML model: {e}")
         except Exception as e:
@@ -305,9 +326,11 @@ class PicksService:
 
         # 2. Home Attack Strength
         home_att = self._calculate_weighted_strength(
-            home_stats.home_goals_per_match
-            if home_stats.home_matches_played > 3
-            else home_stats.goals_per_match,
+            (
+                home_stats.home_goals_per_match
+                if home_stats.home_matches_played > 3
+                else home_stats.goals_per_match
+            ),
             avg_home_goals,
             home_stats.recent_form,
         )
@@ -316,27 +339,33 @@ class PicksService:
         # Conceded relative to League Home Avg (they are playing away vs home).
         # Defense strength: Goals Conceded / Avg Goals Conceded by Away Teams.
         away_def = self._calculate_weighted_strength(
-            away_stats.away_goals_conceded_per_match
-            if away_stats.away_matches_played > 3
-            else away_stats.goals_conceded_per_match,
+            (
+                away_stats.away_goals_conceded_per_match
+                if away_stats.away_matches_played > 3
+                else away_stats.goals_conceded_per_match
+            ),
             avg_home_goals,
             away_stats.recent_form,
         )
 
         # 4. Away Attack Strength
         away_att = self._calculate_weighted_strength(
-            away_stats.away_goals_per_match
-            if away_stats.away_matches_played > 3
-            else away_stats.goals_per_match,
+            (
+                away_stats.away_goals_per_match
+                if away_stats.away_matches_played > 3
+                else away_stats.goals_per_match
+            ),
             avg_away_goals,
             away_stats.recent_form,
         )
 
         # 5. Home Defense Strength
         home_def = self._calculate_weighted_strength(
-            home_stats.home_goals_conceded_per_match
-            if home_stats.home_matches_played > 3
-            else home_stats.goals_conceded_per_match,
+            (
+                home_stats.home_goals_conceded_per_match
+                if home_stats.home_matches_played > 3
+                else home_stats.goals_conceded_per_match
+            ),
             avg_away_goals,
             home_stats.recent_form,
         )
@@ -528,7 +557,8 @@ class PicksService:
         picks = MatchSuggestedPicks(match_id=match.id)
 
         # Analyze Context
-        self.context_analyzer.analyze_match_context(match, home_stats, away_stats)
+        if home_stats and away_stats:
+            self.context_analyzer.analyze_match_context(match, home_stats, away_stats)
 
         # Analyze H2H Dominance
         h2h_factor = 1.0
@@ -572,7 +602,7 @@ class PicksService:
         )
 
         # --- REFACTORING: Refine Expectations using League Avgs & Weighted Strength ---
-        if league_averages and has_home_stats and has_away_stats:
+        if league_averages and home_stats and away_stats:
             # Calculate refined expected goals
             ref_home, ref_away = self._calculate_dynamic_expected_goals(
                 home_stats, away_stats, league_averages
@@ -593,7 +623,7 @@ class PicksService:
 
         # Check if this is a low-scoring context
         is_low_scoring = False
-        if has_home_stats and has_away_stats:
+        if home_stats and away_stats:
             is_low_scoring = self._is_low_scoring_context(
                 home_stats, away_stats, predicted_home_goals, predicted_away_goals
             )
@@ -605,9 +635,7 @@ class PicksService:
         # teams.
         # NOW RELAXED: If we have predictions (which use league avg fallback), we can
         # generate picks too.
-        if (
-            home_stats is not None and home_stats.matches_played > 0
-        ) or has_prediction_data:
+        if home_stats and away_stats:
             corners_picks = self._generate_corners_picks(
                 home_stats,
                 away_stats,
@@ -738,7 +766,7 @@ class PicksService:
             # Generate Team Goals (Relaxed: Use prediction data if stats are partial)
             # We only need team names and predicted goals, which we have if
             # has_prediction_data is True
-            if has_prediction_data:
+            if has_prediction_data and home_stats and away_stats:
                 tg_picks = self._generate_team_goals_picks(
                     home_stats, away_stats, predicted_home_goals, predicted_away_goals
                 )
@@ -845,11 +873,11 @@ class PicksService:
     def _apply_ml_refinement(
         self,
         picks_container: MatchSuggestedPicks,
-        model_instance,
+        model_instance: Any,
         match: Match,
         home_stats: Optional[TeamStatistics],
         away_stats: Optional[TeamStatistics],
-    ):
+    ) -> None:
         """
         Uses the trained ML model to adjust confidence/priority of picks.
 
@@ -996,7 +1024,7 @@ class PicksService:
         Generic generator for match total statistics (Over/Under).
         Strictly DRY: Processes both markets in a single loop using tuple configuration.
         """
-        picks = []
+        picks: List[SuggestedPick] = []
         if stat_avg <= 0:
             return picks
 
@@ -1060,7 +1088,7 @@ class PicksService:
         """
         Generic generator for individual team statistics (Over/Under).
         """
-        picks = []
+        picks: List[SuggestedPick] = []
         if stat_avg <= 0:
             return picks
 
@@ -1562,7 +1590,7 @@ class PicksService:
         limit = 10
 
         # Precompute individual Poisson masses
-        def poisson_pmf(lam, k):
+        def poisson_pmf(lam: float, k: int) -> float:
             return (math.exp(-lam) * (lam**k)) / math.factorial(k)
 
         home_probs = [poisson_pmf(expected_home, i) for i in range(limit)]
@@ -1832,12 +1860,16 @@ class PicksService:
             stat_avg=avg,
             lines=[2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5],
             market_types=(
-                MarketType.HOME_CORNERS_OVER
-                if is_home
-                else MarketType.AWAY_CORNERS_OVER,
-                MarketType.HOME_CORNERS_UNDER
-                if is_home
-                else MarketType.AWAY_CORNERS_UNDER,
+                (
+                    MarketType.HOME_CORNERS_OVER
+                    if is_home
+                    else MarketType.AWAY_CORNERS_OVER
+                ),
+                (
+                    MarketType.HOME_CORNERS_UNDER
+                    if is_home
+                    else MarketType.AWAY_CORNERS_UNDER
+                ),
             ),
             label_formats=(
                 f"{team_name} - Más de {{}} córners",
@@ -2138,12 +2170,18 @@ class PicksService:
         pred_away_cards: float,
     ) -> list[SuggestedPick]:
         """Generate Team Specific Card Picks."""
-        picks = []
+        picks: List[SuggestedPick] = []
         # NOTE: Over/Under logic moved to _generate_single_team_cards (Step 6)
         # to avoid duplicates.
         return picks
 
-    def _build_simple_pick(self, market_type, label, prob, reasoning):
+    def _build_simple_pick(
+        self,
+        market_type: Any,
+        label: str,
+        prob: float,
+        reasoning: str,
+    ) -> SuggestedPick:
         """Helper to build a simple pick object."""
         prob = min(0.98, prob)
         return SuggestedPick(

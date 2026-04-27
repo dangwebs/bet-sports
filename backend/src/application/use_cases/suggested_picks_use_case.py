@@ -4,12 +4,17 @@ Suggested Picks Use Case Module
 Use case for generating AI-suggested betting picks for a match.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 from pytz import timezone
+
+if TYPE_CHECKING:
+    from src.application.use_cases.use_cases import DataSources
+
 from src.application.dtos.dtos import (
     BettingFeedbackRequestDTO,
     BettingFeedbackResponseDTO,
@@ -17,6 +22,7 @@ from src.application.dtos.dtos import (
     MarketPerformanceDTO,
     MatchSuggestedPicksDTO,
     SuggestedPickDTO,
+    TopMLPicksDTO,
 )
 from src.domain.entities.betting_feedback import BettingFeedback
 from src.domain.entities.entities import League, Match, Team
@@ -39,12 +45,12 @@ class GetSuggestedPicksUseCase:
 
     def __init__(
         self,
-        data_sources,  # DataSources from use_cases.py
+        data_sources: "DataSources",  # DataSources from use_cases.py
         prediction_service: PredictionService,
         statistics_service: StatisticsService,
         learning_service: LearningService,
         cache_service: CacheService,
-    ):
+    ) -> None:
         self.data_sources = data_sources
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
@@ -56,7 +62,7 @@ class GetSuggestedPicksUseCase:
 
         # Upgrade to AI Picks Service
         self.picks_service = AIPicksService(
-            learning_weights=learning_service.get_learning_weights()
+            learning_weights=learning_service.learning_weights
         )
 
     async def execute(
@@ -84,8 +90,10 @@ class GetSuggestedPicksUseCase:
                     generated_at=get_current_time(),
                 )
 
-            # 1.5 Fetch Global Averages
-            global_avg_data = self.cache_service.get("global_statistical_averages")
+            # 1.5 Fetch Global Averages (async-safe)
+            global_avg_data = await self.cache_service.aget(
+                "global_statistical_averages"
+            )
             global_averages = None
             if global_avg_data:
                 from src.domain.value_objects.value_objects import LeagueAverages
@@ -157,51 +165,46 @@ class GetSuggestedPicksUseCase:
                 prediction_sources.append("The Odds API")
             if home_elo:
                 prediction_sources.append("ClubElo")
-            # 5. Generate prediction
-            prediction = self.prediction_service.generate_prediction(
-                match=match,
-                home_stats=home_stats,
-                away_stats=away_stats,
-                league_averages=league_averages,
-                global_averages=global_averages,
-                data_sources=prediction_sources,
-                highlights_url=highlights_url,
-                real_time_odds=rt_odds,
-                home_elo=home_elo,
-                away_elo=away_elo,
+            # 5. Generate prediction (offload CPU/blocking work to threadpool)
+            prediction = await asyncio.to_thread(
+                lambda: self.prediction_service.generate_prediction(
+                    match=match,
+                    home_stats=home_stats,
+                    away_stats=away_stats,
+                    league_averages=league_averages,
+                    global_averages=global_averages,
+                    data_sources=prediction_sources,
+                    highlights_url=highlights_url,
+                    real_time_odds=rt_odds,
+                    home_elo=home_elo,
+                    away_elo=away_elo,
+                )
             )
 
-            # 6. Generate suggested picks
-            suggested_picks_container = self.picks_service.generate_suggested_picks(
-                match=match,
-                home_stats=home_stats
-                if home_stats and home_stats.matches_played > 0
-                else None,
-                away_stats=away_stats
-                if away_stats and away_stats.matches_played > 0
-                else None,
-                league_averages=league_averages,
-                predicted_home_goals=prediction.predicted_home_goals,
-                predicted_away_goals=prediction.predicted_away_goals,
-                home_win_prob=prediction.home_win_probability,
-                draw_prob=prediction.draw_probability,
-                away_win_prob=prediction.away_win_probability,
+            # 6. Generate suggested picks (offload to threadpool)
+            suggested_picks_container = await asyncio.to_thread(
+                lambda: self.picks_service.generate_suggested_picks(
+                    match=match,
+                    home_stats=(
+                        home_stats
+                        if home_stats and home_stats.matches_played > 0
+                        else None
+                    ),
+                    away_stats=(
+                        away_stats
+                        if away_stats and away_stats.matches_played > 0
+                        else None
+                    ),
+                    league_averages=league_averages,
+                    predicted_home_goals=prediction.predicted_home_goals,
+                    predicted_away_goals=prediction.predicted_away_goals,
+                    home_win_prob=prediction.home_win_probability,
+                    draw_prob=prediction.draw_probability,
+                    away_win_prob=prediction.away_win_probability,
+                )
             )
 
             # 7. Convert to DTO
-            from src.application.use_cases.live_predictions_use_case import (
-                GetLivePredictionsUseCase,
-            )
-
-            # Leverage existing mapping logic from live predictions for consistency
-            _temp_use_case = GetLivePredictionsUseCase(
-                self.data_sources,
-                self.prediction_service,
-                self.statistics_service,
-                None,
-                self.picks_service,
-            )
-
             # Populate DTO
             picks_dtos = []
             for pick in suggested_picks_container.suggested_picks:
@@ -304,11 +307,10 @@ class GetSuggestedPicksUseCase:
         # This is vital when the account is suspended/limited but we already fetched the
         # list
         try:
-            from src.infrastructure.cache.cache_service import get_cache_service
-
-            cache = get_cache_service()
+            # Use injected cache_service (async-safe wrapper present)
+            cache = self.cache_service
             for key in ["filtered", "all"]:
-                live_preds = cache.get_live_matches(key)
+                live_preds = await cache.aget_live_matches(key)
                 if live_preds:
                     # live_preds is List[MatchPredictionDTO]
                     for lp in live_preds:
@@ -512,10 +514,12 @@ class GetSuggestedPicksUseCase:
 
     async def _fetch_csv_history(self, league_code: str) -> list[Match]:
         try:
-            return await self.data_sources.football_data_uk.get_historical_matches(
-                league_code,
-                seasons=["2425", "2324"],
+            csv_history = (
+                await self.data_sources.football_data_uk.get_historical_matches(
+                    league_code, seasons=["2425", "2324"]
+                )
             )
+            return cast(list[Match], csv_history)
         except Exception as exc:
             logger.warning("Failed to fetch CSV history for %s: %s", league_code, exc)
             return []
@@ -539,7 +543,9 @@ class GetSuggestedPicksUseCase:
             logger.warning("OpenFootball fetch failed for %s: %s", league_code, exc)
         return []
 
-    async def _fetch_team_history_apis(self, match: Match) -> list[Match]:
+    async def _fetch_team_history_apis(
+        self, match: Match, bulk_history: Optional[Dict[str, List[Match]]] = None
+    ) -> List[Match]:
         """Fetch history specifically for the two teams from APIs."""
         team_matches = []
 
@@ -718,7 +724,7 @@ class GetLearningStatsUseCase:
 class GetTopMLPicksUseCase:
     """Use case for retrieving the top ML picks across all leagues."""
 
-    def __init__(self, persistence_repository):
+    def __init__(self, persistence_repository: Any) -> None:
         self.persistence_repository = persistence_repository
 
     async def execute(
@@ -739,8 +745,6 @@ class GetTopMLPicksUseCase:
                 )
             else:
                 active_preds = self.persistence_repository.get_all_active_predictions()
-
-            _all_picks = []
 
             from src.application.dtos.dtos import SuggestedPickDTO, TopMLPicksDTO
 
@@ -773,7 +777,11 @@ class GetTopMLPicksUseCase:
                             )
                             continue
                         if m_date.tzinfo is None:
-                            m_date = now.tzinfo.localize(m_date)
+                            # Prefer the runtime tzinfo; otherwise use the
+                            # project fallback timezone helper.
+                            from src.utils.time_utils import COLOMBIA_TZ
+
+                            m_date = cast(datetime, COLOMBIA_TZ.localize(m_date))
                         else:
                             m_date = m_date.astimezone(now.tzinfo)
 

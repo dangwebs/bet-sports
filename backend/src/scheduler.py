@@ -12,8 +12,8 @@ try:
 
     APSCHEDULER_AVAILABLE = True
 except ModuleNotFoundError:
-    AsyncIOScheduler = None  # type: ignore[assignment]
-    CronTrigger = None  # type: ignore[assignment]
+    AsyncIOScheduler = None
+    CronTrigger = None
     APSCHEDULER_AVAILABLE = False
 
 # Configure logger
@@ -23,18 +23,20 @@ logger = logging.getLogger(__name__)
 class BotScheduler:
     """Manages scheduled tasks with extreme memory efficiency for Render Free Tier."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.scheduler: Any = (
             AsyncIOScheduler(timezone=COLOMBIA_TZ) if APSCHEDULER_AVAILABLE else None
         )
         self._job_in_progress = False
 
-    def _get_league_iterator(self, leagues_dict: dict) -> Generator[str, None, None]:
+    def _get_league_iterator(
+        self, leagues_dict: dict[str, Any]
+    ) -> Generator[str, None, None]:
         """Memory-efficient generator for iterating through leagues."""
         for league_id in leagues_dict.keys():
             yield league_id
 
-    async def run_audit_only_job(self):
+    async def run_audit_only_job(self) -> None:
         """Standalone audit job (08:00 AM)."""
         logger.info("Starting scheduled data audit...")
         try:
@@ -46,7 +48,7 @@ class BotScheduler:
         except Exception as e:
             logger.error(f"Scheduled audit failed: {e}")
 
-    async def run_daily_orchestrated_job(self):
+    async def run_daily_orchestrated_job(self) -> None:
         """
         Execute the daily orchestrated job pipeline with 512MB RAM constraint.
         1. Retraining (Selective)
@@ -252,7 +254,7 @@ class BotScheduler:
             self._job_in_progress = False
             gc.collect()
 
-    def start(self, run_immediate: bool = False):
+    def start(self, run_immediate: bool = False) -> None:
         """Start the scheduler with daily job at 06:00 AM Colombia time."""
         if self.scheduler is None or CronTrigger is None:
             logger.warning(
@@ -295,7 +297,7 @@ class BotScheduler:
         except Exception as e:
             logger.error(f"Failed to start scheduler: {str(e)}", exc_info=True)
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the scheduler gracefully."""
         if self.scheduler is None:
             logger.info(

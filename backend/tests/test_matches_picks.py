@@ -55,25 +55,46 @@ def test_live_matches_with_doc():
 
 
 def test_suggested_picks_endpoints():
+    import src.dependencies as deps
+
+    class DummyLearningService:
+        def register_feedback(self, feedback):
+            pass
+
+        def get_market_adjustment(self, market_type):
+            return 1.0
+
+        def get_all_stats(self):
+            return {}
+
+        def get_learning_weights(self):
+            from src.domain.entities.betting_feedback import LearningWeights
+
+            return LearningWeights()
+
+    app.dependency_overrides[deps.get_learning_service] = lambda: DummyLearningService()
     client = TestClient(app)
-    r = client.get("/api/v1/suggested-picks/match/foo")
-    assert r.status_code == 200
-    assert r.json()["match_id"] == "foo"
+    try:
+        r = client.get("/api/v1/suggested-picks/match/foo")
+        assert r.status_code == 200
+        assert r.json()["match_id"] == "foo"
 
-    payload = {
-        "match_id": "foo",
-        "market_type": "win",
-        "prediction": "home",
-        "actual_outcome": "home",
-        "was_correct": True,
-        "odds": 1.5,
-    }
-    r2 = client.post("/api/v1/suggested-picks/feedback", json=payload)
-    assert r2.status_code == 200
-    assert r2.json()["success"] is True
+        payload = {
+            "match_id": "foo",
+            "market_type": "win",
+            "prediction": "home",
+            "actual_outcome": "home",
+            "was_correct": True,
+            "odds": 1.5,
+        }
+        r2 = client.post("/api/v1/suggested-picks/feedback", json=payload)
+        assert r2.status_code == 200
+        assert r2.json()["success"] is True
 
-    r3 = client.get("/api/v1/suggested-picks/learning-stats")
-    assert r3.status_code == 200
+        r3 = client.get("/api/v1/suggested-picks/learning-stats")
+        assert r3.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_daily_and_team_endpoints():

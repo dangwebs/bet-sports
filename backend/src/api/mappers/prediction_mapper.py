@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from src.api.schemas.leagues import LeagueModel
 from src.api.schemas.predictions import MatchPredictionModel
@@ -32,20 +32,23 @@ def normalize_prediction_document(
         return None
 
     try:
-        return MatchPredictionModel.model_validate(
-            {
-                "match": {
-                    **match_payload,
-                    "league": match_payload.get("league")
-                    or {
-                        "id": league.id,
-                        "name": league.name,
-                        "country": league.country,
+        return cast(
+            MatchPredictionModel,
+            MatchPredictionModel.model_validate(
+                {
+                    "match": {
+                        **match_payload,
+                        "league": match_payload.get("league")
+                        or {
+                            "id": league.id,
+                            "name": league.name,
+                            "country": league.country,
+                        },
                     },
-                },
-                "prediction": prediction_payload,
-                "top_ml_picks": payload.get("top_ml_picks", []),
-            }
+                    "prediction": prediction_payload,
+                    "top_ml_picks": payload.get("top_ml_picks", []),
+                }
+            ),
         )
     except Exception:
         return None

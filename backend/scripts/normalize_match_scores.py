@@ -6,6 +6,7 @@ Convierte valores numéricos almacenados como strings a enteros en los campos
 
 Soporta `--dry-run` para mostrar los cambios propuestos sin aplicar.
 """
+
 from __future__ import annotations
 
 import argparse

@@ -33,7 +33,8 @@ def _to_bson_friendly(value: Any) -> Any:
 class MongoRepository:
     """Drop-in replacement for PostgreSQL PersistenceRepository using MongoDB."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        self.client: MongoClient
         mongo_uri = os.getenv(
             "MONGO_URI", "mongodb://admin:adminpassword@localhost:27017/"
         )
@@ -48,22 +49,26 @@ class MongoRepository:
             self.training_results = self.db["training_results"]
             self.match_predictions = self.db["match_predictions"]
             self.api_cache = self.db["api_cache"]
+            self.app_state = self.db["app_state"]
+            self.binary_artifacts = self.db["binary_artifacts"]
 
             # Create indexes
             self.training_results.create_index("key", unique=True)
             self.match_predictions.create_index("match_id", unique=True)
             self.api_cache.create_index("key", unique=True)
+            self.app_state.create_index("key", unique=True)
+            self.binary_artifacts.create_index("key", unique=True)
 
             logger.info(f"✅ Successfully connected to MongoDB database: {db_name}")
         except Exception as e:
             logger.error(f"❌ Failed to connect to MongoDB: {e}")
             raise e
 
-    def create_tables(self):
+    def create_tables(self) -> None:
         """No-op for MongoDB, collections are created implicitly."""
         pass
 
-    def save_training_result(self, key: str, data: dict):
+    def save_training_result(self, key: str, data: Dict[str, Any]) -> None:
         normalized_data = _to_bson_friendly(data)
         self.training_results.update_one(
             {"key": key},
@@ -90,8 +95,12 @@ class MongoRepository:
         return {doc["key"]: doc["data"] for doc in docs}
 
     def save_match_prediction(
-        self, match_id: str, league_id: str, data: dict, ttl_seconds: int = 86400
-    ):
+        self,
+        match_id: str,
+        league_id: str,
+        data: Dict[str, Any],
+        ttl_seconds: int = 86400,
+    ) -> None:
         # Ensure traceability metadata exists
         try:
             if not isinstance(data, dict):
@@ -121,13 +130,31 @@ class MongoRepository:
             upsert=True,
         )
 
-    def get_match_prediction(self, match_id: str) -> Optional[dict]:
+    def get_match_prediction(self, match_id: str) -> Optional[Dict[str, Any]]:
         doc = self.match_predictions.find_one({"match_id": match_id})
         if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
-            return doc.get("data")
+            res = doc.get("data")
+            return res if isinstance(res, dict) else None
         return None
 
-    def bulk_save_predictions(self, predictions_data: List[dict]):
+    def get_match_predictions_bulk(self, match_ids: List[str]) -> Dict[str, dict]:
+        """Return active prediction data keyed by match id.
+
+        Expired documents are excluded from the result.
+        """
+        if not match_ids:
+            return {}
+        docs = self.match_predictions.find(
+            {"match_id": {"$in": match_ids}, "expires_at": {"$gt": get_current_time()}}
+        )
+        result: Dict[str, dict] = {}
+        for doc in docs:
+            mid = doc.get("match_id")
+            if mid:
+                result[mid] = doc.get("data")
+        return result
+
+    def bulk_save_predictions(self, predictions_data: List[Dict[str, Any]]) -> None:
         if not predictions_data:
             return
         from pymongo import UpdateOne
@@ -180,8 +207,12 @@ class MongoRepository:
         ]
 
     def save_cached_response(
-        self, endpoint: str, data: dict, params: dict = None, ttl_seconds: int = 3600
-    ):
+        self,
+        endpoint: str,
+        data: Dict[str, Any],
+        params: Optional[Dict[str, Any]] = None,
+        ttl_seconds: int = 3600,
+    ) -> None:
         key = f"{endpoint}:{str(params)}"
         expires_at = get_current_time() + timedelta(seconds=ttl_seconds)
         self.api_cache.update_one(
@@ -190,28 +221,75 @@ class MongoRepository:
             upsert=True,
         )
 
-    def get_cached_response(self, endpoint: str, params: dict = None) -> Optional[dict]:
+    def get_cached_response(
+        self, endpoint: str, params: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
         key = f"{endpoint}:{str(params)}"
         doc = self.api_cache.find_one({"key": key})
         # Check expiration - assuming get_current_time and expires_at are compatible
         if doc and doc.get("expires_at") and doc["expires_at"] > get_current_time():
-            return doc.get("data")
+            res = doc.get("data")
+            return res if isinstance(res, dict) else None
         return None
 
-    def clear_all_predictions(self):
-        self.match_predictions.delete_many({})
+    def clear_all_predictions(self, league_ids: Optional[List[str]] = None) -> bool:
+        if league_ids:
+            self.match_predictions.delete_many({"league_id": {"$in": league_ids}})
+        else:
+            self.match_predictions.delete_many({})
+        return True
 
     def clear_all_data(self) -> Dict[str, int]:
         """Clear training, predictions and API cache collections."""
         training_deleted = self.training_results.delete_many({}).deleted_count
         predictions_deleted = self.match_predictions.delete_many({}).deleted_count
         cache_deleted = self.api_cache.delete_many({}).deleted_count
+        app_state_deleted = self.app_state.delete_many({}).deleted_count
+        artifacts_deleted = self.binary_artifacts.delete_many({}).deleted_count
 
         return {
             "training_results": training_deleted,
             "match_predictions": predictions_deleted,
             "api_cache": cache_deleted,
+            "app_state": app_state_deleted,
+            "binary_artifacts": artifacts_deleted,
         }
+
+    def save_app_state(self, key: str, data: Dict[str, Any]) -> None:
+        """Save general application state (JSON)."""
+        normalized_data = _to_bson_friendly(data)
+        self.app_state.update_one(
+            {"key": key},
+            {"$set": {"data": normalized_data, "last_updated": get_current_time()}},
+            upsert=True,
+        )
+
+    def get_app_state(self, key: str) -> Optional[dict]:
+        """Retrieve general application state."""
+        doc = self.app_state.find_one({"key": key})
+        return doc.get("data") if doc else None
+
+    def save_binary_artifact(self, key: str, binary_data: bytes) -> None:
+        """Save heavy binary data (e.g. ML model) as BSON Binary."""
+        from bson.binary import Binary
+
+        self.binary_artifacts.update_one(
+            {"key": key},
+            {
+                "$set": {
+                    "data": Binary(binary_data),
+                    "last_updated": get_current_time(),
+                }
+            },
+            upsert=True,
+        )
+
+    def get_binary_artifact(self, key: str) -> Optional[bytes]:
+        """Retrieve binary data from MongoDB."""
+        doc = self.binary_artifacts.find_one({"key": key})
+        if doc and "data" in doc:
+            return bytes(doc["data"])
+        return None
 
 
 # Singleton accessor with old name alias to avoid changing dependencies everywhere

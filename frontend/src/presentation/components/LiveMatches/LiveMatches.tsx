@@ -89,49 +89,55 @@ interface NormalizedMatch {
   awayTeam?: import("../../../types").Team | string;
 }
 
+type MatchLike = (LiveMatch | import("../../../types").Match) & {
+  // Added for compatibility with some raw data sources or optional fields
+  home_goals?: number;
+  away_goals?: number;
+  home_team_obj?: import("../../../types").Team;
+  away_team_obj?: import("../../../types").Team;
+};
+
 // Normalize match data from either Match or LiveMatch
 const normalizeMatch = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  match: any
+  match: MatchLike
 ): NormalizedMatch => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const m = match as any;
   // Check if it's a LiveMatch (has league_name) or Match (has league object)
-  if ("league_name" in m) {
+  if ("league_name" in match) {
     // It's a LiveMatch
+    const lm = match as LiveMatch;
     return {
-      status: m.status || "LIVE",
-      leagueName: m.league_name || "Liga",
+      status: lm.status || "LIVE",
+      leagueName: lm.league_name || "Liga",
       homeTeamName:
-        typeof m.home_team === "string"
-          ? m.home_team
-          : m.home_team.name || "Local",
+        typeof lm.home_team === "string"
+          ? lm.home_team
+          : lm.home_team.name || "Local",
       awayTeamName:
-        typeof m.away_team === "string"
-          ? m.away_team
-          : m.away_team.name || "Visitante",
-      homeTeam: m.home_team,
-      awayTeam: m.away_team,
-      homeScore: m.home_score ?? 0,
-      awayScore: m.away_score ?? 0,
+        typeof lm.away_team === "string"
+          ? lm.away_team
+          : lm.away_team.name || "Visitante",
+      homeTeam: lm.home_team,
+      awayTeam: lm.away_team,
+      homeScore: lm.home_score ?? 0,
+      awayScore: lm.away_score ?? 0,
     };
   } else {
-    // It's a Match or LiveMatch
+    // It's a Match (from types)
+    const m = match as import("../../../types").Match & {
+      home_goals?: number;
+      away_goals?: number;
+      home_team_obj?: import("../../../types").Team;
+      away_team_obj?: import("../../../types").Team;
+    };
     return {
       status: m.status || "LIVE",
-      leagueName: (m && m.league && m.league.name) || m.league_name || "Liga",
-      homeTeamName:
-        typeof m.home_team === "string"
-          ? m.home_team
-          : m.home_team?.name || "Local",
-      awayTeamName:
-        typeof m.away_team === "string"
-          ? m.away_team
-          : m.away_team?.name || "Visitante",
-      homeScore: m.home_goals ?? m.home_score ?? 0,
-      awayScore: m.away_goals ?? m.away_score ?? 0,
-      homeTeam: m.home_team_obj || m.home_team,
-      awayTeam: m.away_team_obj || m.away_team,
+      leagueName: (m && m.league && m.league.name) || "Liga",
+      homeTeamName: m.home_team?.name || "Local",
+      awayTeamName: m.away_team?.name || "Visitante",
+      homeScore: m.home_goals ?? 0,
+      awayScore: m.away_goals ?? 0,
+      homeTeam: m.home_team,
+      awayTeam: m.away_team,
     };
   }
 };

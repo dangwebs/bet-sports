@@ -2,59 +2,98 @@
 
 Resumen rápido
 --------------
-Esta guía recoge los comandos y pasos para mantener el backend en estado "lint‑green" localmente y para entender cómo CI valida el código.
+Esta guía recoge el flujo canónico para validar backend y frontend localmente y para entender cómo CI valida el código.
 
 Comandos principales (local)
 ---------------------------
-- Activar entorno virtual:
+- Ejecutar el gate canónico full-stack desde la raíz del repo:
 
 ```bash
-source .venv/bin/activate
+./scripts/quality_gate.sh all
 ```
 
-- Ejecutar todos los hooks de `pre-commit` (aplica `black`, `isort` y otras correcciones automáticas):
+- Ejecutar solo backend:
 
 ```bash
-.venv/bin/pre-commit run --all-files
+./scripts/quality_gate.sh backend
+```
+
+- Ejecutar solo frontend:
+
+```bash
+./scripts/quality_gate.sh frontend
+```
+
+- Ejecutar una línea base completa sin detenerse en el primer fallo:
+
+```bash
+./scripts/quality_gate.sh report
+```
+
+- `scripts/local_checks.sh` sigue existiendo, pero ahora delega al gate canónico:
+
+```bash
+./scripts/local_checks.sh
+```
+
+- Activar entorno virtual del backend para checks manuales:
+
+```bash
+source backend/.venv/bin/activate
+```
+
+- Ejecutar todos los hooks de `pre-commit` desde la raíz sin depender de `PATH`:
+
+```bash
+./scripts/pre_commit.sh run --all-files
 ```
 
 - Ejecutar ruff para ver todos los errores de lint:
 
 ```bash
-.venv/bin/ruff check .
+cd backend && .venv/bin/ruff check src tests
 ```
 
 - Ejecutar `black` en modo verificación (excluir venv):
 
 ```bash
-.venv/bin/black --check . --exclude '/(backend/venv|venv|\.venv)/'
+cd backend && .venv/bin/black --check src tests
 ```
 
 - Ejecutar `isort` en modo verificación (evitar venv/node_modules):
 
 ```bash
-.venv/bin/isort --check-only . --skip .venv --skip venv --skip backend/venv --skip frontend/node_modules
+cd backend && .venv/bin/isort --check-only src tests
+```
+
+- Ejecutar `mypy` con la misma forma que usa CI:
+
+```bash
+cd backend && .venv/bin/mypy src/ --ignore-missing-imports --follow-imports=skip
 ```
 
 - Ejecutar pruebas unitarias del backend:
 
 ```bash
-cd backend && .venv/bin/pytest -q
+cd backend && .venv/bin/pytest -v --tb=short
+```
+
+- Ejecutar validación del frontend manualmente:
+
+```bash
+cd frontend && npm run lint && npm run build && npx vitest run
 ```
 
 Qué hacer si hay fallos
 -----------------------
-- Para problemas de formato e imports: ejecutar `pre-commit run --all-files` y volver a hacer `git add` + `git commit`.
+- Para problemas de formato e imports: ejecutar el check concreto afectado o `./scripts/pre_commit.sh run --all-files`, luego volver a hacer `git add` + `git commit`.
 - Para reglas de `ruff` (p. ej. E402, F821): revisar los imports y las anotaciones de tipos. Las correcciones no triviales (p. ej. C901) requieren un spec y refactor controlado.
 
 CI
 --
-La acción de GitHub `Lint` está definida en `.github/workflows/lint.yml`. CI ejecuta:
-- Instalación de herramientas (`ruff`, `black`, `isort`)
-- `ruff check .`
-- `black --check .`
-- `isort --check-only .`
-- Instalación deps y linter frontend (en `frontend/`)
+Las acciones de GitHub relevantes están en `.github/workflows/ci.yml`, `.github/workflows/ci-pr.yml` y `.github/workflows/lint.yml`. La intención operativa local debe replicar esta matriz:
+- Backend: `ruff`, `black`, `isort`, `mypy`, `pytest`
+- Frontend: `eslint`, `build`, `vitest`
 
 Notas importantes
 -----------------

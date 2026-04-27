@@ -5,7 +5,7 @@ description: "Conventional Commits v1.0.0 specification. Activate when writing c
 
 # Conventional Commits Skill
 
-All commit messages in this project **must** follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/).
+All commit messages **must** follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/).
 
 ## Format
 
@@ -29,8 +29,8 @@ All commit messages in this project **must** follow [Conventional Commits v1.0.0
 | `style` | Whitespace, formatting, missing semicolons (no logic change) | None |
 | `test` | Adding or correcting tests | None |
 | `chore` | Build tasks, dependency updates, tooling configuration | None |
-| `ci` | Changes to CI/CD configuration files (.github/workflows) | None |
-| `build` | Changes affecting the build system (turbo, webpack, nest-cli) | None |
+| `ci` | Changes to CI/CD configuration files | None |
+| `build` | Changes affecting the build system | None |
 | `revert` | Reverts a previous commit | Depends on reverted commit |
 
 > `feat` and `fix` MUST align with the actual change. Never use `chore` for a feature or `refactor` for a fix.
@@ -41,12 +41,12 @@ Scope identifies which part of the codebase was changed. Use the service or modu
 
 | Area | Scope Examples |
 |---|---|
-| Backend services | `auth`, `user`, `tenant`, `bot`, `billing`, `notify`, `player` |
-| API Gateway modules | `api-gateway`, `graphql`, `gql-auth` |
-| Frontend | `frontend`, `auth-ui`, `dashboard`, `bot-ui` |
-| Infrastructure | `docker`, `ci`, `proto`, `k8s` |
-| Monorepo packages | `api-pkg`, `common-pkg` |
-| Documentation | `docs`, `readme` |
+| Backend services | Use the service or module name from the project |
+| API / Gateway | `api`, `gateway`, `graphql`, `rest` |
+| Frontend | `ui`, `auth-ui`, `dashboard`, component names |
+| Infrastructure | `docker`, `ci`, `k8s`, `deploy` |
+| Shared packages | Package name from the monorepo |
+| Documentation | `docs`, `readme`, `changelog` |
 
 ## Description Rules
 
@@ -81,31 +81,27 @@ Refs #456
 feat(auth): add refresh token rotation
 
 # ✅ Bug fix with scope
-fix(bot): prevent duplicate execution when schedule overlaps
+fix(scheduler): prevent duplicate execution when schedule overlaps
 
 # ✅ Refactor with body
-refactor(user-svc): extract password hashing into dedicated service
+refactor(users): extract password hashing into dedicated service
 
 Password hashing logic was duplicated between the create and update
-flows. Centralizing it ensures consistent bcrypt rounds configuration
-from the environment.
+flows. Centralizing it ensures consistent configuration.
 
 # ✅ Breaking change
-feat(api-gateway)!: remove deprecated listBots_v1 query
+feat(api)!: remove deprecated v1 query endpoint
 
-BREAKING CHANGE: listBots_v1 has been removed. Migrate to listBots
-which now supports cursor-based pagination via the 'cursor' argument.
+BREAKING CHANGE: v1 endpoint removed. Migrate to v2 which supports
+cursor-based pagination via the 'cursor' argument.
 
 Closes #234
 
 # ✅ Chore
-chore(deps): upgrade nestjs to 11.1.0
+chore(deps): upgrade framework to latest major
 
 # ✅ CI change
 ci: add docker image vulnerability scan step to pipeline
-
-# ✅ Docs
-docs(auth-svc): document JWT refresh token flow in README
 ```
 
 ## Anti-patterns to Avoid
@@ -122,10 +118,6 @@ git commit -m "feat: fix typo in button"         # should be fix/style
 
 # ❌ Past tense
 git commit -m "feat(auth): added OAuth2 login"   # should be "add"
-
-# ❌ Too long description
-git commit -m "feat(bot): add a new feature that allows users to schedule bots to run automatically at specific times"
-# → feat(bot): add time-based bot scheduling
 ```
 
 ## Commit Atomicity
@@ -139,9 +131,9 @@ git commit -m "feat(bot): add a new feature that allows users to schedule bots t
 Branches should mirror commit types:
 
 ```
-feat/bot-scheduling
+feat/user-scheduling
 fix/auth-token-refresh
-refactor/user-service-extraction
-chore/upgrade-nestjs-11
-docs/api-gateway-graphql-schema
+refactor/service-extraction
+chore/upgrade-deps
+docs/api-schema
 ```

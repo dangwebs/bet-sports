@@ -5,6 +5,12 @@ description: "ALWAYS-ON meta-skill. This skill MUST be activated FIRST on every 
 
 # Orchestrator Agent Skill
 
+## Communication Style
+
+- Default to caveman mode: terse, direct, and compact.
+- Keep the mandatory classification and activation format intact.
+- Expand only when the user asks for detail or when clarity requires it.
+
 > **⚡ ALWAYS-ON**: This skill is activated on EVERY user prompt as the first step, as defined in `AGENTS.md`. You MUST classify and announce before doing any work.
 
 You are the **orchestrator** for this project. Your role is to analyze incoming tasks, decompose them, and ensure the right specialist skills are activated in the right order.
@@ -25,31 +31,25 @@ Then proceed to read and apply the activated skills.
 For any task that creates or modifies code, the orchestrator must enforce the Spec Kit pipeline before implementation:
 
 1. `/speckit.constitution` (if principles are missing or outdated)
-2. `/speckit.specify`
-3. `/speckit.plan`
-4. `/speckit.tasks`
-5. Execute implementation (`/speckit.implement` or equivalent task execution)
+2. `/speckit.specify` — generates `spec.md`, `plan.md`, and `tasks.md` in one continuous flow
+3. Execute implementation (`/speckit.implement` or equivalent task execution)
 
 Exception: pure questions, read-only analysis, or documentation explanations with no code edits.
 
 ## Available Specialist Skills
 
-| Skill                   | Path                                            | When to Activate                                               |
-| ----------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
-| `frontend`              | `.claude/skills/frontend/SKILL.md`              | UI components, pages, styles, client integrations              |
-| `backend`               | `.claude/skills/backend/SKILL.md`               | Services, APIs, database, server logic                         |
-| `general`               | `.claude/skills/general/SKILL.md`               | CLI tools, libraries, ML, scripts, data pipelines, DevOps      |
-| `architecture`          | `.claude/skills/architecture/SKILL.md`          | System design, service boundaries, full-stack planning         |
-| `software-architecture` | `.claude/skills/software-architecture/SKILL.md` | Clean Arch, Hexagonal, DDD, CQRS, microservices patterns       |
-| `design-patterns`       | `.claude/skills/design-patterns/SKILL.md`       | GoF patterns, React/NestJS-specific patterns, code smells      |
-| `clean-code`            | `.claude/skills/clean-code/SKILL.md`            | Naming, functions, comments, error handling — all code reviews |
-| `best-practices`        | `.claude/skills/best-practices/SKILL.md`        | SOLID, DRY, YAGNI, security baseline, testing standards        |
-| `linting`               | `.claude/skills/linting/SKILL.md`               | ESLint, Prettier, TypeScript strict mode, import ordering      |
-| `devops`                | `.claude/skills/devops/SKILL.md`                | Docker, CI/CD, environment config, GitHub Actions              |
-| `conventional-commits`  | `.claude/skills/conventional-commits/SKILL.md`  | Commit messages, changelogs, PR descriptions, git history      |
-| `code-quality`          | `.claude/skills/code-quality/SKILL.md`          | ALWAYS co-activate when writing or modifying code              |
+| Skill                  | Path                                           | When to Activate                                               |
+| ---------------------- | ---------------------------------------------- | -------------------------------------------------------------- |
+| `frontend`             | `.claude/skills/frontend/SKILL.md`             | UI components, pages, styles, client integrations              |
+| `backend`              | `.claude/skills/backend/SKILL.md`              | Services, APIs, database, server logic                         |
+| `general`              | `.claude/skills/general/SKILL.md`              | CLI tools, libraries, ML, scripts, data pipelines              |
+| `architecture`         | `.claude/skills/architecture/SKILL.md`         | System design, service boundaries, DDD, CQRS, full-stack      |
+| `code-quality`         | `.claude/skills/code-quality/SKILL.md`         | ALWAYS co-activate when writing or modifying code              |
+| `linting`              | `.claude/skills/linting/SKILL.md`              | ESLint, Prettier, TypeScript strict mode, import ordering      |
+| `devops`               | `.claude/skills/devops/SKILL.md`               | Docker, CI/CD, environment config, GitHub Actions              |
+| `conventional-commits` | `.claude/skills/conventional-commits/SKILL.md` | Commit messages, changelogs, PR descriptions, git history      |
 
-> **Rule**: `code-quality`, `clean-code`, and `linting` must be co-activated alongside any skill that produces or modifies code. They are only omitted when the task is purely a question or a review with no code changes.
+> **Rule**: `code-quality` and `linting` must be co-activated alongside any skill that produces or modifies code. They are only omitted when the task is purely a question or a review with no code changes.
 
 ## Orchestration Workflow
 

@@ -7,7 +7,7 @@ from multiple sources (GitHub, CSV, API-Football, ESPN, etc.).
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from src.application.use_cases.use_cases import DataSources
 from src.domain.entities.entities import League, Match
@@ -24,7 +24,7 @@ class TrainingDataService:
 
     def __init__(
         self, data_sources: DataSources, enrichment_service: MatchEnrichmentService
-    ):
+    ) -> None:
         self.data_sources = data_sources
         self.enrichment_service = enrichment_service
 
@@ -48,9 +48,10 @@ class TrainingDataService:
             elif days_back:
                 gh_start_dt = get_current_time() - timedelta(days=days_back)
 
-            return await gh_data.get_finished_matches(
+            github_matches = await gh_data.get_finished_matches(
                 league_codes=leagues, date_from=gh_start_dt
             )
+            return cast(List[Match], github_matches)
         except Exception as e:
             logger.warning(f"GitHub Dataset fetch failed: {e}")
             return []
@@ -150,9 +151,11 @@ class TrainingDataService:
             logger.warning(f"OpenFootball fetch failed for training data: {e}")
             return []
 
-    def _get_sortable_date(self, m: Match):
+    def _get_sortable_date(self, m: Match) -> datetime:
         dt = m.match_date
-        return COLOMBIA_TZ.localize(dt) if dt.tzinfo is None else dt
+        if dt.tzinfo is None:
+            return cast(datetime, COLOMBIA_TZ.localize(dt))
+        return cast(datetime, dt)
 
     async def fetch_comprehensive_training_data(
         self,
@@ -258,13 +261,14 @@ class TrainingDataService:
                         league_codes=[league_code],
                     )
                 )
-                if fd_matches:
+                typed_matches = cast(List[Match], fd_matches)
+                if typed_matches:
                     logger.info(
                         "✓ Found %d backfill matches in Football-Data.org for %s",
-                        len(fd_matches),
+                        len(typed_matches),
                         league_code,
                     )
-                    return fd_matches
+                    return typed_matches
                 else:
                     logger.info(
                         f"No matches found in Football-Data.org for {league_code} gap."

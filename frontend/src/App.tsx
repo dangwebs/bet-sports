@@ -19,6 +19,7 @@ import BotDashboard from "./presentation/components/BotDashboard/BotDashboard";
 import LiveMatchDetailsModal from "./presentation/components/MatchDetails/LiveMatchDetailsModal";
 import MainLayout from "./presentation/components/Layout/MainLayout";
 import ErrorBoundary from "./presentation/components/ErrorBoundary/ErrorBoundary";
+import ParleyCalculatorPage from "./presentation/components/Parley/ParleyCalculatorPage";
 
 // Zustand Stores
 import { useUIStore } from "./application/stores/useUIStore";
@@ -152,6 +153,7 @@ const App: React.FC = () => {
             </>
           }
         />
+        <Route path="/parley-calculator" element={<ParleyCalculatorPage />} />
         <Route path="/bot" element={<BotDashboard />} />
         <Route path="/dashboard" element={<Navigate to="/bot" replace />} />
       </Routes>

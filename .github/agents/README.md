@@ -1,58 +1,36 @@
-# Copilot Agents for BJJ-BetSports
+# Copilot Agents for HyperGenIA
 
-This folder defines the specialized agent setup for this repository and keeps Copilot aligned with `RULES.md`.
+This folder recreates the specialized agent setup from `.claude/agents` for GitHub Copilot custom agents.
 
 ## Available Agents
 
 - `hypergenia-orchestrator.agent.md`
   - Intake, classification, delegation, and Spec Kit enforcement.
 - `hypergenia-frontend.agent.md`
-  - React + Vite + MUI work in `frontend/`.
+  - Next.js work in `Front/`.
 - `hypergenia-backend.agent.md`
-  - FastAPI + Python + ML/worker work in `backend/`.
+  - NestJS microservices work in `HyperGenIA/mono-ms/`.
 - `hypergenia-architecture.agent.md`
-  - Cross-domain architecture, data flow, and infrastructure decisions.
+  - Cross-domain/cross-service architecture and contracts.
+
+## Default Tone
+
+All agents default to caveman full: terse, direct, and compact. Keep this as the baseline unless a user asks for more detail.
 
 ## Spec Kit Compatibility
 
 These agents are designed to work with Spec Kit prompts under `.github/prompts/`:
 
 1. `/speckit.constitution`
-2. `/speckit.specify`
-3. `/speckit.plan`
-4. `/speckit.tasks`
-5. implementation delegated to specialist agent
-6. `/speckit.implement`
-
-## Mandatory Rules Alignment
-
-- `RULES.md` is mandatory for all specialists.
-- All responses must be in Spanish.
-- Any code-changing task must go through the orchestrator and specs-first flow.
-
-## Shared Skills Baseline
-
-To keep a consistent experience across all agents, every agent uses the same base skills from `.github/skills/`:
-
-- `orchestrator`
-- `architecture`
-- `frontend`
-- `backend`
-- `general`
-- `code-quality`
-- `clean-code`
-- `best-practices`
-- `linting`
-- `design-patterns`
-- `software-architecture`
-- `devops`
-- `conventional-commits`
+2. `/speckit.specify` — generates `spec.md`, `plan.md`, and `tasks.md` in one continuous flow
+3. implementation delegated to specialist agent
+4. `/speckit.implement`
 
 ## Mapping to Existing Claude Setup
 
 | Claude source | Copilot equivalent |
 |---|---|
-| `.claude/agents/orchestrator.md` | `hypergenia-orchestrator.agent.md` |
-| `.claude/agents/frontend.md` | `hypergenia-frontend.agent.md` |
-| `.claude/agents/backend.md` | `hypergenia-backend.agent.md` |
-| `.claude/agents/architecture.md` | `hypergenia-architecture.agent.md` |
+| `.claude/agents/orchestrator.md` | `orchestrator.agent.md` |
+| `.claude/agents/frontend.md` | `frontend.agent.md` |
+| `.claude/agents/backend.md` | `backend.agent.md` |
+| `.claude/agents/architecture.md` | `architecture.agent.md` |

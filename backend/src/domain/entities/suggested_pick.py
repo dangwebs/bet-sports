@@ -103,7 +103,7 @@ class SuggestedPick:
     formatted_reasoning: Optional[str] = None  # [NEW] Structured reasoning for UI
     ml_confidence: float = 0.0  # Raw ML probability score (0.0 - 1.0)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate probability and risk level."""
         if not 0 <= self.probability <= 1:
             raise ValueError(f"Probability must be 0-1, got {self.probability}")
