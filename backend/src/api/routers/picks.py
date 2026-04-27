@@ -75,7 +75,7 @@ def register_feedback(
     payload: BettingFeedbackRequest,
     learning_service: LearningService = Depends(get_learning_service),
 ) -> BettingFeedbackResponse:
-    """Register feedback using the application use case injected with LearningService."""
+    """Register feedback using the injected application learning service."""
     dto = BettingFeedbackRequestDTO(**payload.model_dump())
     use_case = RegisterFeedbackUseCase(learning_service)
     resp = use_case.execute(dto)

@@ -11,7 +11,7 @@ class FakeColl:
         return self._docs
 
 
-class FakeRepo:
+class PredictionRepo:
     def __init__(self, docs):
         self.match_predictions = FakeColl(docs)
 
@@ -38,7 +38,7 @@ def test_data_loader_filters_out_of_range_predictions():
         },
     }
 
-    loader = DataLoader(repository=FakeRepo([doc]))
+    loader = DataLoader(repository=PredictionRepo([doc]))
     results = loader.load_predictions_for_league("E0")
     # The out-of-range prediction should be filtered out
     assert len(results) == 0
@@ -58,7 +58,7 @@ class FakeCollection:
         return None
 
 
-class FakeRepo:
+class PredictionRepoWithTraining:
     def __init__(self, docs, training=None, updated_at=None):
         self.match_predictions = FakeCollection(docs)
         self._training = training
@@ -86,7 +86,7 @@ def test_data_loader_loads_predictions_and_training_result():
 
     training = {"version": "v1"}
     updated_at = datetime(2026, 3, 31)
-    repo = FakeRepo([doc], training=training, updated_at=updated_at)
+    repo = PredictionRepoWithTraining([doc], training=training, updated_at=updated_at)
     loader = DataLoader(repository=repo)
 
     preds = loader.load_predictions_for_league("E0")

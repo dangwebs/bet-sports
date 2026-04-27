@@ -6,12 +6,12 @@ persisted in the Explorer DB (MongoRepository.match_predictions).
 """
 
 from datetime import timedelta
-from typing import Dict
+from typing import Any
 
 from src.utils.time_utils import get_current_time
 
 
-def compute_baseline(persistence_repo, days: int = 90) -> Dict:
+def compute_baseline(persistence_repo: Any, days: int = 90) -> dict[str, Any]:
     now = get_current_time()
     cutoff = now - timedelta(days=days)
 

@@ -8,10 +8,9 @@ Contains factory functions for creating use case dependencies.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
-from src.application.services.ml_training_orchestrator import (
-    MLTrainingOrchestrator,  # type: ignore
-)
+from src.application.services.ml_training_orchestrator import MLTrainingOrchestrator
 from src.application.services.training_data_service import TrainingDataService
 from src.application.use_cases.use_cases import DataSources
 from src.domain.services.ai_picks_service import AIPicksService

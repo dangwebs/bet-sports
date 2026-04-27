@@ -5,7 +5,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import joblib
 from pytz import timezone
@@ -377,11 +377,14 @@ class GetPredictionsUseCase:
             logger.info(
                 f"Generating picks for {len(match_tasks)} matches in parallel..."
             )
-            return await self.background_processor.process_matches_parallel(match_tasks)
+            parallel_results = await self.background_processor.process_matches_parallel(
+                match_tasks
+            )
+            return cast(list[Any], parallel_results)
 
         # Fallback synchronous
         logger.info(f"Generating picks for {len(match_tasks)} matches synchronously...")
-        results = []
+        results: list[Any] = []
         for task in match_tasks:
             try:
                 res = self.picks_service.generate_suggested_picks(
@@ -808,7 +811,10 @@ class GetPredictionsUseCase:
                     )
                     await async_repo.bulk_save_predictions(prediction_batch)
                     logger.info(
-                        "✓ Massively saved %s pre-calculated predictions for league %s (async)",
+                        (
+                            "✓ Massively saved %s pre-calculated predictions "
+                            "for league %s (async)"
+                        ),
                         len(predictions),
                         league_id,
                     )
@@ -827,7 +833,10 @@ class GetPredictionsUseCase:
                         prediction_batch,
                     )
                     logger.info(
-                        "✓ Massively saved %s pre-calculated predictions for league %s (threaded)",
+                        (
+                            "✓ Massively saved %s pre-calculated predictions "
+                            "for league %s (threaded)"
+                        ),
                         len(predictions),
                         league_id,
                     )
@@ -1439,12 +1448,14 @@ class GetMatchDetailsUseCase:
                 logger.warning("TheSportsDB lookup failed for %s: %s", match_id, exc)
         return match
 
-    def _lookup_precalculated_prediction(self, match_id: str) -> Optional[Any]:
+    def _lookup_precalculated_prediction(
+        self, match_id: str
+    ) -> Optional[MatchPredictionDTO]:
         """Try to fetch a pre-calculated prediction from persistence."""
         try:
             from src.dependencies import get_persistence_repository
 
-            repo = get_persistence_repository()
+            repo = cast(Any, get_persistence_repository())
             pred_data, _ = repo.get_match_prediction_with_timestamp(match_id)
             if pred_data:
                 logger.info(
@@ -1511,7 +1522,7 @@ class GetMatchDetailsUseCase:
             sources.append(FootballDataUKSource.SOURCE_NAME)
         return sources
 
-    def _create_skeleton_prediction(self, match: Any) -> Any:
+    def _create_skeleton_prediction(self, match: Any) -> MatchPredictionDTO:
         """Create a zero-probability skeleton prediction when data is missing."""
         from src.utils.time_utils import get_current_time
 
@@ -1724,13 +1735,19 @@ class GetTeamPredictionsUseCase:
             pass
         return None
 
-    async def _fetch_historical_matches(self, league_code: str, match: Any) -> list:
+    async def _fetch_historical_matches(
+        self, league_code: str, match: Any
+    ) -> list[Match]:
         if not league_code:
             return []
         try:
-            return await self.data_sources.football_data_uk.get_historical_matches(
-                league_code, seasons=["2425", "2324"]
+            historical_matches = (
+                await self.data_sources.football_data_uk.get_historical_matches(
+                    league_code,
+                    seasons=["2425", "2324"],
+                )
             )
+            return cast(list[Match], historical_matches)
         except Exception as exc:
             logger.warning(f"Failed to fetch CSV history: {exc}")
             return []
@@ -1889,6 +1906,65 @@ class GetTeamPredictionsUseCase:
             model_metadata=getattr(prediction, "model_metadata", {}),
             created_at=prediction.created_at,
         )
+
+    def _enrich_match_dto_with_projections(
+        self,
+        match: Match,
+        home_stats: TeamStatistics | None,
+        away_stats: TeamStatistics | None,
+        prediction: Prediction | None,
+    ) -> MatchDTO:
+        """Add projected statistics to MatchDTO for non-started matches."""
+        match_dto = self._match_to_dto(match)
+        if match.status not in ["NS", "TIMED", "SCHEDULED"]:
+            return match_dto
+
+        def get_stat(stats: TeamStatistics | None, attr: str, pred_val: float) -> float:
+            value = float(
+                getattr(stats, attr, 0.0) if stats and stats.matches_played > 0 else 0.0
+            )
+            if value == 0.0 and prediction:
+                return pred_val
+            return value
+
+        home_corners = get_stat(
+            home_stats,
+            "avg_corners_per_match",
+            prediction.predicted_home_corners if prediction else 0.0,
+        )
+        away_corners = get_stat(
+            away_stats,
+            "avg_corners_per_match",
+            prediction.predicted_away_corners if prediction else 0.0,
+        )
+        home_yellow_cards = get_stat(
+            home_stats,
+            "avg_yellow_cards_per_match",
+            prediction.predicted_home_yellow_cards if prediction else 0.0,
+        )
+        away_yellow_cards = get_stat(
+            away_stats,
+            "avg_yellow_cards_per_match",
+            prediction.predicted_away_yellow_cards if prediction else 0.0,
+        )
+        home_red_cards = get_stat(
+            home_stats,
+            "avg_red_cards_per_match",
+            prediction.predicted_home_red_cards if prediction else 0.0,
+        )
+        away_red_cards = get_stat(
+            away_stats,
+            "avg_red_cards_per_match",
+            prediction.predicted_away_red_cards if prediction else 0.0,
+        )
+
+        match_dto.home_corners = int(round(home_corners))
+        match_dto.away_corners = int(round(away_corners))
+        match_dto.home_yellow_cards = int(round(home_yellow_cards))
+        match_dto.away_yellow_cards = int(round(away_yellow_cards))
+        match_dto.home_red_cards = int(round(home_red_cards))
+        match_dto.away_red_cards = int(round(away_red_cards))
+        return match_dto
 
 
 class GetGlobalLiveMatchesUseCase:

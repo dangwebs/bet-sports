@@ -9,9 +9,9 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
-from pytz import timezone  # type: ignore
+from pytz import timezone
 from src.application.dtos.dtos import (
     LeagueDTO,
     MatchDTO,
@@ -21,7 +21,7 @@ from src.application.dtos.dtos import (
     TeamDTO,
 )
 from src.application.use_cases.use_cases import DataSources
-from src.domain.entities.entities import League, Match, Prediction
+from src.domain.entities.entities import League, Match, Prediction, TeamStatistics
 from src.domain.services.picks_service import PicksService
 from src.domain.services.prediction_service import PredictionService
 from src.domain.services.statistics_service import StatisticsService
@@ -107,7 +107,12 @@ def _determine_data_sources(
     )
 
 
-def _build_feature_batch(match, home_stats, away_stats, outcomes):
+def _build_feature_batch(
+    match: Match,
+    home_stats: TeamStatistics,
+    away_stats: TeamStatistics,
+    outcomes: List[Tuple[Any, float, str]],
+) -> List[Any]:
     """Build an ML features batch from suggested picks (used by ML overrides)."""
     from src.domain.entities.suggested_pick import ConfidenceLevel, SuggestedPick
     from src.domain.services.ml_feature_extractor import MLFeatureExtractor
@@ -141,7 +146,9 @@ def _build_feature_batch(match, home_stats, away_stats, outcomes):
     return features_batch
 
 
-def _normalize_and_apply_probs(prediction, ml_probs: List[float]) -> None:
+def _normalize_and_apply_probs(
+    prediction: PredictionDTO, ml_probs: List[float]
+) -> None:
     """Normalize ML raw probabilities and apply them to the prediction DTO.
 
     Kept as a module helper so it can be unit-tested independently.
@@ -175,7 +182,9 @@ def _normalize_and_apply_probs(prediction, ml_probs: List[float]) -> None:
 
 
 def _persist_and_cache_response(
-    use_case, filtered_results: List[MatchPredictionDTO], cache_key: str
+    use_case: "GetLivePredictionsUseCase",
+    filtered_results: List[MatchPredictionDTO],
+    cache_key: str,
 ) -> None:
     """Persist live predictions and cache them for fast retrieval."""
     try:
@@ -233,7 +242,7 @@ class GetLivePredictionsUseCase:
         cache_service: CacheService,
         picks_service: PicksService,
         persistence_repository: Optional[Any] = None,
-    ):
+    ) -> None:
         self.data_sources = data_sources
         self.prediction_service = prediction_service
         self.statistics_service = statistics_service
@@ -241,14 +250,17 @@ class GetLivePredictionsUseCase:
         self.picks_service = picks_service
         self.persistence_repository = persistence_repository
 
-    async def _get_live_matches_or_cached(self, filter_target_leagues: bool):
+    async def _get_live_matches_or_cached(
+        self, filter_target_leagues: bool
+    ) -> Tuple[List[Match] | List[MatchPredictionDTO], bool, str, Optional[str]]:
         cache_key = "filtered" if filter_target_leagues else "all"
         cached = await self.cache_service.aget_live_matches(cache_key)
         if cached is not None:
-            logger.info("Returning %d cached live matches", len(cached))
-            return cached, True, cache_key, None
+            cached_predictions = cast(List[MatchPredictionDTO], cached)
+            logger.info("Returning %d cached live matches", len(cached_predictions))
+            return cached_predictions, True, cache_key, None
 
-        matches = []
+        matches: List[Match] = []
         source_used = "None"
 
         if self.data_sources.football_data_org.is_configured:
@@ -363,15 +375,17 @@ class GetLivePredictionsUseCase:
             source_used,
         ) = await self._get_live_matches_or_cached(filter_target_leagues)
         if was_cached:
-            return matches
+            return cast(List[MatchPredictionDTO], matches)
 
         if not matches:
             return []
 
-        logger.info("Fetched %d live matches from %s", len(matches), source_used)
+        live_matches = cast(List[Match], matches)
+
+        logger.info("Fetched %d live matches from %s", len(live_matches), source_used)
 
         # Pre-fetch bulk history for active leagues (if available)
-        bulk_history = await self._prefetch_bulk_history(matches)
+        bulk_history = await self._prefetch_bulk_history(live_matches)
 
         # Pre-fetch pre-calculated predictions in bulk to avoid N+1 DB calls
         pre_calculated_map: dict = {}
@@ -382,7 +396,7 @@ class GetLivePredictionsUseCase:
             )
 
             async_repo = get_async_mongo_repository()
-            match_ids = [m.id for m in matches]
+            match_ids = [m.id for m in live_matches]
             pre_calculated_map = await async_repo.get_match_predictions_bulk(match_ids)
         except Exception as e:
             # Fallback to sync persistence repository if async adapter fails
@@ -401,7 +415,7 @@ class GetLivePredictionsUseCase:
         # Generate predictions for each match
         results: List[MatchPredictionDTO] = []
 
-        for match in matches:
+        for match in live_matches:
             # Delegate per-match processing to a helper to keep execute() small
             if "start_time" not in locals():
                 import time
@@ -446,7 +460,7 @@ class GetLivePredictionsUseCase:
         # Check prediction cache (async-safe)
         cached_pred = await self.cache_service.aget_predictions(match.id)
         if cached_pred is not None:
-            return cached_pred
+            return cast(PredictionDTO, cached_pred)
 
         # Collect available stats / sources
         (
@@ -526,7 +540,6 @@ class GetLivePredictionsUseCase:
         )
         await self.cache_service.aset_predictions(match.id, prediction_dto)
 
-        return prediction_dto
         return prediction_dto
 
     async def _process_single_live_match(
@@ -644,7 +657,7 @@ class GetLivePredictionsUseCase:
         # Execute in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        all_matches = []
+        all_matches: List[Match] = []
         for result in results:
             if isinstance(result, list):
                 all_matches.extend(result)
@@ -656,10 +669,12 @@ class GetLivePredictionsUseCase:
 
     async def _fetch_csv_history(self, league_code: str) -> list[Match]:
         try:
-            return await self.data_sources.football_data_uk.get_historical_matches(
-                league_code,
-                seasons=["2425", "2324", "2223", "2122"],
+            csv_history = (
+                await self.data_sources.football_data_uk.get_historical_matches(
+                    league_code, seasons=["2425", "2324", "2223", "2122"]
+                )
             )
+            return cast(list[Match], csv_history)
         except Exception as exc:
             logger.warning("Failed to fetch CSV history for %s: %s", league_code, exc)
             return []
@@ -771,7 +786,7 @@ class GetLivePredictionsUseCase:
             # but for safety we can check mapping
             for internal_code, org_code in COMPETITION_CODE_MAPPING.items():
                 if internal_code == match.league.id:
-                    return internal_code
+                    return cast(str, match.league.id)
         except Exception as exc:
             logger.debug(
                 "Failed to map internal league code for match %s: %s",

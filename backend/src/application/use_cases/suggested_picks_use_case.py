@@ -8,9 +8,9 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
-from pytz import timezone  # type: ignore
+from pytz import timezone
 
 if TYPE_CHECKING:
     from src.application.use_cases.use_cases import DataSources
@@ -61,9 +61,8 @@ class GetSuggestedPicksUseCase:
         self.club_elo = getattr(data_sources, "club_elo", None) or ClubEloSource()
 
         # Upgrade to AI Picks Service
-        weights = learning_service.get_learning_weights()
         self.picks_service = AIPicksService(
-            learning_weights=weights if weights else None
+            learning_weights=learning_service.learning_weights
         )
 
     async def execute(
@@ -206,19 +205,6 @@ class GetSuggestedPicksUseCase:
             )
 
             # 7. Convert to DTO
-            from src.application.use_cases.live_predictions_use_case import (
-                GetLivePredictionsUseCase,
-            )
-
-            # Leverage existing mapping logic from live predictions for consistency
-            _temp_use_case = GetLivePredictionsUseCase(
-                self.data_sources,
-                self.prediction_service,
-                self.statistics_service,
-                None,
-                self.picks_service,
-            )
-
             # Populate DTO
             picks_dtos = []
             for pick in suggested_picks_container.suggested_picks:
@@ -528,10 +514,12 @@ class GetSuggestedPicksUseCase:
 
     async def _fetch_csv_history(self, league_code: str) -> list[Match]:
         try:
-            return await self.data_sources.football_data_uk.get_historical_matches(
-                league_code,
-                seasons=["2425", "2324"],
+            csv_history = (
+                await self.data_sources.football_data_uk.get_historical_matches(
+                    league_code, seasons=["2425", "2324"]
+                )
             )
+            return cast(list[Match], csv_history)
         except Exception as exc:
             logger.warning("Failed to fetch CSV history for %s: %s", league_code, exc)
             return []
@@ -736,7 +724,7 @@ class GetLearningStatsUseCase:
 class GetTopMLPicksUseCase:
     """Use case for retrieving the top ML picks across all leagues."""
 
-    def __init__(self, persistence_repository):
+    def __init__(self, persistence_repository: Any) -> None:
         self.persistence_repository = persistence_repository
 
     async def execute(
@@ -757,8 +745,6 @@ class GetTopMLPicksUseCase:
                 )
             else:
                 active_preds = self.persistence_repository.get_all_active_predictions()
-
-            _all_picks = []
 
             from src.application.dtos.dtos import SuggestedPickDTO, TopMLPicksDTO
 
@@ -791,10 +777,11 @@ class GetTopMLPicksUseCase:
                             )
                             continue
                         if m_date.tzinfo is None:
-                            # Use now.tzinfo if it's not None, otherwise default to COLOMBIA_TZ from utils
+                            # Prefer the runtime tzinfo; otherwise use the
+                            # project fallback timezone helper.
                             from src.utils.time_utils import COLOMBIA_TZ
 
-                            m_date = (now.tzinfo or COLOMBIA_TZ).localize(m_date)
+                            m_date = cast(datetime, COLOMBIA_TZ.localize(m_date))
                         else:
                             m_date = m_date.astimezone(now.tzinfo)
 

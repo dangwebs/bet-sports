@@ -42,7 +42,7 @@ def _build_league_averages(
     }
 
 
-def _get_iterator(all_matches: List[Any]):
+def _get_iterator(all_matches: List[Any]) -> Any:
     try:
         from tqdm import tqdm
 
@@ -52,8 +52,10 @@ def _get_iterator(all_matches: List[Any]):
 
 
 def _ensure_team_stats(
-    team_stats_cache: dict, statistics_service: StatisticsService, match: Any
-):
+    team_stats_cache: dict[str, dict[str, Any]],
+    statistics_service: StatisticsService,
+    match: Any,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     if match.home_team.name not in team_stats_cache:
         team_stats_cache[
             match.home_team.name
@@ -68,7 +70,9 @@ def _ensure_team_stats(
     )
 
 
-def _parse_cached_suggested_picks(cached_result: Optional[dict], match: Any):
+def _parse_cached_suggested_picks(
+    cached_result: Optional[dict[str, Any]], match: Any
+) -> Any | None:
     if not cached_result or "suggested_picks" not in cached_result:
         return None
     try:
@@ -106,7 +110,17 @@ def _compute_picks_metrics(
     resolution_service: PickResolutionService,
     feature_extractor: MLFeatureExtractor,
     match: Any,
-):
+) -> tuple[
+    List[dict[str, Any]],
+    List[Any],
+    List[int],
+    int,
+    float,
+    float,
+    Optional[str],
+    bool,
+    float,
+]:
     picks_list: List[dict] = []
     ml_feats: List[Any] = []
     ml_tgts: List[int] = []
@@ -243,6 +257,20 @@ def _process_match_for_dataset(
     feature_extractor: MLFeatureExtractor,
     statistics_service: StatisticsService,
     league_averages_map: Dict[str, "LeagueAverages"],
+) -> (
+    tuple[
+        List[Any],
+        List[int],
+        List[dict[str, Any]],
+        int,
+        float,
+        float,
+        Optional[str],
+        bool,
+        float,
+        dict[str, Any],
+    ]
+    | None
 ):
     """Process a single match into ML-ready features, targets and a history entry.
 
@@ -477,7 +505,7 @@ async def prepare_datasets(
     )
 
 
-def train_league_models(ml_features: List[Any], ml_targets: List[int]):
+def train_league_models(ml_features: List[Any], ml_targets: List[int]) -> Any:
     """Train a RandomForestClassifier on the provided features/targets and return it."""
     clf = RandomForestClassifier(
         n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
@@ -638,7 +666,7 @@ class MLTrainingOrchestrator:
         finally:
             cleanup_model_artifacts(logger)
 
-    def _get_predicted_winner(self, prediction) -> str:
+    def _get_predicted_winner(self, prediction: Any) -> str:
         if (
             prediction.home_win_probability > prediction.away_win_probability
             and prediction.home_win_probability > prediction.draw_probability
@@ -651,7 +679,7 @@ class MLTrainingOrchestrator:
             return "away"
         return "draw"
 
-    def _get_actual_winner(self, match) -> str:
+    def _get_actual_winner(self, match: Any) -> str:
         if match.home_goals > match.away_goals:
             return "home"
         elif match.away_goals > match.home_goals:

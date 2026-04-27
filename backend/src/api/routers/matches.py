@@ -147,7 +147,7 @@ def get_team_matches(team_name: str, limit: int = 10) -> list[dict[str, Any]]:
             if q in home_name or q in away_name:
                 candidates.append(normalized)
 
-        def _key_dt(n: MatchPredictionModel):
+        def _key_dt(n: MatchPredictionModel) -> datetime:
             try:
                 return datetime.fromisoformat(n.match.match_date.replace("Z", "+00:00"))
             except Exception:
