@@ -48,6 +48,7 @@ if _mongo_to_bson_friendly is None:
     # Fallback: minimal serializer if import fails for some reason.
     def _to_bson_friendly(value: Any) -> Any:
         return value
+
 else:
     _to_bson_friendly = _mongo_to_bson_friendly
 
