@@ -7,12 +7,10 @@ Handles calculation of team statistics from match history.
 from __future__ import annotations
 
 import unicodedata
-from typing import TYPE_CHECKING, List, Optional
+from typing import Any, List, Optional
 
 from src.domain.entities.entities import Match, TeamH2HStatistics, TeamStatistics
-
-if TYPE_CHECKING:
-    from src.domain.value_objects.value_objects import LeagueAverages
+from src.domain.value_objects.value_objects import LeagueAverages
 
 
 class StatisticsService:
@@ -402,7 +400,7 @@ class StatisticsService:
 
         return name
 
-    _normalization_cache = {}
+    _normalization_cache: dict[str, str] = {}
 
     @staticmethod
     def normalize_team_name(name: str) -> str:
@@ -676,7 +674,7 @@ class StatisticsService:
         )
 
     @staticmethod
-    def create_empty_stats_dict() -> dict:
+    def create_empty_stats_dict() -> dict[str, Any]:
         """Create a dictionary for tracking stats incrementally."""
         return {
             "matches_played": 0,
@@ -704,8 +702,9 @@ class StatisticsService:
         }
 
     @staticmethod
-    def update_team_stats_dict(stats: dict, match: Match, is_home: bool):
-        """Update a stats dictionary with a new match result."""
+    def _update_raw_stats_dict(
+        stats: dict[str, Any], match: Match, is_home: bool
+    ) -> None:
         goals_for = match.home_goals if is_home else match.away_goals
         goals_against = match.away_goals if is_home else match.home_goals
 
@@ -773,6 +772,35 @@ class StatisticsService:
             stats["matches_with_fouls"] += 1
 
     @staticmethod
+    def update_team_stats_dict(
+        stats: dict[str, Any], match: Match, is_home: bool
+    ) -> None:
+        """Update a stats dictionary with a new match result.
+
+        Includes context splitting for home and away views.
+        """
+        # Update global blended stats
+        StatisticsService._update_raw_stats_dict(stats, match, is_home)
+
+        # Update contextual stats
+        is_intl = match.league.id in ["UCL", "UEL", "UECL", "WC", "EURO", "LIB", "SUD"]
+
+        if is_intl:
+            if "international_stats" not in stats:
+                stats[
+                    "international_stats"
+                ] = StatisticsService.create_empty_stats_dict()
+            StatisticsService._update_raw_stats_dict(
+                stats["international_stats"], match, is_home
+            )
+        else:
+            if "domestic_stats" not in stats:
+                stats["domestic_stats"] = StatisticsService.create_empty_stats_dict()
+            StatisticsService._update_raw_stats_dict(
+                stats["domestic_stats"], match, is_home
+            )
+
+    @staticmethod
     def convert_to_domain_stats(team_name: str, raw_stats: dict) -> TeamStatistics:
         """Convert a raw stats dictionary to a TeamStatistics domain entity."""
         mp = raw_stats["matches_played"]
@@ -800,9 +828,11 @@ class StatisticsService:
             recent_yellow_cards=raw_stats.get("recent_yellow_cards", [])[-5:],
             recent_shots=raw_stats.get("recent_shots", [])[-5:],
             recent_form="",  # Form is calculated from full history if needed
+            domestic_stats=raw_stats.get("domestic_stats"),
+            international_stats=raw_stats.get("international_stats"),
         )
 
-    def calculate_league_averages(self, matches: List[Match]) -> "LeagueAverages":
+    def calculate_league_averages(self, matches: List[Match]) -> LeagueAverages:
         """
         Calculate league-wide averages from match history.
 
@@ -841,22 +871,27 @@ class StatisticsService:
                 total_cards += match.home_yellow_cards + match.away_yellow_cards
                 matches_with_cards += 1
 
-        # Calculate averages with fallbacks
-        from src.domain.value_objects.value_objects import LeagueAverages
-
         if matches_with_goals == 0:
-            return None
+            return LeagueAverages(
+                avg_home_goals=0.0,
+                avg_away_goals=0.0,
+                avg_total_goals=0.0,
+                avg_corners=9.5,
+                avg_cards=4.5,
+            )
 
         return LeagueAverages(
             avg_home_goals=total_home_goals / matches_with_goals,
             avg_away_goals=total_away_goals / matches_with_goals,
             avg_total_goals=(total_home_goals + total_away_goals) / matches_with_goals,
-            avg_corners=total_corners / matches_with_corners
-            if matches_with_corners > 0
-            else 9.5,
-            avg_cards=total_cards / matches_with_cards
-            if matches_with_cards > 0
-            else 4.5,
+            avg_corners=(
+                total_corners / matches_with_corners
+                if matches_with_corners > 0
+                else 9.5
+            ),
+            avg_cards=(
+                total_cards / matches_with_cards if matches_with_cards > 0 else 4.5
+            ),
         )
 
     @staticmethod
@@ -918,11 +953,13 @@ class StatisticsService:
                         "home": match.home_team.name,
                         "away": match.away_team.name,
                         "score": f"{a_score}-{b_score}",
-                        "winner": "A"
-                        if a_score > b_score
-                        else "B"
-                        if b_score > a_score
-                        else "Draw",
+                        "winner": (
+                            "A"
+                            if a_score > b_score
+                            else "B"
+                            if b_score > a_score
+                            else "Draw"
+                        ),
                     }
                 )
             elif is_b_home and is_a_away:
@@ -936,11 +973,13 @@ class StatisticsService:
                         "home": match.home_team.name,
                         "away": match.away_team.name,
                         "score": f"{b_score}-{a_score}",
-                        "winner": "B"
-                        if b_score > a_score
-                        else "A"
-                        if a_score > b_score
-                        else "Draw",
+                        "winner": (
+                            "B"
+                            if b_score > a_score
+                            else "A"
+                            if a_score > b_score
+                            else "Draw"
+                        ),
                     }
                 )
 

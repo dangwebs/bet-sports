@@ -4,8 +4,9 @@ ML Feature Extractor
 Centralizes the logic for creating feature vectors for ML models.
 """
 
+import statistics
 import zlib
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional, Sequence
 
 from src.domain.entities.suggested_pick import SuggestedPick
 
@@ -19,11 +20,54 @@ class MLFeatureExtractor:
     """
 
     @staticmethod
+    def _calculate_variance_features(
+        recent_list: Sequence[float], season_avg: float
+    ) -> list[float]:
+        if not recent_list or len(recent_list) < 2:
+            return [0.0, 0.0, 0.0]  # Trend, Volatility, Momentum
+
+        # 1. Trend (Recent Avg vs Season Avg)
+        recent_avg = sum(recent_list) / len(recent_list)
+        trend = recent_avg - season_avg
+
+        # 2. Volatility (Standard Deviation)
+        try:
+            volatility = statistics.stdev(recent_list)
+        except Exception:
+            volatility = 0.0
+
+        # 3. Momentum (Weighted Average)
+        # Weights: [0.1, 0.15, 0.2, 0.25, 0.3] (Most recent gets most weight)
+        weights = [0.1, 0.15, 0.2, 0.25, 0.3]
+        # Adjust weights if list is shorter than 5
+        if len(recent_list) < 5:
+            weights = [1.0 / len(recent_list)] * len(recent_list)
+        else:
+            weights = weights[-len(recent_list) :]
+
+        momentum = sum(v * w for v, w in zip(recent_list, weights))
+
+        return [
+            round(float(trend), 3),
+            round(float(volatility), 3),
+            round(float(momentum), 3),
+        ]
+
+    @staticmethod
+    def _get_win_rate(stats_dict: Optional[dict]) -> float:
+        if not stats_dict:
+            return 0.0
+        mp = stats_dict.get("matches_played", 0)
+        if mp == 0:
+            return 0.0
+        return float(stats_dict.get("wins", 0) / mp)
+
+    @staticmethod
     def extract_features(
         pick: SuggestedPick,
-        match: "Match" = None,
-        home_stats: "TeamStatistics" = None,
-        away_stats: "TeamStatistics" = None,
+        match: Optional["Match"] = None,
+        home_stats: Optional["TeamStatistics"] = None,
+        away_stats: Optional["TeamStatistics"] = None,
     ) -> List[float]:
         """
         Extract a standardized feature vector from a suggested pick + match context.
@@ -56,21 +100,21 @@ class MLFeatureExtractor:
             mp_a = max(1, away_stats.matches_played)
 
             # Shot Dominance (Home vs Away)
-            h_shots = getattr(home_stats, "total_shots", 0) / mp_h
-            a_shots = getattr(away_stats, "total_shots", 0) / mp_a
+            h_shots = float(getattr(home_stats, "total_shots", 0)) / mp_h
+            a_shots = float(getattr(away_stats, "total_shots", 0)) / mp_a
             features.append(h_shots)
             features.append(a_shots)
             features.append(h_shots - a_shots)  # Shot diff
 
             # Efficiency (Shots on Target)
-            h_sot = getattr(home_stats, "total_shots_on_target", 0) / mp_h
-            a_sot = getattr(away_stats, "total_shots_on_target", 0) / mp_a
+            h_sot = float(getattr(home_stats, "total_shots_on_target", 0)) / mp_h
+            a_sot = float(getattr(away_stats, "total_shots_on_target", 0)) / mp_a
             features.append(h_sot)
             features.append(a_sot)
 
             # Aggression (Fouls)
-            h_fouls = getattr(home_stats, "total_fouls", 0) / mp_h
-            a_fouls = getattr(away_stats, "total_fouls", 0) / mp_a
+            h_fouls = float(getattr(home_stats, "total_fouls", 0)) / mp_h
+            a_fouls = float(getattr(away_stats, "total_fouls", 0)) / mp_a
             features.append(h_fouls - a_fouls)
 
             # Form (Last 5 matches points estimate)
@@ -119,14 +163,18 @@ class MLFeatureExtractor:
             features.append(float(a_pass_acc))
 
             # Tackles per game
-            h_tackles = getattr(home_stats, "total_tackles", 0) / mp_h
-            a_tackles = getattr(away_stats, "total_tackles", 0) / mp_a
+            h_tackles = float(getattr(home_stats, "total_tackles", 0)) / mp_h
+            a_tackles = float(getattr(away_stats, "total_tackles", 0)) / mp_a
             features.append(h_tackles)
             features.append(a_tackles)
 
             # Interceptions per game
-            h_interceptions = getattr(home_stats, "total_interceptions", 0) / mp_h
-            a_interceptions = getattr(away_stats, "total_interceptions", 0) / mp_a
+            h_interceptions = (
+                float(getattr(home_stats, "total_interceptions", 0)) / mp_h
+            )
+            a_interceptions = (
+                float(getattr(away_stats, "total_interceptions", 0)) / mp_a
+            )
             features.append(h_interceptions)
             features.append(a_interceptions)
 
@@ -137,8 +185,8 @@ class MLFeatureExtractor:
             # Corners per game (uses matches_with_corners for accurate average)
             mc_h = getattr(home_stats, "matches_with_corners", 0) or mp_h
             mc_a = getattr(away_stats, "matches_with_corners", 0) or mp_a
-            h_corners = getattr(home_stats, "total_corners", 0) / max(1, mc_h)
-            a_corners = getattr(away_stats, "total_corners", 0) / max(1, mc_a)
+            h_corners = float(getattr(home_stats, "total_corners", 0)) / max(1, mc_h)
+            a_corners = float(getattr(away_stats, "total_corners", 0)) / max(1, mc_a)
             features.append(h_corners)
             features.append(a_corners)
             features.append(h_corners + a_corners)  # Total expected corners
@@ -146,8 +194,12 @@ class MLFeatureExtractor:
             # Yellow cards per game
             mcy_h = getattr(home_stats, "matches_with_cards", 0) or mp_h
             mcy_a = getattr(away_stats, "matches_with_cards", 0) or mp_a
-            h_yellows = getattr(home_stats, "total_yellow_cards", 0) / max(1, mcy_h)
-            a_yellows = getattr(away_stats, "total_yellow_cards", 0) / max(1, mcy_a)
+            h_yellows = float(getattr(home_stats, "total_yellow_cards", 0)) / max(
+                1, mcy_h
+            )
+            a_yellows = float(getattr(away_stats, "total_yellow_cards", 0)) / max(
+                1, mcy_a
+            )
             features.append(h_yellows)
             features.append(a_yellows)
             features.append(h_yellows + a_yellows)  # Total expected cards
@@ -155,52 +207,22 @@ class MLFeatureExtractor:
             # ============================================================
             # VARIANCE & FORM FEATURES (New for Mode Collapse Fix)
             # ============================================================
-            import statistics
-
-            def calculate_variance_features(
-                recent_list: list[float], season_avg: float
-            ) -> list[float]:
-                if not recent_list or len(recent_list) < 2:
-                    return [0.0, 0.0, 0.0]  # Trend, Volatility, Momentum
-
-                # 1. Trend (Recent Avg vs Season Avg)
-                recent_avg = sum(recent_list) / len(recent_list)
-                trend = recent_avg - season_avg
-
-                # 2. Volatility (Standard Deviation)
-                try:
-                    volatility = statistics.stdev(recent_list)
-                except Exception:
-                    volatility = 0.0
-
-                # 3. Momentum (Weighted Average)
-                # Weights: [0.1, 0.15, 0.2, 0.25, 0.3] (Most recent gets most weight)
-                weights = [0.1, 0.15, 0.2, 0.25, 0.3]
-                # Adjust weights if list is shorter than 5
-                if len(recent_list) < 5:
-                    weights = [1 / len(recent_list)] * len(recent_list)
-                else:
-                    weights = weights[-len(recent_list) :]
-
-                momentum = sum(v * w for v, w in zip(recent_list, weights))
-
-                return [round(trend, 3), round(volatility, 3), round(momentum, 3)]
 
             # Extract Corner Variance
-            h_corn_var = calculate_variance_features(
+            h_corn_var = MLFeatureExtractor._calculate_variance_features(
                 home_stats.recent_corners, h_corners
             )
-            a_corn_var = calculate_variance_features(
+            a_corn_var = MLFeatureExtractor._calculate_variance_features(
                 away_stats.recent_corners, a_corners
             )
             features.extend(h_corn_var)  # [Trend, Vol, Mom]
             features.extend(a_corn_var)
 
             # Extract Card Variance
-            h_card_var = calculate_variance_features(
+            h_card_var = MLFeatureExtractor._calculate_variance_features(
                 home_stats.recent_yellow_cards, h_yellows
             )
-            a_card_var = calculate_variance_features(
+            a_card_var = MLFeatureExtractor._calculate_variance_features(
                 away_stats.recent_yellow_cards, a_yellows
             )
             features.extend(h_card_var)
@@ -245,9 +267,32 @@ class MLFeatureExtractor:
             ref_strictness = 4.5
             features.append(ref_strictness)
 
+            # ============================================================
+            # DOMESTIC VS INTERNATIONAL PERFORMANCE (Global Expansion)
+            # ============================================================
+
+            # Calculate win rates contextually
+            h_dom_wr = MLFeatureExtractor._get_win_rate(
+                getattr(home_stats, "domestic_stats", None)
+            )
+            h_intl_wr = MLFeatureExtractor._get_win_rate(
+                getattr(home_stats, "international_stats", None)
+            )
+            a_dom_wr = MLFeatureExtractor._get_win_rate(
+                getattr(away_stats, "domestic_stats", None)
+            )
+            a_intl_wr = MLFeatureExtractor._get_win_rate(
+                getattr(away_stats, "international_stats", None)
+            )
+
+            # Feature: difference between intl performance and domestic performance
+            # Positive means they perform better in international matches
+            features.append(float(h_intl_wr - h_dom_wr))
+            features.append(float(a_intl_wr - a_dom_wr))
+
         else:
-            # Padding if no stats provided (39 zeros: 35 original + 4 new
-            # efficiency/interaction features)
-            features.extend([0.0] * 39)
+            # Padding if no stats provided (41 zeros: 35 original + 4 new
+            # efficiency/interaction features + 2 new context features)
+            features.extend([0.0] * 41)
 
         return features

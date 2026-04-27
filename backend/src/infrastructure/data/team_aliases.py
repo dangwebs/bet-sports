@@ -6,6 +6,7 @@ canonical key and a helper to compute a canonical team key for arbitrary
 team names. The mapping is intentionally small and can be extended as
 needed.
 """
+
 import re
 import unicodedata
 

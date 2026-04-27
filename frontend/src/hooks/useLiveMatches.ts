@@ -305,8 +305,10 @@ export const useLiveMatches = () => {
 
         let liveMatches: LiveMatch[] = Array.isArray(data)
           ? data.map((item: unknown) => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const match = item as any; // Cast once to bypass strict check on data from API
+              const match = item as import("../types").Match & {
+                prediction?: import("../types").Prediction;
+                minute?: number;
+              };
               return {
                 id: (match.id as string) || "",
                 home_team: match.home_team,
@@ -315,13 +317,12 @@ export const useLiveMatches = () => {
                 away_team: match.away_team,
                 away_short_name: match.away_team?.short_name,
                 away_logo_url: match.away_team?.logo_url,
-                home_score: (match.home_goals ?? match.home_score ?? 0) as number,
-                away_score: (match.away_goals ?? match.away_score ?? 0) as number,
-                minute: (match.minute || 0) as number,
+                home_score: (match.home_goals ?? 0) as number,
+                away_score: (match.away_goals ?? 0) as number,
+                minute: match.minute || 0,
                 league_id: (match.league?.id || "unknown") as string,
                 league_name: (match.league?.name || "Liga Desconocida") as string,
                 league_flag: (match.league?.flag ||
-                  match.league?.logo ||
                   undefined) as string | undefined,
                 status: (match.status as LiveMatch["status"]) || "LIVE",
                 home_corners: (match.home_corners || 0) as number,

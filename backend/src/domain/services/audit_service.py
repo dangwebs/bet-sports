@@ -27,7 +27,7 @@ class AuditService:
             Dict containing the audit report.
         """
         logger.info("AUDIT: Starting automated data integrity check...")
-        report = {
+        report: Dict[str, Any] = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "missing_leagues": [],
@@ -49,7 +49,9 @@ class AuditService:
         match_history = results.get("match_history", [])
 
         # 2. Analyze League Coverage
-        league_stats = {l: {"total": 0, "recent": 0} for l in DEFAULT_LEAGUES}
+        league_stats = {
+            league_code: {"total": 0, "recent": 0} for league_code in DEFAULT_LEAGUES
+        }
         missing_leagues = []
 
         now = datetime.now()

@@ -2,7 +2,7 @@
 Match Enrichment Service
 
 This service provides logic to merge match data from multiple sources.
-It helps fill in missing statistics (corners, cards, shots) by finding the 
+It helps fill in missing statistics (corners, cards, shots) by finding the
 same match in different data sources (e.g., CSV vs API).
 """
 
@@ -20,7 +20,7 @@ class MatchEnrichmentService:
     Service for enriching and merging match data from multiple sources.
     """
 
-    def __init__(self, statistics_service: StatisticsService = None):
+    def __init__(self, statistics_service: Optional[StatisticsService] = None) -> None:
         self.statistics_service = statistics_service or StatisticsService()
 
     def merge_matches(
@@ -30,7 +30,7 @@ class MatchEnrichmentService:
         Merge two lists of matches.
         If a match exists in both, prefer the one with more detailed statistics.
         """
-        merged_map = {}
+        merged_map: dict[str, Match] = {}
 
         # Helper to create a deduplication key
         def get_match_key(m: Match) -> str:
@@ -57,7 +57,7 @@ class MatchEnrichmentService:
 
         return list(merged_map.values())
 
-    def _enrich_match(self, base: Match, source: Match):
+    def _enrich_match(self, base: Match, source: Match) -> None:
         """
         Enrich base match with data from source match if available.
         """

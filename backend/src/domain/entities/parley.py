@@ -16,10 +16,10 @@ class Parley:
     total_odds: float = 0.0
     total_probability: float = 0.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._calculate_totals()
 
-    def _calculate_totals(self):
+    def _calculate_totals(self) -> None:
         """Calculate total odds and probability based on picks."""
         if not self.picks:
             return

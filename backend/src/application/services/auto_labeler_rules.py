@@ -4,12 +4,13 @@ This module contains small, well-tested functions that derive per-market
 labels (winner, over/under) from a persisted prediction document and the
 final match object returned by external data sources.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
 
-def _get(obj: Any, *names, default=None):
+def _get(obj: Any, *names: str, default: Any = None) -> Any:
     """Robust getter that works with objects or dicts."""
     for name in names:
         if obj is None:

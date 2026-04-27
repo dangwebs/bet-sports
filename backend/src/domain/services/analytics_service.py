@@ -27,7 +27,9 @@ class AnalyticsService:
             List of dictionaries containing stats per pick type, sorted by efficiency.
         """
         # Dictionary to store stats: {pick_type: {won: 0, lost: 0, ...}}
-        stats = defaultdict(lambda: {"won": 0, "lost": 0, "void": 0, "total": 0})
+        stats: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"won": 0, "lost": 0, "void": 0, "total": 0}
+        )
 
         for pred in predictions:
             # Ensure we have necessary attributes

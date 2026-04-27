@@ -1,8 +1,11 @@
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.value_objects import LeagueAverages
 
 # ML Imports
 try:
@@ -29,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def _build_league_averages(
     all_matches: List[Any], statistics_service: StatisticsService
-) -> Dict[str, dict]:
+) -> Dict[str, "LeagueAverages"]:
     league_matches_map: Dict[str, List[Any]] = {}
     for m in all_matches:
         league_matches_map.setdefault(m.league.id, []).append(m)
@@ -39,7 +42,7 @@ def _build_league_averages(
     }
 
 
-def _get_iterator(all_matches: List[Any]):
+def _get_iterator(all_matches: List[Any]) -> Any:
     try:
         from tqdm import tqdm
 
@@ -49,8 +52,10 @@ def _get_iterator(all_matches: List[Any]):
 
 
 def _ensure_team_stats(
-    team_stats_cache: dict, statistics_service: StatisticsService, match: Any
-):
+    team_stats_cache: dict[str, dict[str, Any]],
+    statistics_service: StatisticsService,
+    match: Any,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     if match.home_team.name not in team_stats_cache:
         team_stats_cache[
             match.home_team.name
@@ -65,7 +70,9 @@ def _ensure_team_stats(
     )
 
 
-def _parse_cached_suggested_picks(cached_result: Optional[dict], match: Any):
+def _parse_cached_suggested_picks(
+    cached_result: Optional[dict[str, Any]], match: Any
+) -> Any | None:
     if not cached_result or "suggested_picks" not in cached_result:
         return None
     try:
@@ -103,7 +110,17 @@ def _compute_picks_metrics(
     resolution_service: PickResolutionService,
     feature_extractor: MLFeatureExtractor,
     match: Any,
-):
+) -> tuple[
+    List[dict[str, Any]],
+    List[Any],
+    List[int],
+    int,
+    float,
+    float,
+    Optional[str],
+    bool,
+    float,
+]:
     picks_list: List[dict] = []
     ml_feats: List[Any] = []
     ml_tgts: List[int] = []
@@ -119,9 +136,11 @@ def _compute_picks_metrics(
         is_won = result_str == "WIN"
 
         p_detail = {
-            "market_type": pick.market_type.value
-            if hasattr(pick.market_type, "value")
-            else str(pick.market_type),
+            "market_type": (
+                pick.market_type.value
+                if hasattr(pick.market_type, "value")
+                else str(pick.market_type)
+            ),
             "market_label": pick.market_label,
             "was_correct": is_won,
             "probability": float(pick.probability),
@@ -237,7 +256,21 @@ def _process_match_for_dataset(
     resolution_service: PickResolutionService,
     feature_extractor: MLFeatureExtractor,
     statistics_service: StatisticsService,
-    league_averages_map: Dict[str, dict],
+    league_averages_map: Dict[str, "LeagueAverages"],
+) -> (
+    tuple[
+        List[Any],
+        List[int],
+        List[dict[str, Any]],
+        int,
+        float,
+        float,
+        Optional[str],
+        bool,
+        float,
+        dict[str, Any],
+    ]
+    | None
 ):
     """Process a single match into ML-ready features, targets and a history entry.
 
@@ -345,12 +378,12 @@ async def prepare_datasets(
     List[int],
     Dict[str, dict],
     List[dict],
-    dict,
+    Dict[str, dict],
     int,
     int,
     float,
     float,
-    dict,
+    Dict[str, "LeagueAverages"],
 ]:
     """Fetches matches and processes them into ML-ready datasets.
 
@@ -472,9 +505,11 @@ async def prepare_datasets(
     )
 
 
-def train_league_models(ml_features: List[Any], ml_targets: List[int]):
+def train_league_models(ml_features: List[Any], ml_targets: List[int]) -> Any:
     """Train a RandomForestClassifier on the provided features/targets and return it."""
-    clf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
+    clf = RandomForestClassifier(
+        n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
+    )
     clf.fit(ml_features, ml_targets)
     return clf
 
@@ -524,6 +559,7 @@ class MLTrainingOrchestrator:
         learning_service: LearningService,
         resolution_service: PickResolutionService,
         cache_service: CacheService,
+        persistence_repo: Optional[Any] = None,
     ):
         self.training_data_service = training_data_service
         self.statistics_service = statistics_service
@@ -531,6 +567,7 @@ class MLTrainingOrchestrator:
         self.learning_service = learning_service
         self.resolution_service = resolution_service
         self.cache_service = cache_service
+        self.persistence_repo = persistence_repo
         self.feature_extractor = MLFeatureExtractor()
 
     async def run_training_pipeline(
@@ -585,13 +622,28 @@ class MLTrainingOrchestrator:
                         return train_league_models(ml_features, ml_targets)
 
                     loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(None, _train_model)
+                    trained_model = await loop.run_in_executor(None, _train_model)
+
+                    # --- PERSIST TO DB ---
+                    if self.persistence_repo:
+                        from io import BytesIO
+
+                        import joblib
+                        from src.core.constants import ML_MODEL_FILENAME
+
+                        logger.info("💾 Persisting trained model to Database...")
+                        buffer = BytesIO()
+                        joblib.dump(trained_model, buffer)
+                        self.persistence_repo.save_binary_artifact(
+                            ML_MODEL_FILENAME, buffer.getvalue()
+                        )
+                        logger.info("✅ Model persisted to Database successfully.")
 
                     logger.info(
-                        "ML Model trained in memory for the current pipeline run."
+                        "ML Model trained and persisted for the current pipeline run."
                     )
-                except Exception:
-                    logger.exception("Failed to train ML model in memory.")
+                except Exception as e:
+                    logger.exception(f"Failed to train or persist ML model: {e}")
 
             # --- PREPARE RESULTS ---
             accuracy = self._calculate_accuracy(match_history)
@@ -614,7 +666,7 @@ class MLTrainingOrchestrator:
         finally:
             cleanup_model_artifacts(logger)
 
-    def _get_predicted_winner(self, prediction) -> str:
+    def _get_predicted_winner(self, prediction: Any) -> str:
         if (
             prediction.home_win_probability > prediction.away_win_probability
             and prediction.home_win_probability > prediction.draw_probability
@@ -627,7 +679,7 @@ class MLTrainingOrchestrator:
             return "away"
         return "draw"
 
-    def _get_actual_winner(self, match) -> str:
+    def _get_actual_winner(self, match: Any) -> str:
         if match.home_goals > match.away_goals:
             return "home"
         elif match.away_goals > match.home_goals:

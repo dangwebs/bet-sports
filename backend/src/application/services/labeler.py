@@ -4,6 +4,7 @@ This is a modest, best-effort implementation that uses the MongoRepository API
 when available. It supports dry-run mode which returns a report without
 persisting changes.
 """
+
 from __future__ import annotations
 
 import logging

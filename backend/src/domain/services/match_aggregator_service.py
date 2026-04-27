@@ -13,7 +13,7 @@ This domain service is responsible for:
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List
+from typing import Any, Coroutine, List
 
 from src.domain.entities.entities import League, Match
 from src.infrastructure.data_sources.espn import ESPNSource
@@ -51,7 +51,7 @@ class MatchAggregatorService:
         logger.info("Aggregating history for %s from all sources...", league_id)
 
         # Define parallel tasks
-        tasks = []
+        tasks: List[Coroutine[Any, Any, Any]] = []
 
         # 1. Football-Data.co.uk (Primary)
         tasks.append(
@@ -102,22 +102,10 @@ class MatchAggregatorService:
         # Execute
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        uk_matches = results[0] if not isinstance(results[0], Exception) else []
-        org_matches = (
-            results[1]
-            if not isinstance(results[1], Exception) and results[1] is not None
-            else []
-        )
-        espn_matches = (
-            results[2]
-            if not isinstance(results[2], Exception) and results[2] is not None
-            else []
-        )
-        open_matches = (
-            results[3]
-            if not isinstance(results[3], Exception) and results[3] is not None
-            else []
-        )
+        uk_matches: List[Match] = results[0] if isinstance(results[0], list) else []
+        org_matches: List[Match] = results[1] if isinstance(results[1], list) else []
+        espn_matches: List[Match] = results[2] if isinstance(results[2], list) else []
+        open_matches: List[Match] = results[3] if isinstance(results[3], list) else []
 
         if isinstance(results[0], Exception):
             logger.warning("UK Source Error: %s", results[0])
@@ -192,7 +180,7 @@ class MatchAggregatorService:
             a_norm = StatisticsService.normalize_team_name(m.away_team.name)
             return f"{date_str}_{h_norm}_{a_norm}"
 
-        def enrich_match(target: Match, source: Match):
+        def enrich_match(target: Match, source: Match) -> None:
             # Fill missing core stats
             if target.home_corners is None and source.home_corners is not None:
                 target.home_corners = source.home_corners
@@ -225,7 +213,7 @@ class MatchAggregatorService:
             if not target.referee and source.referee:
                 target.referee = source.referee
 
-        def process_list(matches, source_tag):
+        def process_list(matches: List[Match] | None, source_tag: str) -> int:
             count = 0
             if not matches:
                 return count
@@ -331,7 +319,10 @@ class MatchAggregatorService:
 
             m_date = m.match_date
             if m_date.tzinfo is None:
-                m_date = now.tzinfo.localize(m_date)
+                from pytz import timezone as pytz_tz
+
+                tz = pytz_tz("America/Bogota")
+                m_date = tz.localize(m_date)
             else:
                 m_date = m_date.astimezone(now.tzinfo)
 

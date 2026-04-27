@@ -4,13 +4,13 @@ API Dependencies Module
 Provides dependency injection for FastAPI routes.
 Contains factory functions for creating use case dependencies.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
-from src.application.services.ml_training_orchestrator import (
-    MLTrainingOrchestrator,  # type: ignore
-)
+from src.application.services.ml_training_orchestrator import MLTrainingOrchestrator
 from src.application.services.training_data_service import TrainingDataService
 from src.application.use_cases.use_cases import DataSources
 from src.domain.services.ai_picks_service import AIPicksService
@@ -29,6 +29,9 @@ from src.infrastructure.data_sources.football_data_org import FootballDataOrgSou
 from src.infrastructure.data_sources.football_data_uk import FootballDataUKSource
 from src.infrastructure.data_sources.openfootball import OpenFootballSource
 from src.infrastructure.data_sources.thesportsdb import TheSportsDBClient
+from src.infrastructure.repositories.async_mongo_adapter import (
+    get_async_mongo_repository,
+)
 from src.infrastructure.repositories.mongo_repository import (
     MongoRepository,
     get_mongo_repository,
@@ -107,7 +110,7 @@ def get_statistics_service() -> StatisticsService:
 @lru_cache()
 def get_learning_service() -> LearningService:
     """Get learning service (cached)."""
-    return LearningService()
+    return LearningService(persistence_repo=get_persistence_repository())
 
 
 @lru_cache()
@@ -119,7 +122,10 @@ def get_parley_service() -> ParleyService:
 @lru_cache()
 def get_picks_service() -> AIPicksService:
     """Get AI picks service (cached)."""
-    return AIPicksService()
+    return AIPicksService(
+        learning_weights=get_learning_service().learning_weights,
+        persistence_repo=get_persistence_repository(),
+    )
 
 
 @lru_cache()
@@ -149,6 +155,39 @@ def get_persistence_repository() -> MongoRepository:
     return get_mongo_repository()
 
 
+def get_async_persistence_repository() -> Any:
+    """Return an async-friendly persistence repository (Motor-native when available).
+
+    Use this in FastAPI async handlers to avoid blocking the event loop.
+    """
+    return get_async_mongo_repository()
+
+
+async def get_async_learning_service() -> "LearningService":
+    """Async factory that returns a LearningService-like object preloaded with
+    learning weights fetched from the async repository.
+
+    This avoids calling the sync `LearningService._load_weights` inside the
+    event loop.
+    """
+    repo = get_async_persistence_repository()
+    svc = LearningService(persistence_repo=None)
+    try:
+        data = await repo.get_app_state(LearningService.MONGO_KEY)
+    except Exception:
+        data = None
+
+    if data:
+        try:
+            svc._learning_weights = svc._reconstruct_weights(data)
+        except Exception:
+            svc._learning_weights = svc.learning_weights
+    else:
+        svc._learning_weights = svc.learning_weights
+
+    return svc
+
+
 @lru_cache()
 def get_ml_training_orchestrator() -> "MLTrainingOrchestrator":
     """Get ML training orchestrator service (cached)."""
@@ -163,6 +202,7 @@ def get_ml_training_orchestrator() -> "MLTrainingOrchestrator":
         learning_service=get_learning_service(),
         resolution_service=get_pick_resolution_service(),
         cache_service=get_cache_service(),
+        persistence_repo=get_persistence_repository(),
     )
 
 

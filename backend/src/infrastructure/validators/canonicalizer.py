@@ -1,4 +1,5 @@
 """Canonicalize team names using a shared alias table."""
+
 from __future__ import annotations
 
 import json

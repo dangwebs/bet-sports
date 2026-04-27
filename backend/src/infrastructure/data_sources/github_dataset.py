@@ -35,10 +35,15 @@ class LocalGithubDataSource:
         "F1": "Ligue 1",
         "P1": "Primeira Liga",
         "N1": "Eredivisie",
+        "COL1": "Liga BetPlay",
+        "ARG1": "Liga Profesional",
+        "BRA1": "Série A",
+        "LIB": "Copa Libertadores",
+        "SUD": "Copa Sudamericana",
         # Add more as needed based on CSV "Division" column
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Resolve path relative to this file, not CWD
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.file_path = os.path.join(current_dir, "local_data", "matches_github.csv")
@@ -130,7 +135,7 @@ class LocalGithubDataSource:
             away_team_name = row.get("AwayTeam")
 
             # Helper to parse float or int string to int safely
-            def safe_int(val):
+            def safe_int(val: Optional[str]) -> Optional[int]:
                 if not val:
                     return None
                 try:
@@ -138,7 +143,7 @@ class LocalGithubDataSource:
                 except (ValueError, TypeError):
                     return None
 
-            def safe_float(val):
+            def safe_float(val: Optional[str]) -> Optional[float]:
                 if not val:
                     return None
                 try:
@@ -175,16 +180,19 @@ class LocalGithubDataSource:
 
             # Simple ID generation
             date_part = match_date.strftime("%Y%m%d")
-            home_short = home_team_name[:3]
-            away_short = away_team_name[:3]
-            match_id = f"gh_{division}_{date_part}_{home_short}_{away_short}"
+            div_id = str(division or "UNK")
+            h_name = str(home_team_name or "Home")
+            a_name = str(away_team_name or "Away")
+            home_short = h_name[:3]
+            away_short = a_name[:3]
+            match_id = f"gh_{div_id}_{date_part}_{home_short}_{away_short}"
 
-            home_team = Team(id=home_team_name, name=home_team_name)
-            away_team = Team(id=away_team_name, name=away_team_name)
+            home_team = Team(id=h_name, name=h_name)
+            away_team = Team(id=a_name, name=a_name)
 
             league = League(
-                id=division,
-                name=self.LEAGUE_MAPPING.get(division, division),
+                id=div_id,
+                name=self.LEAGUE_MAPPING.get(div_id, div_id),
                 country="International",
             )
 

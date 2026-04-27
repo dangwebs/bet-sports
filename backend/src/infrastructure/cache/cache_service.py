@@ -1,6 +1,8 @@
+import asyncio
 import logging
 import os
 import threading
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Any, Optional, TypeVar
 
@@ -9,9 +11,6 @@ import diskcache
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
-
-
-from abc import ABC, abstractmethod
 
 
 class CacheProvider(ABC):
@@ -33,7 +32,7 @@ class CacheProvider(ABC):
     def clear(self) -> bool:
         pass
 
-    def close(self):
+    def close(self) -> None:
         """Optional close method for cleanup."""
         pass
 
@@ -41,7 +40,7 @@ class CacheProvider(ABC):
 class DiskCacheProvider(CacheProvider):
     """DiskCache implementation."""
 
-    def __init__(self, cache_dir: str):
+    def __init__(self, cache_dir: str) -> None:
         self.cache = diskcache.Cache(cache_dir)
         logger.info(f"DiskCache initialized at {cache_dir}")
 
@@ -54,26 +53,26 @@ class DiskCacheProvider(CacheProvider):
 
     def set(self, key: str, value: Any, ttl: int) -> bool:
         try:
-            return self.cache.set(key, value, expire=ttl)
+            return bool(self.cache.set(key, value, expire=ttl))
         except Exception as e:
             logger.error(f"DiskCache set failed for {key}: {e}")
             return False
 
     def delete(self, key: str) -> bool:
         try:
-            return self.cache.delete(key)
+            return bool(self.cache.delete(key))
         except Exception as e:
             logger.debug(f"DiskCache delete failed for {key}: {e}")
             return False
 
     def clear(self) -> bool:
         try:
-            return self.cache.clear()
+            return bool(self.cache.clear())
         except Exception as e:
             logger.debug(f"DiskCache clear failed: {e}")
             return False
 
-    def close(self):
+    def close(self) -> None:
         try:
             self.cache.close()
             logger.info("DiskCache closed")
@@ -96,7 +95,7 @@ class CacheService:
     TTL_FORECASTS = 86400
     MAX_MEMORY_ITEMS = 200  # Cap to prevent OOM on 512MB RAM
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the cache service with providers."""
         self._memory_cache: OrderedDict[str, Any] = OrderedDict()
         self._lock = threading.RLock()
@@ -203,6 +202,30 @@ class CacheService:
 
     def set_league_averages(self, league_id: str, data: Any) -> None:
         self.set(f"league_averages:{league_id}", data, self.TTL_HISTORICAL)
+
+    # --- Async wrappers ---
+    async def aget(self, key: str) -> Optional[Any]:
+        """Async wrapper for `get` to be used in async contexts.
+
+        Runs the synchronous `get` in a thread to avoid blocking the event loop.
+        """
+        return await asyncio.to_thread(self.get, key)
+
+    async def aset(self, key: str, value: Any, ttl_seconds: int) -> None:
+        """Async wrapper for `set` to be used in async contexts."""
+        await asyncio.to_thread(self.set, key, value, ttl_seconds)
+
+    async def aget_live_matches(self, key: str) -> Optional[Any]:
+        return await self.aget(f"live_matches:{key}")
+
+    async def aset_live_matches(self, data: Any, key: str) -> None:
+        await self.aset(f"live_matches:{key}", data, self.TTL_LIVE_MATCHES)
+
+    async def aget_predictions(self, match_id: str) -> Optional[Any]:
+        return await self.aget(f"predictions:{match_id}")
+
+    async def aset_predictions(self, match_id: str, data: Any) -> None:
+        await self.aset(f"predictions:{match_id}", data, self.TTL_PREDICTIONS)
 
 
 # Singleton instance

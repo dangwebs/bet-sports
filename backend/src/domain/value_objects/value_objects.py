@@ -20,7 +20,7 @@ class Probability:
 
     value: float
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not 0.0 <= self.value <= 1.0:
             raise ValueError(f"Probability must be between 0 and 1, got {self.value}")
 
@@ -44,7 +44,7 @@ class Odds:
     draw: float
     away: float
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.home < 1.0 or self.draw < 1.0 or self.away < 1.0:
             raise ValueError("Odds must be >= 1.0")
 
@@ -93,7 +93,7 @@ class Score:
     home: int
     away: int
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.home < 0 or self.away < 0:
             raise ValueError("Goals cannot be negative")
 
@@ -137,7 +137,7 @@ class TeamStrength:
     attack_strength: float  # > 1 means stronger than average
     defense_strength: float  # < 1 means better defense than average
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.attack_strength < 0 or self.defense_strength < 0:
             raise ValueError("Strength values cannot be negative")
 
@@ -154,7 +154,7 @@ class PredictionConfidence:
     data_quality: float  # Based on amount and recency of data
     model_certainty: float  # How certain the model is
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for val in [self.overall, self.data_quality, self.model_certainty]:
             if not 0.0 <= val <= 1.0:
                 raise ValueError("Confidence values must be between 0 and 1")

@@ -5,6 +5,7 @@ Scans persisted match predictions and, when match results are available,
 writes label information back to the persistence repository so downstream
 components (training, metrics) can use labeled data.
 """
+
 import logging
 import os
 from typing import Any, Dict, Optional, Tuple

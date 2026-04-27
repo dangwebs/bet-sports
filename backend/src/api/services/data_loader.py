@@ -12,7 +12,7 @@ from src.utils.time_utils import get_current_time
 
 
 class DataLoader:
-    def __init__(self, repository=None) -> None:
+    def __init__(self, repository: Any | None = None) -> None:
         self.repository = repository or get_mongo_repository()
 
     def load_predictions_for_league(self, league_id: str) -> list[MatchPredictionModel]:

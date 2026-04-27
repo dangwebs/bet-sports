@@ -31,6 +31,12 @@ repos:
         files: ^frontend/.*
       - id: ruff-local
         name: Ruff (local)
-        entry: .venv/bin/ruff check --fix
+        entry: bash -c "cd backend && ./.venv/bin/ruff check --fix"
         language: system
-        files: \.(py)$
+        files: ^backend/.*\.py$
+      - id: mypy-local
+        name: Mypy (local)
+        entry: bash -c "cd backend && ./.venv/bin/mypy src/ --ignore-missing-imports --follow-imports=skip"
+        language: system
+        pass_filenames: false
+        files: ^backend/.*\.py$
