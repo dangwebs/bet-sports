@@ -1,7 +1,7 @@
+import asyncio
 import logging
 import os
 import threading
-import asyncio
 from collections import OrderedDict
 from typing import Any, Optional, TypeVar
 

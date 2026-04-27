@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from pytz import timezone  # type: ignore
-
 from src.core.paths import BACKEND_ROOT, PROJECT_ROOT
 from src.domain.entities.betting_feedback import (
     BettingFeedback,

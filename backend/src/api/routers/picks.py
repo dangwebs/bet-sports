@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from fastapi import APIRouter, Depends
 from src.api.schemas.auxiliary import (
     BettingFeedbackRequest,
@@ -15,9 +16,9 @@ from src.application.use_cases.suggested_picks_use_case import (
     RegisterFeedbackUseCase,
 )
 from src.dependencies import (
+    get_async_learning_service,
     get_cache_service,
     get_data_sources,
-    get_async_learning_service,
     get_learning_service,
     get_prediction_service,
     get_statistics_service,

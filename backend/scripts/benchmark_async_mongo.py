@@ -19,16 +19,13 @@ import argparse
 import asyncio
 import json
 import math
-import os
-import random
 import statistics
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
-from datetime import timedelta
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 # Setup path
 project_root = Path(__file__).resolve().parents[1]
@@ -97,8 +94,12 @@ async def benchmark_single_operation(
     errors = 0
 
     op_map: Dict[str, Callable] = {
-        "get_match_prediction": lambda: repo.get_match_prediction(data.get("match_id", "test_match")),
-        "get_match_predictions_bulk": lambda: repo.get_match_predictions_bulk(data.get("match_ids", [])),
+        "get_match_prediction": lambda: repo.get_match_prediction(
+            data.get("match_id", "test_match")
+        ),
+        "get_match_predictions_bulk": lambda: repo.get_match_predictions_bulk(
+            data.get("match_ids", [])
+        ),
         "save_match_prediction": lambda: repo.save_match_prediction(
             data.get("match_id", "test_match"),
             data.get("league_id", "E0"),
@@ -106,9 +107,17 @@ async def benchmark_single_operation(
             data.get("ttl", 3600),
         ),
         "bulk_save_predictions": lambda: repo.bulk_save_predictions(
-            data.get("predictions", [{"match_id": f"m_{i}", "league_id": "E0", "data": {}} for i in range(10)])
+            data.get(
+                "predictions",
+                [
+                    {"match_id": f"m_{i}", "league_id": "E0", "data": {}}
+                    for i in range(10)
+                ],
+            )
         ),
-        "get_cached_response": lambda: repo.get_cached_response(data.get("endpoint", "/api/test")),
+        "get_cached_response": lambda: repo.get_cached_response(
+            data.get("endpoint", "/api/test")
+        ),
         "save_cached_response": lambda: repo.save_cached_response(
             data.get("endpoint", "/api/test"),
             data.get("cached_data", {"result": "test"}),
@@ -122,9 +131,11 @@ async def benchmark_single_operation(
         return BenchmarkResult(operation=operation, durations_ms=[], errors=1)
 
     if sem:
+
         async def run_op():
             async with sem:
                 return await op_func()
+
     else:
         run_op = op_func
 
@@ -133,7 +144,7 @@ async def benchmark_single_operation(
 
     try:
         results = await asyncio.gather(*tasks, return_exceptions=True)
-    except Exception as e:
+    except Exception:
         errors = iterations
         return BenchmarkResult(operation=operation, durations_ms=[], errors=errors)
 
@@ -162,8 +173,12 @@ def run_sync_comparison(
     errors = 0
 
     op_map: Dict[str, Callable] = {
-        "get_match_prediction": lambda: repo.get_match_prediction(data.get("match_id", "test_match")),
-        "get_match_predictions_bulk": lambda: repo.get_match_predictions_bulk(data.get("match_ids", [])),
+        "get_match_prediction": lambda: repo.get_match_prediction(
+            data.get("match_id", "test_match")
+        ),
+        "get_match_predictions_bulk": lambda: repo.get_match_predictions_bulk(
+            data.get("match_ids", [])
+        ),
         "save_match_prediction": lambda: repo.save_match_prediction(
             data.get("match_id", "test_match"),
             data.get("league_id", "E0"),
@@ -171,9 +186,17 @@ def run_sync_comparison(
             data.get("ttl", 3600),
         ),
         "bulk_save_predictions": lambda: repo.bulk_save_predictions(
-            data.get("predictions", [{"match_id": f"m_{i}", "league_id": "E0", "data": {}} for i in range(10)])
+            data.get(
+                "predictions",
+                [
+                    {"match_id": f"m_{i}", "league_id": "E0", "data": {}}
+                    for i in range(10)
+                ],
+            )
         ),
-        "get_cached_response": lambda: repo.get_cached_response(data.get("endpoint", "/api/test")),
+        "get_cached_response": lambda: repo.get_cached_response(
+            data.get("endpoint", "/api/test")
+        ),
         "save_cached_response": lambda: repo.save_cached_response(
             data.get("endpoint", "/api/test"),
             data.get("cached_data", {"result": "test"}),
@@ -215,7 +238,12 @@ async def run_async_benchmarks(
         "league_id": "E0",
         "payload": {"test": True, "timestamp": time.time()},
         "predictions": [
-            {"match_id": f"m_{i}", "league_id": "E0", "data": {"test": True}, "ttl_seconds": 3600}
+            {
+                "match_id": f"m_{i}",
+                "league_id": "E0",
+                "data": {"test": True},
+                "ttl_seconds": 3600,
+            }
             for i in range(10)
         ],
         "endpoint": "/api/benchmark",
@@ -224,19 +252,31 @@ async def run_async_benchmarks(
 
     for op in operations:
         print(f"  Running {op}...")
-        result = await benchmark_single_operation(repo, op, test_data, iterations, concurrency, sem)
+        result = await benchmark_single_operation(
+            repo, op, test_data, iterations, concurrency, sem
+        )
         results[op] = result
-        print(f"    p50: {result.p50:.2f}ms, p95: {result.p95:.2f}ms, errors: {result.errors}")
+        print(
+            f"    p50: {result.p50:.2f}ms, p95: {result.p95:.2f}ms, errors: {result.errors}"
+        )
 
     return results
 
 
 async def main():
     parser = argparse.ArgumentParser(description="Benchmark AsyncMongoRepository")
-    parser.add_argument("-n", "--iterations", type=int, default=100, help="Total requests")
-    parser.add_argument("-c", "--concurrency", type=int, default=10, help="Concurrent requests")
-    parser.add_argument("--operations", nargs="*", default=None, help="Operations to benchmark")
-    parser.add_argument("--sync", action="store_true", help="Compare with sync repository")
+    parser.add_argument(
+        "-n", "--iterations", type=int, default=100, help="Total requests"
+    )
+    parser.add_argument(
+        "-c", "--concurrency", type=int, default=10, help="Concurrent requests"
+    )
+    parser.add_argument(
+        "--operations", nargs="*", default=None, help="Operations to benchmark"
+    )
+    parser.add_argument(
+        "--sync", action="store_true", help="Compare with sync repository"
+    )
     parser.add_argument("--output", type=str, default=None, help="Output JSON file")
     args = parser.parse_args()
 
@@ -248,16 +288,22 @@ async def main():
         "bulk_save_predictions",
     ]
 
-    print(f"Benchmarking AsyncMongoRepository (n={args.iterations}, c={args.concurrency})")
+    print(
+        f"Benchmarking AsyncMongoRepository (n={args.iterations}, c={args.concurrency})"
+    )
 
     repo = AsyncMongoRepository()
-    async_results = await run_async_benchmarks(repo, operations, args.iterations, args.concurrency)
+    async_results = await run_async_benchmarks(
+        repo, operations, args.iterations, args.concurrency
+    )
 
     # Summary
     print("\n=== Async Results ===")
     total_p50 = 0
     for op, res in async_results.items():
-        print(f"{op}: p50={res.p50:.2f}ms p95={res.p95:.2f}ms p99={res.p99:.2f} errors={res.errors}")
+        print(
+            f"{op}: p50={res.p50:.2f}ms p95={res.p95:.2f}ms p99={res.p99:.2f} errors={res.errors}"
+        )
         total_p50 += res.p50
 
     avg_p50 = total_p50 / len(async_results)
@@ -268,7 +314,9 @@ async def main():
         print("\n=== Sync Comparison ===")
         sync_repo = MongoRepository()
         for op in operations:
-            res = run_sync_comparison(sync_repo, op, {}, args.iterations, args.concurrency)
+            res = run_sync_comparison(
+                sync_repo, op, {}, args.iterations, args.concurrency
+            )
             print(f"{op}: p50={res.p50:.2f}ms p95={res.p95:.2f}ms errors={res.errors}")
 
     # Save results

@@ -13,7 +13,7 @@ This domain service is responsible for:
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Coroutine, Any, List
+from typing import Any, Coroutine, List
 
 from src.domain.entities.entities import League, Match
 from src.infrastructure.data_sources.espn import ESPNSource

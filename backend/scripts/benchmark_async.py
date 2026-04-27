@@ -15,15 +15,16 @@ import json
 import math
 import os
 import statistics
+
+# Make sure the project root (backend/) is on sys.path so `from src...` works
+import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Tuple
 
 import httpx
 
-# Make sure the project root (backend/) is on sys.path so `from src...` works
-import sys
-from pathlib import Path
 project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(project_root))
 
@@ -47,7 +48,9 @@ def percentile(data: List[float], p: float) -> float:
     return d0
 
 
-async def make_request(client: httpx.AsyncClient, method: str, url: str, sem: asyncio.Semaphore) -> Tuple[float, int]:
+async def make_request(
+    client: httpx.AsyncClient, method: str, url: str, sem: asyncio.Semaphore
+) -> Tuple[float, int]:
     async with sem:
         start = time.perf_counter()
         try:
@@ -59,7 +62,9 @@ async def make_request(client: httpx.AsyncClient, method: str, url: str, sem: as
             return elapsed, 0
 
 
-async def run_benchmark(app, path: str, method: str = "GET", total: int = 100, concurrency: int = 10) -> Result:
+async def run_benchmark(
+    app, path: str, method: str = "GET", total: int = 100, concurrency: int = 10
+) -> Result:
     sem = asyncio.Semaphore(concurrency)
     async with httpx.AsyncClient(app=app, base_url="http://test") as client:
         tasks = [make_request(client, method, path, sem) for _ in range(total)]
@@ -121,7 +126,9 @@ def main() -> None:
         # Lightweight fake repository with minimal methods used by endpoints
         import importlib
 
-        mongo_mod = importlib.import_module("src.infrastructure.repositories.mongo_repository")
+        mongo_mod = importlib.import_module(
+            "src.infrastructure.repositories.mongo_repository"
+        )
         deps_mod = importlib.import_module("src.dependencies")
         preds_mod = importlib.import_module("src.api.routers.predictions")
 
@@ -173,9 +180,19 @@ def main() -> None:
                     self._storage.clear()
                     return deleted
                 # support delete by league_id list
-                if "league_id" in filter and isinstance(filter.get("league_id"), dict) and "$in" in filter["league_id"]:
-                    ids = set(filter["league_id"]["$in"]) if filter["league_id"]["$in"] else set()
-                    keys = [k for k, v in self._storage.items() if v.get("league_id") in ids]
+                if (
+                    "league_id" in filter
+                    and isinstance(filter.get("league_id"), dict)
+                    and "$in" in filter["league_id"]
+                ):
+                    ids = (
+                        set(filter["league_id"]["$in"])
+                        if filter["league_id"]["$in"]
+                        else set()
+                    )
+                    keys = [
+                        k for k, v in self._storage.items() if v.get("league_id") in ids
+                    ]
                     for k in keys:
                         del self._storage[k]
                     return len(keys)
@@ -219,7 +236,9 @@ def main() -> None:
                     return None
                 return entry.get("data")
 
-            def save_cached_response(self, endpoint, data, params=None, ttl_seconds=3600):
+            def save_cached_response(
+                self, endpoint, data, params=None, ttl_seconds=3600
+            ):
                 k = f"{endpoint}:{str(params)}"
                 self._api_cache[k] = {"data": data, "expires_at": None}
 
@@ -231,7 +250,10 @@ def main() -> None:
                 return doc.get("data"), doc.get("last_updated")
 
             def save_training_result(self, key, data):
-                self._training_results[key] = {"data": data, "last_updated": time.time()}
+                self._training_results[key] = {
+                    "data": data,
+                    "last_updated": time.time(),
+                }
 
             # --- Match predictions ---
             def get_match_prediction(self, match_id):
@@ -241,9 +263,14 @@ def main() -> None:
                 return doc.get("data")
 
             def get_match_predictions_bulk(self, match_ids):
-                return {m: (self._match_predictions.get(m) or {}).get("data") for m in match_ids}
+                return {
+                    m: (self._match_predictions.get(m) or {}).get("data")
+                    for m in match_ids
+                }
 
-            def save_match_prediction(self, match_id, league_id, data, ttl_seconds=86400):
+            def save_match_prediction(
+                self, match_id, league_id, data, ttl_seconds=86400
+            ):
                 self._match_predictions[match_id] = {
                     "data": data,
                     "league_id": league_id,
@@ -272,7 +299,12 @@ def main() -> None:
         # Patch the canonical mongo factory in the repo module
         mongo_mod.get_mongo_repository = lambda: fake_repo
         # Some modules import get_mongo_repository at module level; patch common consumers
-        for m in ("src.api.services.data_loader", "src.api.routers.matches", "src.api.routers.predictions", "src.worker"):
+        for m in (
+            "src.api.services.data_loader",
+            "src.api.routers.matches",
+            "src.api.routers.predictions",
+            "src.worker",
+        ):
             try:
                 mod = importlib.import_module(m)
                 if hasattr(mod, "get_mongo_repository"):
@@ -283,16 +315,29 @@ def main() -> None:
         # If monkeypatching fails, continue — requests may hit real DB and fail.
         pass
     for ep in endpoints:
-        print(f"Running benchmark: {ep} (requests={args.requests}, concurrency={args.concurrency})")
-        res = loop.run_until_complete(run_benchmark(app, ep, "GET", args.requests, args.concurrency))
+        print(
+            f"Running benchmark: {ep} (requests={args.requests}, concurrency={args.concurrency})"
+        )
+        res = loop.run_until_complete(
+            run_benchmark(app, ep, "GET", args.requests, args.concurrency)
+        )
         summary = summarize(res)
         overall[ep] = summary
         print(json.dumps({"endpoint": ep, "summary": summary}, indent=2))
 
         # Save raw durations
-        fname = os.path.join(ensure_tmp_dir(), f"benchmark_{ep.strip('/').replace('/', '_')}.json")
+        fname = os.path.join(
+            ensure_tmp_dir(), f"benchmark_{ep.strip('/').replace('/', '_')}.json"
+        )
         with open(fname, "w") as fh:
-            json.dump({"durations_ms": res.durations, "statuses": res.statuses, "summary": summary}, fh)
+            json.dump(
+                {
+                    "durations_ms": res.durations,
+                    "statuses": res.statuses,
+                    "summary": summary,
+                },
+                fh,
+            )
 
     out_fname = os.path.join(ensure_tmp_dir(), "benchmark_summary.json")
     with open(out_fname, "w") as fh:

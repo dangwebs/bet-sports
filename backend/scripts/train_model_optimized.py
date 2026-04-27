@@ -151,15 +151,25 @@ def build_global_training_tasks(
             global_team_stats_cache[a_name] = raw_away_global
 
         # Warmup check (> 3 matches globally)
-        if raw_home_global["matches_played"] >= 3 and raw_away_global["matches_played"] >= 3:
+        if (
+            raw_home_global["matches_played"] >= 3
+            and raw_away_global["matches_played"] >= 3
+        ):
             if league_id not in tasks_by_league:
                 tasks_by_league[league_id] = []
-            
+
             # We pass the global state. To strictly support tournament-specific state,
-            # we could also track `league_team_stats_cache`, but for now we pass global 
+            # we could also track `league_team_stats_cache`, but for now we pass global
             # to fulfill the blended strength requirement.
             tasks_by_league[league_id].append(
-                (match, raw_home_global, raw_away_global, league_avgs_map.get(league_id), None, weights)
+                (
+                    match,
+                    raw_home_global,
+                    raw_away_global,
+                    league_avgs_map.get(league_id),
+                    None,
+                    weights,
+                )
             )
 
         # Update State (Global)
@@ -660,7 +670,9 @@ async def main():
         # Pre-calculate League Avgs map
         league_avgs_map = {}
         for league_id, league_matches in matches_by_league.items():
-            league_avgs_map[league_id] = stats_service.calculate_league_averages(league_matches)
+            league_avgs_map[league_id] = stats_service.calculate_league_averages(
+                league_matches
+            )
 
         # Build Global Stats Cache and Tasks
         global_team_stats_cache, tasks_by_league = build_global_training_tasks(
